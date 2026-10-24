@@ -16,6 +16,17 @@ cd "$ROOT_DIR"
 
 GP="$(ls -1d "$HOME"/.local/share/alire/releases/gnatprove_*/bin/gnatprove 2>/dev/null | head -1)"
 GNAT="$(ls -1d "$HOME"/.local/share/alire/toolchains/gnat_native_*/bin 2>/dev/null | head -1)"
+
+if [ -z "$GP" ] || [ ! -x "$GP" ]; then
+  echo "ERROR: gnatprove not found (~/.local/share/alire/releases/gnatprove_*/bin)." >&2
+  echo "Install it with 'alr install gnatprove' and retry." >&2
+  exit 2
+fi
+if [ -z "$GNAT" ] || [ ! -x "$GNAT/gcc" ]; then
+  echo "ERROR: GNAT compiler (gnat_native toolchain) not found." >&2
+  exit 2
+fi
+
 export PATH="$(dirname "$GP"):$GNAT:$PATH"
 
 BATCH="${BATCH:-20}"

@@ -78,6 +78,11 @@ bash scripts/prove_kernel.sh    # full kernel run (185 modules)
 SKIP_BUILD=1 SEL4_PRIMARY=0 bash scripts/run_tests.sh
 ```
 
+## CI (GitHub Actions)
+
+- **Push / PR to `master`** → `build` (bare-metal kernel + ISO) and `verify` (7 root-task daemons, SPARK Level 4) run automatically.
+- **Manual** (`Actions` → `CI` → *Run workflow*) → the `prove-full` job runs the complete 185-module SPARK Level-4 proof (`scripts/prove_kernel.sh`) and uploads `obj/proof/report.txt` as an artifact.
+
 ## Documentation
 
 - [`PROJECT_PASSPORT.md`](PROJECT_PASSPORT.md) — project overview.

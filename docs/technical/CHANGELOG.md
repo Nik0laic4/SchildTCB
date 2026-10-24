@@ -119,6 +119,26 @@
 - Minimal C root task (`apps/hello`, `src/schild_core/arm64/apps/hello/`) prints via `seL4_DebugPutChar` (syscall -9) after `Booting all finished, dropped to user space`.
 - Direction: Raspberry Pi 4B (BCM2711, `AARCH64_bcm2711_verified.cmake`) — formally-verified AArch64 target (SMP 4 cores, UART debug). No SMMU on RPi — DMA isolation stays out of scope for now.
 
+## v1.0.0-pre (2026-10-24) — CI: full 185-module proof as a manual job; actions bumped to v7
+
+- `prove-full` job added to `.github/workflows/ci.yml`, gated on `workflow_dispatch`
+  (manual only): it runs `scripts/prove_kernel.sh` — the complete 185-module
+  SPARK Level-4 proof (tens of minutes) — and uploads `obj/proof/report.txt`
+  as an artifact. The per-push CI still runs only the fast 7-daemon `verify.sh`.
+- `actions/checkout` bumped `@v4 → @v7` (Node 20 → Node 24, removes the runner
+  deprecation warning); `actions/upload-artifact@v7` for the report.
+- `scripts/prove_kernel.sh` hardened: fails fast if `gnatprove` or the GNAT
+  toolchain is missing (mirrors `verify.sh`).
+
+## v1.0.0-pre (2026-10-24) — ARM64 (AArch64) feasibility check (QEMU, prep for Pi 4B)
+
+**Validated in QEMU: the seL4 kernel cross-compiles and starts for AArch64 (`qemu-arm-virt`).**
+
+- Toolchain ready: QEMU aarch64, `gcc-aarch64-linux-gnu`, `gnat-aarch64` (Ada cross), seL4 Python deps.
+- seL4 kernel builds for `qemu-arm-virt` AArch64 (verified 165 KB / debug+printing 148 KB) and starts under QEMU.
+- Direction: Raspberry Pi 4B (BCM2711, `AARCH64_bcm2711_verified.cmake`) is the formally-verified AArch64 target (SMP 4 cores, UART debug). No SMMU on RPi — DMA isolation stays out of scope for now.
+- This is the entry point for the ARM64 port (Phase 0 of the network-gateway roadmap).
+
 ## v1.0.0-pre (2026-10-04) — W4: formal proof of the root task (driver Off→On, 7 daemons)
 
 **Validated: `schild_root_task.adb` flipped `SPARK_Mode => Off → On` and proved (54 checks, Level 4); `verify.sh` = 7 daemons, `not-proved: 0`; QEMU 18/18.**

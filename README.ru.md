@@ -78,6 +78,11 @@ bash scripts/prove_kernel.sh    # полный прогон ядра (185 мод
 SKIP_BUILD=1 SEL4_PRIMARY=0 bash scripts/run_tests.sh
 ```
 
+## CI (GitHub Actions)
+
+- **Push / PR в `master`** → автоматически выполняются `build` (bare-metal ядро + ISO) и `verify` (7 демонов root-задачи, SPARK Level 4).
+- **Вручную** (`Actions` → `CI` → *Run workflow*) → задача `prove-full` выполняет полное доказательство 185 модулей на SPARK Level 4 (`scripts/prove_kernel.sh`) и загружает `obj/proof/report.txt` как артефакт.
+
 ## Документация
 
 - [`PROJECT_PASSPORT.md`](PROJECT_PASSPORT.md) — обзор проекта.
