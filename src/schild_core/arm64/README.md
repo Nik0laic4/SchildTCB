@@ -30,6 +30,6 @@ ninja
 
 ## Следующие шаги
 - **Ada root-задача** — ✅ валидирована: полный цикл elfloader → ядро → Ada root task работает в QEMU (см. `ada/README.md`).
-- **virtio-net в QEMU** — ✅ валидированы TX + RX + ICMP echo + DHCP (UDP) + TCP-клиент под seL4 (см. `ada/README.md`).
-- HTTP-клиент (TCP + HTTP/1.0 GET) поверх virtio-net.
+- **virtio-net в QEMU** — ✅ валидированы TX + RX + ICMP echo + DHCP (UDP) + TCP + HTTP-клиент под seL4 (см. `ada/README.md`).
+- Разбор HTTP-ответа и далее — TCP-сервер / DNS-клиент.
 - Драйвер Ethernet **GENET** (Pi 4) — вместо e1000e.

@@ -529,9 +529,9 @@ static int parse_tcp(const volatile u8 *rxpkt, u32 *seq, u32 *ack, u8 *flags,
 }
 
 /* Set up RX (queue 0) and TX (queue 1), resolve the gateway with ARP, send an
- * ICMP echo request, then a DHCP DISCOVER, then a TCP handshake + data
- * exchange, checking each reply.  Returns:
- *   5 = TCP ok, 4 = DHCP ok (no TCP), 3 = ping ok (no DHCP),
+ * ICMP echo request, then a DHCP DISCOVER, then a TCP handshake + HTTP/1.0
+ * GET, checking each reply.  Returns:
+ *   5 = HTTP ok, 4 = DHCP ok (no TCP), 3 = ping ok (no DHCP),
  *   2 = ARP ok (no ICMP), 1 = TX ok, 0 = error. */
 u64 schild_virtio_net_test(void)
 {
@@ -690,11 +690,11 @@ u64 schild_virtio_net_test(void)
         if (!parse_dhcp_offer(rxpkt, offered_ip)) return 3;
     }
 
-    /* TCP round-trip: 3-way handshake (SYN -> SYN-ACK -> ACK) + a data
-     * exchange with a host service reached via the SLIRP gateway (10.0.2.2). */
+    /* TCP round-trip: 3-way handshake (SYN -> SYN-ACK -> ACK) + an HTTP/1.0
+     * GET to a host service reached via the SLIRP gateway (10.0.2.2). */
     {
         static const u8 host_ip[4] = { 10, 0, 2, 2 };
-        static const u8 ping[4]    = { 'p', 'i', 'n', 'g' };
+        static const u8 http_get[18] = "GET / HTTP/1.0\r\n\r\n";
         const u32 isn = 0x12345678u;
         u32 server_isn = 0;
 
@@ -738,20 +738,27 @@ u64 schild_virtio_net_test(void)
             server_isn = seq;
         }
 
-        /* ACK + data. */
+        /* ACK + HTTP GET.  Two RX buffers: the server replies with a pure ACK
+         * first, then the HTTP response. */
         rx_desc[0].addr  = dma_pa + 0x2000;
         rx_desc[0].len   = 1510;
         rx_desc[0].flags = 2;
         rx_desc[0].next  = 0;
+        rx_desc[1].addr  = dma_pa + 0x3000;
+        rx_desc[1].len   = 1510;
+        rx_desc[1].flags = 2;
+        rx_desc[1].next  = 0;
         rx_avail->ring[rx_avail->idx % VQ_NUM] = 0;
+        rx_avail->idx = rx_avail->idx + 1;
+        rx_avail->ring[rx_avail->idx % VQ_NUM] = 1;
         rx_avail->idx = rx_avail->idx + 1;
 
         pkt = dma + 0x6000;
         for (i = 0; i < 10; i++) pkt[i] = 0x00;    /* virtio_net_hdr */
         build_tcp_frame(pkt + 10, gw_mac, offered_ip, host_ip,
-                        isn + 1, server_isn + 1, 0x18, ping, 4);
+                        isn + 1, server_isn + 1, 0x18, http_get, 18);
         tx_desc[0].addr  = dma_pa + 0x6000;
-        tx_desc[0].len   = 10 + 14 + 20 + 20 + 4;
+        tx_desc[0].len   = 10 + 14 + 20 + 20 + 18;
         tx_desc[0].flags = 0;
         tx_desc[0].next  = 0;
         tx_avail->ring[tx_avail->idx % VQ_NUM] = 0;
@@ -764,17 +771,25 @@ u64 schild_virtio_net_test(void)
         for (spins = 0; spins < 1000000; spins++) {
             if (tx_used->idx >= 5) break;
         }
-        for (spins = 0; spins < 5000000 && rx_used->idx < 5; spins++) {
+        for (spins = 0; spins < 5000000 && rx_used->idx < 6; spins++) {
         }
-        if (rx_used->idx < 5) return 4;   /* handshake ok, no data reply */
+        if (rx_used->idx < 6) return 4;   /* handshake ok, no HTTP reply */
 
         {
-            const volatile u8 *rxpkt = dma + 0x2000 + 10;
-            const volatile u8 *tpayload;
-            u32 seq, ack; u8 fl; int pl;
-            if (!parse_tcp(rxpkt, &seq, &ack, &fl, &tpayload, &pl)) return 4;
-            if (!(fl & 0x10)) return 4;   /* no ACK flag */
-            if (pl <= 0) return 4;        /* no payload */
+            /* The HTTP response is in one of the two RX buffers. */
+            int k, ok = 0;
+            for (k = 0; k < 2 && !ok; k++) {
+                const volatile u8 *rxpkt = dma + 0x2000 + k * 0x1000 + 10;
+                const volatile u8 *tpayload;
+                u32 seq2, ack2; u8 fl2; int pl2;
+                if (parse_tcp(rxpkt, &seq2, &ack2, &fl2, &tpayload, &pl2) &&
+                    (fl2 & 0x10) && pl2 >= 5 &&
+                    tpayload[0] == 'H' && tpayload[1] == 'T' && tpayload[2] == 'T' &&
+                    tpayload[3] == 'P' && tpayload[4] == '/') {
+                    ok = 1;
+                }
+            }
+            if (!ok) return 4;
         }
         return 5;
     }
