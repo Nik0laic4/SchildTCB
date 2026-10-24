@@ -33,14 +33,12 @@ jobs:
 
       - name: Install Ada/SPARK toolchain
         run: |
-          alr -n toolchain --select gnat_native
-          alr -n toolchain --select gprbuild
+          alr -n toolchain --select gnat_native=14.2.1
+          alr -n toolchain --select gprbuild=22.0.1
           alr -n install gnatprove
 
       - name: Locate toolchain (debug)
         run: |
-          echo "=== alr toolchain list ==="
-          alr toolchain --list || true
           echo "=== toolchains dir ==="
           ls -la "$HOME/.local/share/alire/toolchains/" || echo "NO TOOLCHAINS DIR"
           echo "=== find gnat gcc ==="
