@@ -71,7 +71,7 @@ begin
       R : Unsigned_64 := Virtio_Net_Test;
    begin
       if R = 5 then
-         Debug_Put_Line ("virtio-net TCP: OK");
+         Debug_Put_Line ("virtio-net HTTP: OK");
       elsif R = 4 then
          Debug_Put_Line ("virtio-net DHCP: OK, TCP: none");
       elsif R = 3 then

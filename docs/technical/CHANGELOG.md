@@ -6,6 +6,20 @@
 > *pending* or *target* have not yet been validated. Formal-verification
 > coverage is stated per-module, never as an aggregate percentage.
 
+## v1.0.0-pre (2026-10-24) — AArch64: virtio-net HTTP client under seL4 (QEMU)
+
+**Validated: the Ada seL4 root task sends `GET / HTTP/1.0` over a TCP connection to a host HTTP server via the SLIRP gateway and receives `HTTP/1.0 200 OK` (`virtio-net HTTP: OK`).**
+
+- `sel4_mmio.c`: the TCP data payload is now an HTTP/1.0 request; the response
+  verifier checks the payload for the `HTTP/` prefix.
+- The server replies with a pure ACK first, then the HTTP response, so the RX
+  queue is armed with **two** buffers (descriptors 0 and 1) for the data round.
+- Validated against `python3 -m http.server` on the host (server log
+  `"GET / HTTP/1.0" 200`).
+- Full stack in one boot: ARP → ICMP → DHCP → TCP handshake → HTTP GET/response.
+- Next step: parse the HTTP response body (content-length) and, later, a TCP
+  server / DNS-over-UDP client.
+
 ## v1.0.0-pre (2026-10-24) — AArch64: virtio-net TCP client under seL4 (QEMU)
 
 **Validated: the Ada seL4 root task completes a TCP 3-way handshake (SYN → SYN-ACK → ACK) to a host service via the SLIRP gateway (`10.0.2.2:8080`) and exchanges data (`virtio-net TCP: OK`).**
