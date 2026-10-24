@@ -33,11 +33,9 @@ jobs:
 
       - name: Install Ada/SPARK toolchain
         run: |
-          alr toolchain --install gnat_native
-          alr toolchain --install gprbuild
-          alr toolchain --select gnat_native
-          alr toolchain --select gprbuild
-          alr install gnatprove
+          alr -n toolchain --select gnat_native
+          alr -n toolchain --select gprbuild
+          alr -n install gnatprove
 
       - name: Build (bare-metal kernel + ISO)
         run: |
