@@ -21,6 +21,10 @@ provide the seL4 root task written in Ada.
 | `root_linker.ld` | seL4 root-task layout (entry `_sel4_start`, load @ `0x400000`). |
 | `sel4_stubs.c` | seL4 `svc #0` shim + GNAT runtime stubs. |
 | `build_root.sh` | Build the seL4 root task + validate the ELF. |
+| `virtio_mmio.ads` / `.adb` | virtio-mmio transport driver (probe + MAC read). |
+| `virtio_probe.adb` | Bare-metal virtio-net probe (validated in QEMU). |
+| `virtio_start.S` | AArch64 entry point for the virtio probe. |
+| `build_virtio.sh` | Build + boot the virtio-net probe in QEMU. |
 
 ## Design
 
@@ -99,6 +103,25 @@ cat /tmp/serial.log
 
 (`ElfloaderHashInstructions` is `hash_none`, so the pre-built Ada ELF swaps in
 without a hash check.)
+
+## Artifact 3 — virtio-net device probe (validated)
+
+```bash
+./build_virtio.sh          # build + boot the virtio-net probe in QEMU
+```
+
+Brings a virtio-net device into the DRIVER state and prints its MAC.  QEMU
+attaches the first `-device` to the **last** virtio-mmio slot (bus.31 @
+`0x0a00_3e00`), so the driver targets that slot.  Validated output:
+
+```
+==== Schild TCB: virtio-net probe (AArch64 bare-metal) ====
+virtio-net found, MAC = 52:54:00:12:34:56
+```
+
+This validates the `Virtio_MMIO` driver in isolation (EL1, direct MMIO).  Next
+steps: map the virtio-mmio region into the seL4 root-task VSpace, then set up
+the virtqueues for real TX/RX.
 
 ## Requirements
 

@@ -6,6 +6,20 @@
 > *pending* or *target* have not yet been validated. Formal-verification
 > coverage is stated per-module, never as an aggregate percentage.
 
+## v1.0.0-pre (2026-10-24) — AArch64: virtio-mmio driver + virtio-net MAC probe (QEMU)
+
+**Validated: the Ada virtio-mmio driver brings a virtio-net device into the DRIVER state and reads its MAC address in `qemu-system-aarch64`.**
+
+- `virtio_mmio.ads` / `virtio_mmio.adb`: virtio-mmio transport driver (spec
+  `SPARK_Mode => On`, MMIO body `Off`), overlaying the device registers at the
+  qemu virtio-mmio slot.  QEMU attaches the first `-device` to the **last**
+  slot (bus.31 @ `0x0a00_3e00`), discovered via `info qtree`.
+- `virtio_probe.adb` + `build_virtio.sh`: boots bare-metal and prints
+  `virtio-net found, MAC = 52:54:00:12:34:56` (the MAC passed to
+  `-device virtio-net-device,mac=...`).
+- Next: map the virtio-mmio region into the seL4 root-task VSpace, then set up
+  the virtqueues for TX/RX.
+
 ## v1.0.0-pre (2026-10-24) — AArch64: Ada seL4 root task runs under the elfloader in QEMU
 
 **Validated: the full seL4 AArch64 cycle — ELF loader → kernel → Ada root task — boots in QEMU and prints `Hello from Ada (seL4 AArch64 root task)!` (after `Booting all finished, dropped to user space`).**
