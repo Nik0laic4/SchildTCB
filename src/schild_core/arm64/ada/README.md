@@ -18,7 +18,7 @@ provide the seL4 root task written in Ada.
 | `schild_arm_root_task.adb` | Ada/SPARK seL4 root task. |
 | `sel4_syscall.ads` / `.adb` | seL4 debug-console syscall seam (spec `On`; syscall in C). |
 | `root_start.S` | seL4 root-task entry point. |
-| `root_linker.ld` | seL4 root-task layout (load @ `0x60000000`). |
+| `root_linker.ld` | seL4 root-task layout (entry `_sel4_start`, load @ `0x400000`). |
 | `sel4_stubs.c` | seL4 `svc #0` shim + GNAT runtime stubs. |
 | `build_root.sh` | Build the seL4 root task + validate the ELF. |
 
@@ -53,23 +53,56 @@ Hello from Ada (AArch64)!
 Runtime OK.
 ```
 
-## Artifact 2 — seL4 root task (compiled; QEMU run pending)
+## Artifact 2 — seL4 root task (validated in QEMU)
 
 ```bash
 ./build_root.sh            # build root_task.elf + validate the ELF
 ```
 
 The root task prints through `seL4_SysDebugPutChar` (syscall -9, `svc #0`) and
-is linked at `0x60000000`.  `build_root.sh` validates the ELF: AArch64 machine,
-entry point, `svc` instruction present, Ada entry symbol present.
+is linked at `0x400000` with entry `_sel4_start` (the seL4 AArch64 convention).
+`build_root.sh` validates the ELF: AArch64 machine, entry point, `svc`
+instruction, Ada entry symbol.
 
-**Pending:** booting `root_task.elf` under the seL4 elfloader is *not*
-reproduced on this machine because the seL4 project (kernel + elfloader, via
-`repo`) is not checked out here.  The C root task already completes the full
-elfloader → kernel → root-task cycle (see `../README.md`); swapping in the Ada
-root task is the next validation step once the seL4 toolchain is present.
+**Validated:** the full cycle — ELF loader → kernel → Ada root task — boots in
+QEMU and prints, after `Booting all finished, dropped to user space`:
+
+```
+==== Schild TCB: Ada/SPARK seL4 root task (AArch64) ====
+Root task running under seL4 (DebugPutChar via svc #0).
+sum(1..5) = 0x000000000000000f
+Hello from Ada (seL4 AArch64 root task)!
+```
+
+Reproduction (the seL4 project is upstream, fetched with `repo`):
+
+```bash
+# 1. seL4 project + kernel/elfloader build (griddle)
+mkdir sel4proj && cd sel4proj
+repo init -u https://github.com/seL4/sel4test-manifest.git --depth=1
+repo sync -j8
+mkdir build && cd build
+../griddle --PLATFORM=qemu-arm-virt --SIMULATION=ON --KernelSel4Arch=aarch64
+ninja
+
+# 2. Build the Ada root task, inject it as the elfloader root server
+cd <schild>/src/schild_core/arm64/ada && ./build_root.sh
+aarch64-linux-gnu-strip -o <sel4proj>/build/elfloader/rootserver root_task.elf
+
+# 3. Rebuild the elfloader (CPIO + link) and boot the full cycle
+cd <sel4proj>/build && ninja
+qemu-system-aarch64 -machine virt,gic-version=2 -cpu cortex-a53 -m size=2G \
+    -no-reboot -display none -monitor none -serial file:/tmp/serial.log \
+    -kernel images/sel4test-driver-image-arm-qemu-arm-virt
+cat /tmp/serial.log
+```
+
+(`ElfloaderHashInstructions` is `hash_none`, so the pre-built Ada ELF swaps in
+without a hash check.)
 
 ## Requirements
 
 - `gcc-14` / `gnatmake-14` / `ld` / `readelf` / `objdump` for `aarch64-linux-gnu`
-- `qemu-system-aarch64` (for Artifact 1)
+- `qemu-system-aarch64`
+- Artifact 2's full cycle: the seL4 project via `repo` (sel4test-manifest) and
+  `griddle` (see the reproduction steps above)

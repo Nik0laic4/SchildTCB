@@ -3,15 +3,16 @@
  *
  * Schild TCB -- seL4 AArch64 root-task entry point.
  *
- * seL4 drops the root task into user space (EL0) with the BootInfo pointer in
- * x0 and the IPC buffer pointer in x1, and with an uninitialised stack.  We set
- * up a 16 KiB stack in .bss and jump to the Ada main procedure.  (BootInfo/IPC
- * capture is intentionally deferred: the current root task only uses the debug
- * console, which needs no boot info.)
+ * seL4 drops the root task into user space (EL0) at `_sel4_start` (the seL4
+ * convention: the kernel jumps to the ELF entry with the BootInfo pointer in x0
+ * and the IPC buffer pointer in x1, and an uninitialised stack).  We set up a
+ * 16 KiB stack in .bss and jump to the Ada main procedure.  (BootInfo/IPC
+ * capture is deferred: the current root task only uses the debug console,
+ * which needs no boot info.)
  */
 .section .text
-.globl _start
-_start:
+.globl _sel4_start
+_sel4_start:
     adrp x0, stack_top
     add  sp, x0, :lo12:stack_top
     bl   _ada_schild_arm_root_task

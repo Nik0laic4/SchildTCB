@@ -6,6 +6,19 @@
 > *pending* or *target* have not yet been validated. Formal-verification
 > coverage is stated per-module, never as an aggregate percentage.
 
+## v1.0.0-pre (2026-10-24) — AArch64: Ada seL4 root task runs under the elfloader in QEMU
+
+**Validated: the full seL4 AArch64 cycle — ELF loader → kernel → Ada root task — boots in QEMU and prints `Hello from Ada (seL4 AArch64 root task)!` (after `Booting all finished, dropped to user space`).**
+
+- `root_task.elf` uses the seL4 AArch64 convention: entry `_sel4_start` @
+  `0x400000` (the aarch64-linux-gnu default text segment), corrected from the
+  earlier `0x60000000` experiment.
+- Injected as the elfloader root server (`strip` → `build/elfloader/rootserver`),
+  the CPIO archive is rebuilt, and the cycle prints `sum(1..5) = 0x000000000000000f`.
+- seL4 project re-checked-out via `repo` (sel4test-manifest) and built with
+  `griddle` (`qemu-arm-virt`, aarch64); `ElfloaderHashInstructions=hash_none`
+  lets the pre-built Ada ELF swap in cleanly.
+
 ## v1.0.0-pre (2026-10-24) — AArch64: bare-metal Ada runtime validated in QEMU; Ada seL4 root task built
 
 **Validated in QEMU: the Zero-Footprint-Profile runtime (`bare_runtime`) compiles and runs on AArch64 (cross-GNAT 14), printing over the PL011 UART of `qemu-system-aarch64 -M virt` — no hardware, no OS.**

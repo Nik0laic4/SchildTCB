@@ -29,6 +29,6 @@ ninja
 ```
 
 ## Следующие шаги
-- **Ada root-задача** — runtime валидирован в QEMU, root task компилируется в валидный ELF; осталось прогнать его под elfloader (нужен seL4-проект на диске).
+- **Ada root-задача** — ✅ валидирована: полный цикл elfloader → ядро → Ada root task работает в QEMU (см. `ada/README.md`).
 - Драйвер Ethernet **GENET** (Pi 4) — вместо e1000e.
 - Сеть в QEMU (virtio-net) до покупки Pi 4B.

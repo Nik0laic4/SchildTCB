@@ -2,11 +2,11 @@
  * SPDX-License-Identifier: GPL-2.0-only
  *
  * seL4 AArch64 root-task layout.  The ELF is loaded by the seL4 elfloader at
- * its linked virtual address; 0x60000000 matches the existing arm64 C root-task
- * experiment (arm64/linker.ld).  The exact load address is re-confirmed when
- * the root task is run under the seL4 elfloader (pending on this machine).
+ * its linked virtual address.  seL4 AArch64 root tasks are linked at 0x400000
+ * (the aarch64-linux-gnu default text segment) with entry `_sel4_start`, the
+ * same convention the sel4runtime root task uses.
  */
-ENTRY(_start)
+ENTRY(_sel4_start)
 PHDRS
 {
     rx PT_LOAD FLAGS(5);   /* R-X: code + read-only data */
@@ -14,7 +14,7 @@ PHDRS
 }
 SECTIONS
 {
-    . = 0x60000000;
+    . = 0x400000;
     .text   : { *(.text*) } :rx
     .rodata : { *(.rodata*) } :rx
     . = ALIGN(0x10000);

@@ -63,6 +63,14 @@ else
     exit 1
 fi
 
+ENTRY_SYM=$("$PREFIX"nm root_task.elf | grep -c '_sel4_start' || true)
+if [ "$ENTRY_SYM" -gt 0 ]; then
+    echo "[root] seL4 entry (_sel4_start): present"
+else
+    echo "[root] ERROR: seL4 entry symbol missing" >&2
+    exit 1
+fi
+
 ADA_SYM=$("$PREFIX"nm root_task.elf | grep -c '_ada_schild_arm_root_task' || true)
 if [ "$ADA_SYM" -gt 0 ]; then
     echo "[root] Ada entry (_ada_schild_arm_root_task): present"
