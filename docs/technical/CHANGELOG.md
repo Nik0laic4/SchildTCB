@@ -6,6 +6,19 @@
 > *pending* or *target* have not yet been validated. Formal-verification
 > coverage is stated per-module, never as an aggregate percentage.
 
+## v1.0.0-pre (2026-10-24) — AArch64: virtio-net TCP client under seL4 (QEMU)
+
+**Validated: the Ada seL4 root task completes a TCP 3-way handshake (SYN → SYN-ACK → ACK) to a host service via the SLIRP gateway (`10.0.2.2:8080`) and exchanges data (`virtio-net TCP: OK`).**
+
+- `sel4_mmio.c`: TCP segment builder (20-byte header + IPv4 pseudo-header
+  checksum), generic TCP parser (seq/ack/flags/payload), 3-way handshake and a
+  data exchange (`ping` → `host-ack`) against a Python server on the host.
+- QEMU's SLIRP forwards the gateway `10.0.2.2` to the host loopback, so the
+  guest reaches a host service directly — deterministic, no internet required.
+- Full stack now validated in one boot: ARP → ICMP echo → DHCP DISCOVER/OFFER
+  → TCP handshake + data round-trip.
+- Next step: an HTTP client (TCP + HTTP/1.0 GET) and, later, a TCP server.
+
 ## v1.0.0-pre (2026-10-24) — AArch64: virtio-net DHCP (UDP) under seL4 (QEMU)
 
 **Validated: the Ada seL4 root task sends a DHCP DISCOVER (UDP broadcast, `0.0.0.0:68` → `255.255.255.255:67`) and receives the DHCP OFFER (`Your-IP 10.0.2.15`) from QEMU's SLIRP server (`virtio-net DHCP: OK`).**

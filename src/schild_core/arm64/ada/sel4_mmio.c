@@ -450,10 +450,89 @@ static int parse_dhcp_offer(const volatile u8 *rxpkt, u8 *offered_ip)
     return 1;
 }
 
+/* Build a TCP segment (20-byte header + payload, checksum computed over the
+ * IPv4 pseudo-header). */
+static void build_tcp(volatile u8 *p, u16 sport, u16 dport,
+                      u32 seq, u32 ack, u8 flags,
+                      const u8 *src_ip, const u8 *dst_ip,
+                      const volatile u8 *payload, int plen)
+{
+    u32 sum = 0;
+    u16 c;
+    int i;
+
+    p[0] = (u8)(sport >> 8); p[1] = (u8)sport;
+    p[2] = (u8)(dport >> 8); p[3] = (u8)dport;
+    p[4] = (u8)(seq >> 24); p[5] = (u8)(seq >> 16);
+    p[6] = (u8)(seq >> 8); p[7] = (u8)seq;
+    p[8] = (u8)(ack >> 24); p[9] = (u8)(ack >> 16);
+    p[10] = (u8)(ack >> 8); p[11] = (u8)ack;
+    p[12] = 0x50;            /* data offset = 5 words (20 bytes) */
+    p[13] = flags;
+    p[14] = 0x20; p[15] = 0x00;   /* window = 8192 */
+    p[16] = 0x00; p[17] = 0x00;   /* checksum */
+    p[18] = 0x00; p[19] = 0x00;   /* urgent pointer */
+    for (i = 0; i < plen; i++) p[20 + i] = payload[i];
+
+    /* Pseudo-header: src IP, dst IP, zero+protocol(6), TCP length. */
+    for (i = 0; i < 4; i += 2) sum += ((u32)src_ip[i] << 8) | src_ip[i + 1];
+    for (i = 0; i < 4; i += 2) sum += ((u32)dst_ip[i] << 8) | dst_ip[i + 1];
+    sum += 6;
+    sum += 20 + plen;
+    for (i = 0; i + 1 < 20 + plen; i += 2)
+        sum += ((u32)p[i] << 8) | p[i + 1];
+    if (i < 20 + plen)
+        sum += (u32)p[i] << 8;
+    while (sum >> 16)
+        sum = (sum & 0xffff) + (sum >> 16);
+    c = (u16)~sum;
+    p[16] = (u8)(c >> 8);
+    p[17] = (u8)c;
+}
+
+/* Build an Ethernet + IPv4 + TCP segment (sport 12345, dport 8080). */
+static void build_tcp_frame(volatile u8 *pkt, const u8 *dst_mac,
+                            const u8 *src_ip, const u8 *dst_ip,
+                            u32 seq, u32 ack, u8 flags,
+                            const volatile u8 *payload, int plen)
+{
+    int i;
+
+    for (i = 0; i < 6; i++) pkt[i] = dst_mac[i];
+    for (i = 0; i < 6; i++) pkt[6 + i] = net_mac[i];
+    pkt[12] = 0x08; pkt[13] = 0x00;   /* EtherType = IPv4 */
+    build_tcp(pkt + 14 + 20, 12345, 8080, seq, ack, flags,
+              src_ip, dst_ip, payload, plen);
+    build_ipv4(pkt + 14, 20 + 20 + plen, 6, src_ip, dst_ip);
+}
+
+/* Parse a received TCP segment; fills seq/ack/flags/payload on success. */
+static int parse_tcp(const volatile u8 *rxpkt, u32 *seq, u32 *ack, u8 *flags,
+                     const volatile u8 **payload, int *plen)
+{
+    int ihl, doff, total;
+    const volatile u8 *tcp;
+
+    if (rxpkt[12] != 0x08 || rxpkt[13] != 0x00) return 0;   /* EtherType = IPv4 */
+    if (rxpkt[23] != 0x06) return 0;                         /* proto = TCP */
+    ihl = (rxpkt[14] & 0x0f) * 4;
+    tcp = rxpkt + 14 + ihl;
+    doff = (tcp[12] >> 4) * 4;
+    *seq   = ((u32)tcp[4] << 24) | ((u32)tcp[5] << 16) | ((u32)tcp[6] << 8) | tcp[7];
+    *ack   = ((u32)tcp[8] << 24) | ((u32)tcp[9] << 16) | ((u32)tcp[10] << 8) | tcp[11];
+    *flags = tcp[13];
+    *payload = tcp + doff;
+    total = ((u16)rxpkt[16] << 8) | rxpkt[17];
+    *plen = total - ihl - doff;
+    if (*plen < 0) *plen = 0;
+    return 1;
+}
+
 /* Set up RX (queue 0) and TX (queue 1), resolve the gateway with ARP, send an
- * ICMP echo request, then a DHCP DISCOVER, checking each reply.  Returns:
- *   4 = DHCP ok, 3 = ping ok (no DHCP), 2 = ARP ok (no ICMP), 1 = TX ok,
- *   0 = error. */
+ * ICMP echo request, then a DHCP DISCOVER, then a TCP handshake + data
+ * exchange, checking each reply.  Returns:
+ *   5 = TCP ok, 4 = DHCP ok (no TCP), 3 = ping ok (no DHCP),
+ *   2 = ARP ok (no ICMP), 1 = TX ok, 0 = error. */
 u64 schild_virtio_net_test(void)
 {
     volatile u32 *regs;
@@ -610,5 +689,93 @@ u64 schild_virtio_net_test(void)
         volatile u8 *rxpkt = dma + 0x2000 + 10;
         if (!parse_dhcp_offer(rxpkt, offered_ip)) return 3;
     }
-    return 4;
+
+    /* TCP round-trip: 3-way handshake (SYN -> SYN-ACK -> ACK) + a data
+     * exchange with a host service reached via the SLIRP gateway (10.0.2.2). */
+    {
+        static const u8 host_ip[4] = { 10, 0, 2, 2 };
+        static const u8 ping[4]    = { 'p', 'i', 'n', 'g' };
+        const u32 isn = 0x12345678u;
+        u32 server_isn = 0;
+
+        /* SYN. */
+        rx_desc[0].addr  = dma_pa + 0x2000;
+        rx_desc[0].len   = 1510;
+        rx_desc[0].flags = 2;
+        rx_desc[0].next  = 0;
+        rx_avail->ring[rx_avail->idx % VQ_NUM] = 0;
+        rx_avail->idx = rx_avail->idx + 1;
+
+        pkt = dma + 0x6000;
+        for (i = 0; i < 10; i++) pkt[i] = 0x00;    /* virtio_net_hdr */
+        build_tcp_frame(pkt + 10, gw_mac, offered_ip, host_ip,
+                        isn, 0, 0x02, 0, 0);
+        tx_desc[0].addr  = dma_pa + 0x6000;
+        tx_desc[0].len   = 10 + 14 + 20 + 20;
+        tx_desc[0].flags = 0;
+        tx_desc[0].next  = 0;
+        tx_avail->ring[tx_avail->idx % VQ_NUM] = 0;
+        tx_avail->idx = tx_avail->idx + 1;
+        __asm__ volatile("dmb sy" ::: "memory");
+
+        mmio32w(regs, VMMIO_QUEUE_NOTIFY, 0);
+        mmio32w(regs, VMMIO_QUEUE_NOTIFY, 1);
+
+        for (spins = 0; spins < 1000000; spins++) {
+            if (tx_used->idx >= 4) break;
+        }
+        for (spins = 0; spins < 5000000 && rx_used->idx < 4; spins++) {
+        }
+        if (rx_used->idx < 4) return 4;   /* DHCP ok, no SYN-ACK */
+
+        {
+            const volatile u8 *rxpkt = dma + 0x2000 + 10;
+            const volatile u8 *tpayload;
+            u32 seq, ack; u8 fl; int pl;
+            if (!parse_tcp(rxpkt, &seq, &ack, &fl, &tpayload, &pl)) return 4;
+            if ((fl & 0x12) != 0x12) return 4;   /* not SYN+ACK */
+            if (ack != isn + 1) return 4;
+            server_isn = seq;
+        }
+
+        /* ACK + data. */
+        rx_desc[0].addr  = dma_pa + 0x2000;
+        rx_desc[0].len   = 1510;
+        rx_desc[0].flags = 2;
+        rx_desc[0].next  = 0;
+        rx_avail->ring[rx_avail->idx % VQ_NUM] = 0;
+        rx_avail->idx = rx_avail->idx + 1;
+
+        pkt = dma + 0x6000;
+        for (i = 0; i < 10; i++) pkt[i] = 0x00;    /* virtio_net_hdr */
+        build_tcp_frame(pkt + 10, gw_mac, offered_ip, host_ip,
+                        isn + 1, server_isn + 1, 0x18, ping, 4);
+        tx_desc[0].addr  = dma_pa + 0x6000;
+        tx_desc[0].len   = 10 + 14 + 20 + 20 + 4;
+        tx_desc[0].flags = 0;
+        tx_desc[0].next  = 0;
+        tx_avail->ring[tx_avail->idx % VQ_NUM] = 0;
+        tx_avail->idx = tx_avail->idx + 1;
+        __asm__ volatile("dmb sy" ::: "memory");
+
+        mmio32w(regs, VMMIO_QUEUE_NOTIFY, 0);
+        mmio32w(regs, VMMIO_QUEUE_NOTIFY, 1);
+
+        for (spins = 0; spins < 1000000; spins++) {
+            if (tx_used->idx >= 5) break;
+        }
+        for (spins = 0; spins < 5000000 && rx_used->idx < 5; spins++) {
+        }
+        if (rx_used->idx < 5) return 4;   /* handshake ok, no data reply */
+
+        {
+            const volatile u8 *rxpkt = dma + 0x2000 + 10;
+            const volatile u8 *tpayload;
+            u32 seq, ack; u8 fl; int pl;
+            if (!parse_tcp(rxpkt, &seq, &ack, &fl, &tpayload, &pl)) return 4;
+            if (!(fl & 0x10)) return 4;   /* no ACK flag */
+            if (pl <= 0) return 4;        /* no payload */
+        }
+        return 5;
+    }
 }
