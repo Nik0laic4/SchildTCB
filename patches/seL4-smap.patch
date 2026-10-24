@@ -1,0 +1,33 @@
+From: Ирганов А.Н.
+Date: 2026-10-04
+Subject: [PATCH] seL4: enable SMAP even with CONFIG_PRINTING (boot-log console)
+
+seL4 x86_64 disables SMAP (Supervisor Mode Access Prevention) whenever
+CONFIG_PRINTING is on, because the comment claims the "user stack trace" reads
+user memory and SMAP would fault it. In fact Arch_userStackTrace reads user
+memory via readWordFromVSpace -> paddr_to_pptr (the supervisor-mapped kernel
+window), which SMAP does NOT fault.
+
+Schild TCB forces CONFIG_PRINTING=1 for the framebuffer boot-log console, so
+SMAP was silently off. This patch enables SMAP regardless of CONFIG_PRINTING,
+keeping SMEP and CR0.WP; only CONFIG_DANGEROUS_CODE_INJECTION still blocks it.
+
+diff --git a/src/arch/x86/kernel/boot.c b/src/arch/x86/kernel/boot.c
+index 93b3209..fa004f6 100644
+--- a/src/arch/x86/kernel/boot.c
++++ b/src/arch/x86/kernel/boot.c
+@@ -373,9 +373,11 @@ BOOT_CODE bool_t init_cpu(
+     cpuid_007h_ebx_t ebx_007;
+     ebx_007.words[0] = x86_cpuid_ebx(0x7, 0);
+     if (cpuid_007h_ebx_get_smap(ebx_007)) {
+-        /* if we have user stack trace enabled or dangerous code injection then we cannot
+-         * enable this as SMAP will make them fault. */
+-        if (!config_set(CONFIG_PRINTING) && !config_set(CONFIG_DANGEROUS_CODE_INJECTION)) {
++        /* Schild TCB: enable SMAP even with CONFIG_PRINTING. The user stack
++         * trace (Arch_userStackTrace) reads user memory via the kernel window
++         * (readWordFromVSpace -> paddr_to_pptr), which is supervisor-mapped, so
++         * SMAP does not fault it. Only dangerous code injection still blocks. */
++        if (!config_set(CONFIG_DANGEROUS_CODE_INJECTION)) {
+             write_cr4(read_cr4() | CR4_SMAP);
+         }
+     }

@@ -1,0 +1,101 @@
+From: Ирганов А.Н.
+Date: 2026-10-04
+Subject: [PATCH] seL4: 8 KiB boot-info frame for 500 untyped caps (32 GB)
+
+The 32 GB ThinkPad T580 fragments its RAM/MMIO into more untyped regions than
+the 4 KiB boot-info frame can describe (~244 descriptors: 184-byte header +
+N*16). Raise seL4_BootInfoFrameBits from one page to two pages (8 KiB) and
+make the kernel map every page of the frame, so CONFIG_MAX_NUM_BOOTINFO_
+UNTYPED_CAPS can grow to 500.
+
+ - bootinfo_types.h: seL4_BootInfoFrameBits = seL4_PageBits + 1 (8 KiB).
+ - boot.c: allocate the boot-info frame right after the (largest) root cnode
+   so it keeps its size alignment; relax the compile_assert to >= PageBits;
+   map each page in create_bi_frame_cap (first cap -> seL4_CapBootInfoFrame,
+   the rest via provide_cap).
+
+diff --git a/libsel4/include/sel4/bootinfo_types.h b/libsel4/include/sel4/bootinfo_types.h
+index 66c97aa..33ae8ac 100644
+--- a/libsel4/include/sel4/bootinfo_types.h
++++ b/libsel4/include/sel4/bootinfo_types.h
+@@ -81,7 +81,7 @@ typedef struct seL4_BootInfo {
+  * structure. Due to internal restrictions, the size must be of the form 2^n and
+  * the minimum is one page.
+  */
+-#define seL4_BootInfoFrameBits  seL4_PageBits
++#define seL4_BootInfoFrameBits  (seL4_PageBits + 1)
+ #define seL4_BootInfoFrameSize  LIBSEL4_BIT(seL4_BootInfoFrameBits)
+ 
+ SEL4_COMPILE_ASSERT(
+
+diff --git a/src/kernel/boot.c b/src/kernel/boot.c
+index 412e1b1..bbf53e0 100644
+--- a/src/kernel/boot.c
++++ b/src/kernel/boot.c
+@@ -212,12 +212,21 @@ BOOT_CODE static void create_rootserver_objects(pptr_t start, v_region_t it_v_re
+     /* the root cnode is at least 4k, so it could be larger or smaller than a pd. */
+ #if (CONFIG_ROOT_CNODE_SIZE_BITS + seL4_SlotBits) > seL4_VSpaceBits
+     rootserver.cnode = alloc_rootserver_obj(cnode_size_bits, 1);
++    /* Schild TCB: the boot info frame may be larger than one page (8 KiB, so it
++     * can hold CONFIG_MAX_NUM_BOOTINFO_UNTYPED_CAPS=500 untyped descriptors).
++     * Allocate it directly after the cnode — the largest root-server object —
++     * so it stays aligned to its own size. */
++    compile_assert(invalid_seL4_BootInfoFrameBits, seL4_BootInfoFrameBits >= seL4_PageBits);
++    maybe_alloc_extra_bi(seL4_BootInfoFrameBits, extra_bi_size_bits);
++    rootserver.boot_info = alloc_rootserver_obj(seL4_BootInfoFrameBits, 1);
+     maybe_alloc_extra_bi(seL4_VSpaceBits, extra_bi_size_bits);
+     rootserver.vspace = alloc_rootserver_obj(seL4_VSpaceBits, 1);
+ #else
+     rootserver.vspace = alloc_rootserver_obj(seL4_VSpaceBits, 1);
+     maybe_alloc_extra_bi(cnode_size_bits, extra_bi_size_bits);
+     rootserver.cnode = alloc_rootserver_obj(cnode_size_bits, 1);
++    maybe_alloc_extra_bi(seL4_BootInfoFrameBits, extra_bi_size_bits);
++    rootserver.boot_info = alloc_rootserver_obj(seL4_BootInfoFrameBits, 1);
+ #endif
+ 
+     /* at this point we are up to creating 4k objects - which is the min size of
+@@ -226,12 +235,6 @@ BOOT_CODE static void create_rootserver_objects(pptr_t start, v_region_t it_v_re
+     compile_assert(invalid_seL4_ASIDPoolBits, seL4_ASIDPoolBits == seL4_PageBits);
+     rootserver.asid_pool = alloc_rootserver_obj(seL4_ASIDPoolBits, 1);
+     rootserver.ipc_buf = alloc_rootserver_obj(seL4_PageBits, 1);
+-    /* The boot info size must be at least one page. Due to the hard-coded order
+-     * of allocations used in the current implementation here, it can't be any
+-     * bigger.
+-     */
+-    compile_assert(invalid_seL4_BootInfoFrameBits, seL4_BootInfoFrameBits == seL4_PageBits);
+-    rootserver.boot_info = alloc_rootserver_obj(seL4_BootInfoFrameBits, 1);
+ 
+     /* TCBs on aarch32 can be larger than page tables in certain configs */
+ #if seL4_TCBBits >= seL4_PageTableBits
+@@ -311,11 +314,28 @@ BOOT_CODE cap_t create_ipcbuf_frame_cap(cap_t root_cnode_cap, cap_t pd_cap, vptr
+     return cap;
+ }
+ 
++BOOT_CODE bool_t provide_cap(cap_t root_cnode_cap, cap_t cap);
++
+ BOOT_CODE void create_bi_frame_cap(cap_t root_cnode_cap, cap_t pd_cap, vptr_t vptr)
+ {
+-    /* create a cap of it and write it into the root CNode */
+-    cap_t cap = create_mapped_it_frame_cap(pd_cap, rootserver.boot_info, vptr, IT_ASID, false, false);
+-    write_slot(SLOT_PTR(pptr_of_cap(root_cnode_cap), seL4_CapBootInfoFrame), cap);
++    /* Schild TCB: the boot info frame spans BIT(seL4_BootInfoFrameBits) bytes
++     * (8 KiB on x86_64, to hold 500 untyped descriptors), but a small-page frame
++     * cap only covers one 4 KiB page. Map each page: the first cap goes in the
++     * dedicated seL4_CapBootInfoFrame slot, the remaining page caps are handed
++     * out through provide_cap() so they are tracked in the root CNode. */
++    word_t n_pages = BIT(seL4_BootInfoFrameBits) / BIT(seL4_PageBits);
++    for (word_t i = 0; i < n_pages; i++) {
++        cap_t cap = create_mapped_it_frame_cap(pd_cap,
++                                                rootserver.boot_info + i * BIT(seL4_PageBits),
++                                                vptr + i * BIT(seL4_PageBits),
++                                                IT_ASID, false, false);
++        if (i == 0) {
++            /* create a cap of it and write it into the root CNode */
++            write_slot(SLOT_PTR(pptr_of_cap(root_cnode_cap), seL4_CapBootInfoFrame), cap);
++        } else {
++            provide_cap(root_cnode_cap, cap);
++        }
++    }
+ }
+ 
+ /**

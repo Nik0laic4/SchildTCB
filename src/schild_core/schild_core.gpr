@@ -1,0 +1,76 @@
+--  NOTE: this project file is a REFERENCE for the intended compiler/linker
+--  switches. The canonical bare-metal build is build.sh (direct gcc/as/ld),
+--  which additionally handles the two-circuit SCHILD_PROFILE overlay, the
+--  C/ASM sources and the custom linker script. This project is not driven by
+--  gprbuild as of Stage 10 (see docs/technical/BUILD.md).
+project Schild_Core is
+
+   -- ==========================================================================
+   -- Two-circuit build profile.
+   --   SCHILD_PROFILE=public  (default): open scaffold — the commercial
+   --     modules (Audit Logger, Config Daemon, Boot Manager) are compiled
+   --     from stub bodies only.
+   --   SCHILD_PROFILE=private: full build — commercial module bodies are
+   --     overlaid from private/ (see tools/sel4/build_rt.sh).
+   -- ==========================================================================
+   type Build_Profile_Kind is ("public", "private");
+   Build_Profile : Build_Profile_Kind := external ("SCHILD_PROFILE", "public");
+
+   for Languages use ("Ada", "C", "Asm");
+
+   for Source_Dirs use (
+      "src",
+      "src/01_hardware",
+      "src/02_security",
+      "src/03_crypto",
+      "src/04_userland",
+      "."
+   );
+
+   for Main use ("schild_main");
+   for Object_Dir use "obj/development";
+   for Exec_Dir use "bin";
+
+   package Compiler is
+      --  Ada compilation switches:
+      --  strict checks, overflow/validity, debug, no stdlib.
+      for Default_Switches ("Ada") use (
+         "-gnat2022",
+         "-gnatwa",
+         "-gnatwl",
+         "-gnatwJ",
+         "-gnatR1",
+         "-gnatf",
+         "-gnato",
+         "-gnatVa",
+         "-g",
+         "-O0",
+         "-nostdlib",
+         "-nostdinc",
+         "-fdebug-prefix-map=" & Project'Project_Dir & "=."
+         --  NOTE: -fmacro-prefix-map is C/C++ only (gnat1 rejects it for Ada);
+         --  build.sh applies it to the C sources only (PREFIX_MAP_C).
+      );
+   end Compiler;
+
+   package Linker is
+      for Default_Switches ("Ada") use (
+         "-nostdlib",
+         "-T", Project'Project_Dir & "/linker.ld",
+         "-z", "noexecstack",
+         "-z", "now"
+      );
+   end Linker;
+
+   package Binder is
+      for Default_Switches ("Ada") use ("-n");
+   end Binder;
+
+   package Prove is
+      for Proof_Switches ("Ada") use (
+         "--report=all",
+         "--warnings=continue"
+      );
+   end Prove;
+
+end Schild_Core;

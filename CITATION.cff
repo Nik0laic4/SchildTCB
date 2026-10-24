@@ -1,0 +1,18 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite it as below."
+authors:
+  - family-names: Irganov
+    given-names: Alexander
+title: "Schild TCB — a formally verified Trusted Computing Base on seL4 (Ada/SPARK)"
+version: 1.0.0-pre
+date-released: 2026-10-24
+license: GPL-2.0-only
+url: "https://github.com/Nik0laic4/SchildTCB"
+repository-code: "https://github.com/Nik0laic4/SchildTCB"
+keywords:
+  - seL4
+  - Ada
+  - SPARK
+  - microkernel
+  - formal verification
+  - TCB

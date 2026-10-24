@@ -1,0 +1,38 @@
+From: Ирганов А.Н.
+Date: 2026-10-04
+Subject: [PATCH] seL4: map the GOP framebuffer chunk as Write-Combining (PAT)
+
+The framebuffer text console (pc99 io.c) writes glyphs and scrolls the whole
+framebuffer on every line; on real hardware (ThinkPad T580) that memory is
+effectively uncached, so the boot log rendering dominates boot time. Map the
+framebuffer's 1 GiB kernel-window chunk with PAT[4]=WC (PDE.PAT=1) so writes
+combine; the IOAPIC/DRHU MMIO in the same chunk stays UC because
+map_kernel_window_devices() overrides those pages afterwards.
+
+diff --git a/src/arch/x86/64/kernel/vspace.c b/src/arch/x86/64/kernel/vspace.c
+index 5743926..0a70355 100644
+--- a/src/arch/x86/64/kernel/vspace.c
++++ b/src/arch/x86/64/kernel/vspace.c
+@@ -89,6 +89,13 @@ BOOT_CODE bool_t map_kernel_window(
+     /* also map the physical memory into the big kernel window */
+     paddr = 0;
+     vaddr = PPTR_BASE;
++    /* Schild TCB: map the GOP framebuffer's 1 GiB chunk as Write-Combining
++     * (PAT[4]) so the framebuffer text console is fast. The framebuffer
++     * (Intel stolen memory / UEFI GOP) is effectively uncached otherwise,
++     * which makes the per-character glyph + scroll writes dominate boot time.
++     * The IOAPIC/DRHU MMIO inside the same chunk stays UC because
++     * map_kernel_window_devices() overrides those specific pages afterwards. */
++    paddr_t fb_chunk = boot_state.fb_info.addr & ~(BIT(seL4_HugePageBits) - 1);
+     for (paddr = 0; paddr < PADDR_TOP;
+          paddr += BIT(seL4_HugePageBits)) {
+ 
+@@ -96,7 +103,7 @@ BOOT_CODE bool_t map_kernel_window(
+         x64KSKernelPDPT[pdpte_index] = pdpte_pdpte_1g_new(
+                                            0,          /* xd               */
+                                            paddr,      /* physical address */
+-                                           0,          /* PAT              */
++                                           (paddr == fb_chunk) ? 1 : 0, /* PAT (WC for fb) */
+                                            KERNEL_IS_GLOBAL(), /* global   */
+                                            0,          /* dirty            */
+                                            0,          /* accessed         */

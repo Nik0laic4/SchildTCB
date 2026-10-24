@@ -1,0 +1,51 @@
+From: Ирганов А.Н.
+Date: 2026-08-13
+Subject: [PATCH] seL4: zero TCB/Endpoint/Notification objects on creation
+
+seL4 relies on the bootloader providing zeroed RAM. createObject() does
+not explicitly zero kernel objects, so their internal state (TCB CTE
+slots/context, endpoint epQueue/state, notification ntfnQueue/state)
+would be garbage on real hardware that presents non-zero RAM after
+power-on (e.g. T580).
+
+Zero the three most safety-critical kernel objects on creation so their
+state is deterministic regardless of RAM contents.
+
+NOTE: CNode/VSpace objects still rely on the seL4 baseline assumption of
+zeroed RAM (root causes documented in docs/technical/CHANGELOG.md).
+
+diff --git a/src/object/objecttype.c b/src/object/objecttype.c
+index e6c6036..14c831e 100644
+--- a/src/object/objecttype.c
++++ b/src/object/objecttype.c
+@@ -516,6 +516,11 @@ cap_t createObject(object_t t, void *regionBase, word_t userSize, bool_t deviceM
+     switch ((api_object_t)t) {
+     case seL4_TCBObject: {
+         tcb_t *tcb;
++        /* Schild TCB: zero the whole TCB object so the internal CTE slots
++         * (tcbCTable/tcbVTable/tcbBuffer) and context start null/zero. seL4
++         * relies on the bootloader providing zeroed RAM; real hardware may
++         * present non-zero RAM, so guarantee deterministic state here. */
++        memzero(regionBase, BIT(seL4_TCBBits));
+         tcb = TCB_PTR((word_t)regionBase + TCB_OFFSET);
+         /** AUXUPD: "(True, ptr_retyps 1
+           (Ptr ((ptr_val \<acute>tcb) - ctcb_offset) :: (cte_C[5]) ptr)
+@@ -545,12 +550,18 @@ cap_t createObject(object_t t, void *regionBase, word_t userSize, bool_t deviceM
+     case seL4_EndpointObject:
+         /** AUXUPD: "(True, ptr_retyp
+           (Ptr (ptr_val \<acute>regionBase) :: endpoint_C ptr))" */
++        /* Schild TCB: zero the endpoint so state=EPState_Idle and epQueue is
++         * empty (deterministic state, independent of RAM contents). */
++        memzero(regionBase, BIT(seL4_EndpointBits));
+         return cap_endpoint_cap_new(0, true, true, true, true,
+                                     EP_REF(regionBase));
+ 
+     case seL4_NotificationObject:
+         /** AUXUPD: "(True, ptr_retyp
+               (Ptr (ptr_val \<acute>regionBase) :: notification_C ptr))" */
++        /* Schild TCB: zero the notification so state=NTFNState_Idle and
++         * ntfnQueue is empty (deterministic state, independent of RAM). */
++        memzero(regionBase, BIT(seL4_NotificationBits));
+         return cap_notification_cap_new(0, true, true,
+                                         NTFN_REF(regionBase));
+ 

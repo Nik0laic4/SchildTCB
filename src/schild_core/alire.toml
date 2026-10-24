@@ -1,0 +1,14 @@
+name = "schild_core"
+description = "Schild TCB formal verification core component"
+version = "1.0.0-pre"
+
+authors = ["Ирганов А.Н."]
+maintainers = ["Ирганов А.Н."]
+maintainers-logins = ["Ирганов А.Н."]
+website = ""
+tags = ["os", "spark", "sel4", "verification"]
+
+executables = ["schild_main"]
+
+[[depends-on]]
+gnatprove = "^14.1.1"

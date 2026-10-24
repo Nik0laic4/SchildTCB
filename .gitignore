@@ -1,0 +1,22 @@
+*.iso
+*.elf
+*.o
+*.ali
+*.bin
+*.img
+*.stdout
+*.log
+obj/
+build/
+build-test/
+__pycache__/
+*.pyc
+.DS_Store
+
+# Proprietary ledger bodies (two-circuit build): build.sh copies the real
+# implementations from private/userland/ into the tree. Never commit them.
+src/schild_core/src/04_userland/schild_distributed_ledger.adb
+src/schild_core/src/04_userland/schild_ledger_consensus.adb
+src/schild_core/src/04_userland/schild_ledger_ipc_gateway.adb
+src/schild_core/src/04_userland/schild_ledger_self_test.adb
+src/schild_core/src/04_userland/schild_wasm_sandbox_interface.adb

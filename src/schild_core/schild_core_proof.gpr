@@ -1,0 +1,23 @@
+-- =============================================================================
+-- Schild TCB SPARK proof project (standalone kernel, host runtime).
+--
+-- The bare-metal schild_core.gpr compiles against a zero-footprint runtime with
+-- -nostdinc, which GNATprove cannot analyse. This project proves the same
+-- kernel sources against the host runtime so the Level-4 contracts can be
+-- checked. Run `gnatprove -P schild_core_proof.gpr --level=4 -j8` (whole
+-- kernel) or `-u <unit>` (a single module).
+-- =============================================================================
+
+project Schild_Core_Proof is
+   for Source_Dirs use ("src",
+                        "src/01_hardware",
+                        "src/02_security",
+                        "src/03_crypto",
+                        "src/04_userland");
+   for Object_Dir use "obj/proof";
+
+   package Compiler is
+      for Default_Switches ("Ada") use ("-gnat2022", "-gnatwa");
+   end Compiler;
+
+end Schild_Core_Proof;

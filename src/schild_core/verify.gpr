@@ -1,0 +1,19 @@
+-- =============================================================================
+-- Schild TCB SPARK proof project.
+--
+-- The formally verified (SPARK Level 4) root-task daemons. Run
+-- `bash scripts/verify.sh` to prove them; the gate fails on any unproved
+-- verification condition.
+-- =============================================================================
+
+project Verify is
+   for Source_Dirs use ("tools/sel4/src", "src/03_crypto");
+   for Object_Dir use "obj/verify";
+   for Main use ("schild_mls_policy.adb",
+                 "schild_config_daemon.adb",
+                 "schild_audit_logger.adb",
+                 "schild_boot_manager.adb",
+                 "schild_hm_model.adb",
+                 "schild_launch_model.adb",
+                 "schild_root_task.adb");
+end Verify;

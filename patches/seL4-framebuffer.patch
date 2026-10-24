@@ -1,0 +1,37 @@
+From: Ирганов А.Н.
+Date: 2026-10-04
+Subject: [PATCH] seL4: request a framebuffer in the Multiboot2 header
+
+The Multiboot2 header only carried the magic + end tag, so GRUB never
+set up a framebuffer (the graphics configs only affect the Multiboot1
+header). This left seL4 blind on hardware without a serial port (ThinkPad
+T580): the root task serial log went nowhere.
+
+Add a Multiboot2 framebuffer request tag (type 5, 8-byte aligned) so GRUB
+reports the framebuffer back via the type-8 tag; boot_sys.c already parses
+that into SEL4_BOOTINFO_HEADER_X86_FRAMEBUFFER for the root task.
+
+diff --git a/src/arch/x86/multiboot.S b/src/arch/x86/multiboot.S
+index b204b56..bc23ce1 100644
+--- a/src/arch/x86/multiboot.S
++++ b/src/arch/x86/multiboot.S
+@@ -66,6 +66,19 @@
+     .long   0x0
+     .long   (__mbi2_end - __mbi2_start)
+     .long  -(0xe85250d6 + (__mbi2_end - __mbi2_start))
++#ifndef CONFIG_MULTIBOOT_GRAPHICS_MODE_NONE
++    /* Framebuffer request tag (type 5). Ask GRUB to set up a framebuffer and
++     * report it back via the Multiboot2 type-8 tag, which boot_sys.c parses
++     * into SEL4_BOOTINFO_HEADER_X86_FRAMEBUFFER for the root task. */
++    .align  8
++    .word   5
++    .word   1   /* flags: bit 0 = don't care about exact match */
++    .long   20  /* tag size in bytes */
++    .long   CONFIG_MULTIBOOT_GRAPHICS_MODE_WIDTH   /* width (0 = any) */
++    .long   CONFIG_MULTIBOOT_GRAPHICS_MODE_HEIGHT  /* height (0 = any) */
++    .long   CONFIG_MULTIBOOT_GRAPHICS_MODE_DEPTH   /* depth (0 = any) */
++#endif
++    .align  8
+     /* end tag - type, flags, size */
+     .word   0x0
+     .word   0x0

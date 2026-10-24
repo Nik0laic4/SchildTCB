@@ -1,0 +1,19 @@
+-- Schild TCB Zero-Footprint Profile: bare-metal restrictions
+-- Academic standard: no hidden allocations, tasks, or exceptions.
+
+pragma Restrictions (No_Exception_Propagation);
+pragma Restrictions (No_Exception_Registration);
+pragma Restrictions (No_Secondary_Stack);
+pragma Restrictions (No_Tasking);
+pragma Restrictions (No_Finalization);
+pragma Restrictions (No_Standard_Allocators_After_Elaboration);
+pragma Restrictions (No_Abort_Statements);
+pragma Restrictions (No_Asynchronous_Control);
+pragma Restrictions (No_Calendar);
+pragma Restrictions (No_Dynamic_Attachment);
+pragma Restrictions (No_IO);
+pragma Restrictions (No_Local_Allocators);
+pragma Restrictions (No_Task_Termination);
+
+-- Bare-metal: no runtime stack checks (no OS to handle them)
+pragma Restrictions (No_Stack_Limit_Checking);

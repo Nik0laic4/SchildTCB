@@ -1,0 +1,39 @@
+From: Ирганов А.Н.
+Date: 2026-10-04
+Subject: [PATCH] seL4: cap MAX_NUM_DRHU at 8 (fix 7 MiB boot-reuse + T580 hang)
+
+The pc99 platform computes MAX_NUM_DRHU as ((-PPTR_DRHU_START) >> PAGE_BITS),
+which treats the entire 1 GiB kernel-device window (KDEV_BASE=0xffffffffc0000000)
+as DRHU (IOMMU) slots — yielding 262142. This inflates:
+
+  * MAX_NUM_RESV_REG = 16 + 1 + 262142 + 2 = 262161, so
+    ndks_boot.reserved[] is ~4 MiB; and
+  * boot_state.drhu_list[] is ~2 MiB.
+
+Both live in .boot.bss, so .boot.bss grows to ~6 MiB, pushing ki_boot_end to
+8 MiB. The kernel then frees the whole [1..8 MiB) as a boot-reuse untyped
+region, split into 1+2+4 MiB caps. The 4 MiB cap at 0x400000 overlaps the
+bloated BSS and hangs in resetUntypedCap's memzero on the ThinkPad T580
+(1 MiB / 2 MiB caps are fine; QEMU does not reproduce).
+
+A real platform has at most a handful of IOMMUs; cap MAX_NUM_DRHU at 8. This
+shrinks the boot structures to a few hundred bytes, brings ki_boot_end back to
+~2 MiB, and removes the problematic 4 MiB boot-reuse chunk entirely.
+
+diff --git a/include/plat/pc99/plat/machine/devices.h b/include/plat/pc99/plat/machine/devices.h
+index 8e4f61c..1cb2dbc 100644
+--- a/include/plat/pc99/plat/machine/devices.h
++++ b/include/plat/pc99/plat/machine/devices.h
+@@ -13,5 +13,12 @@
+ #define PPTR_IOAPIC_START (PPTR_APIC + BIT(PAGE_BITS))
+ #define PPTR_DRHU_START (PPTR_IOAPIC_START + BIT(PAGE_BITS) * CONFIG_MAX_NUM_IOAPIC)
+ 
+-#define MAX_NUM_DRHU    ((-PPTR_DRHU_START) >> PAGE_BITS)
++/* Schild TCB: the upstream formula ((-PPTR_DRHU_START) >> PAGE_BITS) treats
++ * the entire 1 GiB kernel-device window as DRHU (IOMMU) slots, yielding
++ * 262142. That bloats ndks_boot.reserved[] to ~4 MiB and
++ * boot_state.drhu_list[] to ~2 MiB inside .boot.bss, pushing ki_boot_end to
++ * 8 MiB and the boot-reuse untyped region to [1..8 MiB). The resulting 4 MiB
++ * chunk at 0x400000 hangs on the T580 when reset. A real platform has
++ * <= 8 IOMMUs, so cap it there. */
++#define MAX_NUM_DRHU    8
