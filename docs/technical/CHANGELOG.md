@@ -6,14 +6,15 @@
 > *pending* or *target* have not yet been validated. Formal-verification
 > coverage is stated per-module, never as an aggregate percentage.
 
-## v1.0.0-pre (2026-10-24) — ARM64 (AArch64) feasibility check (QEMU, prep for Pi 4B)
+## v1.0.0-pre (2026-10-24) — ARM64 (AArch64) port: full QEMU cycle works
 
-**Validated in QEMU: the seL4 kernel cross-compiles and starts for AArch64 (`qemu-arm-virt`).**
+**Validated in QEMU: the complete seL4 AArch64 stack — ELF loader → kernel → root task — boots and prints `Hello, Schild TCB (ARM64 root task)!`.**
 
-- Toolchain ready: QEMU aarch64, `gcc-aarch64-linux-gnu`, `gnat-aarch64` (Ada cross), seL4 Python deps.
-- seL4 kernel builds for `qemu-arm-virt` AArch64 (verified 165 KB / debug+printing 148 KB) and starts under QEMU.
-- Direction: Raspberry Pi 4B (BCM2711, `AARCH64_bcm2711_verified.cmake`) is the formally-verified AArch64 target (SMP 4 cores, UART debug). No SMMU on RPi — DMA isolation stays out of scope for now.
-- This is the entry point for the ARM64 port (Phase 0 of the network-gateway roadmap).
+- Toolchain ready: QEMU aarch64, `gcc/g++-aarch64-linux-gnu`, `gnat-aarch64` (Ada cross), `protoc`, `dtc`, `repo`, seL4 Python deps.
+- seL4 kernel builds for `qemu-arm-virt` AArch64 (verified 165 KB / debug+printing 148 KB).
+- Correct build path is `seL4_tools` (`griddle`) + elfloader + CPIO archive — direct `kernel.elf` boot does not work (no elfloader).
+- Minimal C root task (`apps/hello`, `src/schild_core/arm64/apps/hello/`) prints via `seL4_DebugPutChar` (syscall -9) after `Booting all finished, dropped to user space`.
+- Direction: Raspberry Pi 4B (BCM2711, `AARCH64_bcm2711_verified.cmake`) — formally-verified AArch64 target (SMP 4 cores, UART debug). No SMMU on RPi — DMA isolation stays out of scope for now.
 
 ## v1.0.0-pre (2026-10-04) — W4: formal proof of the root task (driver Off→On, 7 daemons)
 
