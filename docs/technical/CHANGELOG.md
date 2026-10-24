@@ -6,19 +6,19 @@
 > *pending* or *target* have not yet been validated. Formal-verification
 > coverage is stated per-module, never as an aggregate percentage.
 
-## v1.0.0-pre (2026-10-24) — AArch64: virtio-net HTTP client under seL4 (QEMU)
+## v1.0.0-pre (2026-10-24) — AArch64: virtio-net HTTP client + body parse under seL4 (QEMU)
 
-**Validated: the Ada seL4 root task sends `GET / HTTP/1.0` over a TCP connection to a host HTTP server via the SLIRP gateway and receives `HTTP/1.0 200 OK` (`virtio-net HTTP: OK`).**
+**Validated: the Ada seL4 root task sends `GET / HTTP/1.0` over a TCP connection to a host HTTP server via the SLIRP gateway, receives `HTTP/1.0 200 OK`, and prints the response body over UART (`virtio-net HTTP: OK`, `[body] SchildTCB-body`).**
 
 - `sel4_mmio.c`: the TCP data payload is now an HTTP/1.0 request; the response
-  verifier checks the payload for the `HTTP/` prefix.
+  verifier checks the payload for the `HTTP/` prefix, then `print_http_body`
+  locates the `\r\n\r\n` separator and prints the body over UART.
 - The server replies with a pure ACK first, then the HTTP response, so the RX
   queue is armed with **two** buffers (descriptors 0 and 1) for the data round.
-- Validated against `python3 -m http.server` on the host (server log
-  `"GET / HTTP/1.0" 200`).
+- Validated against `python3 -m http.server` and a minimal Python server
+  returning a fixed `Content-Length` body in a single segment.
 - Full stack in one boot: ARP → ICMP → DHCP → TCP handshake → HTTP GET/response.
-- Next step: parse the HTTP response body (content-length) and, later, a TCP
-  server / DNS-over-UDP client.
+- Next step: a TCP server (guest listens on a port) or a DNS-over-UDP client.
 
 ## v1.0.0-pre (2026-10-24) — AArch64: virtio-net TCP client under seL4 (QEMU)
 
