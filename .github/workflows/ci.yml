@@ -21,11 +21,15 @@ jobs:
 
       - name: Install Alire
         run: |
-          curl -fsSL https://alire.ada.dev/alr-setup | bash
-          ALR_BIN="$(find "$HOME" -name alr -type f 2>/dev/null | head -1)"
-          echo "alr binary: $ALR_BIN"
-          echo "$(dirname "$ALR_BIN")" >> "$GITHUB_PATH"
-          "$ALR_BIN" --version
+          mkdir -p "$HOME/.local/bin"
+          curl -fsSL -o alr.zip https://github.com/alire-project/alire/releases/download/v2.1.1/alr-2.1.1-bin-x86_64-linux.zip
+          unzip -o alr.zip -d alr-dist
+          ALR_BIN="$(find alr-dist -name alr -type f | head -1)"
+          echo "alr at: $ALR_BIN"
+          cp "$ALR_BIN" "$HOME/.local/bin/alr"
+          chmod +x "$HOME/.local/bin/alr"
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+          "$HOME/.local/bin/alr" --version
 
       - name: Install Ada/SPARK toolchain
         run: |
