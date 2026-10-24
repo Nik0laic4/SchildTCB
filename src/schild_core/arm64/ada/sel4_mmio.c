@@ -551,11 +551,75 @@ static void print_http_body(const volatile u8 *p, int len)
     }
 }
 
+static void put_dec(u8 v)
+{
+    if (v >= 100) schild_sel4_debug_putchar('0' + v / 100);
+    if (v >= 10) schild_sel4_debug_putchar('0' + (v / 10) % 10);
+    schild_sel4_debug_putchar('0' + v % 10);
+}
+
+/* Build a DNS A query for "example.com" (29 bytes). */
+static void build_dns_query(volatile u8 *p)
+{
+    int i = 0;
+    p[i++] = 0x12; p[i++] = 0x34;   /* ID */
+    p[i++] = 0x01; p[i++] = 0x00;   /* flags: RD */
+    p[i++] = 0x00; p[i++] = 0x01;   /* QDCOUNT = 1 */
+    p[i++] = 0x00; p[i++] = 0x00;   /* ANCOUNT */
+    p[i++] = 0x00; p[i++] = 0x00;   /* NSCOUNT */
+    p[i++] = 0x00; p[i++] = 0x00;   /* ARCOUNT */
+    p[i++] = 7;
+    p[i++] = 'e'; p[i++] = 'x'; p[i++] = 'a'; p[i++] = 'm'; p[i++] = 'p'; p[i++] = 'l'; p[i++] = 'e';
+    p[i++] = 3;
+    p[i++] = 'c'; p[i++] = 'o'; p[i++] = 'm';
+    p[i++] = 0;                      /* name terminator */
+    p[i++] = 0x00; p[i++] = 0x01;    /* QTYPE = A */
+    p[i++] = 0x00; p[i++] = 0x01;    /* QCLASS = IN */
+}
+
+/* Build an Ethernet + IPv4 + UDP + DNS query to the SLIRP DNS server. */
+static void build_dns_frame(volatile u8 *pkt, const u8 *dst_mac, const u8 *src_ip)
+{
+    static const u8 dns_ip[4] = { 10, 0, 2, 3 };
+    volatile u8 *udp = pkt + 14 + 20;
+    volatile u8 *dns = udp + 8;
+    int i;
+
+    for (i = 0; i < 6; i++) pkt[i] = dst_mac[i];      /* dst = gateway */
+    for (i = 0; i < 6; i++) pkt[6 + i] = net_mac[i];  /* src = our MAC */
+    pkt[12] = 0x08; pkt[13] = 0x00;                    /* EtherType = IPv4 */
+
+    build_dns_query(dns);
+    build_udp(udp, 53000, 53, src_ip, dns_ip, dns, 29);
+    build_ipv4(pkt + 14, 20 + 8 + 29, 17, src_ip, dns_ip);
+}
+
+/* Verify a DNS reply and extract the resolved IPv4 address (last 4 bytes). */
+static int parse_dns_reply(const volatile u8 *rxpkt, u8 *ip)
+{
+    const volatile u8 *dns;
+    int udp_len, plen, i;
+
+    if (rxpkt[12] != 0x08 || rxpkt[13] != 0x00) return 0;   /* EtherType = IPv4 */
+    if (rxpkt[23] != 0x11) return 0;                         /* proto = UDP */
+    if (rxpkt[34] != 0x00 || rxpkt[35] != 0x35) return 0;    /* UDP sport = 53 */
+    dns = rxpkt + 42;                                        /* after Eth+IP+UDP */
+    if (dns[0] != 0x12 || dns[1] != 0x34) return 0;          /* ID */
+    if ((dns[2] & 0x80) == 0) return 0;                       /* QR = response */
+    if ((dns[6] << 8 | dns[7]) == 0) return 0;               /* ANCOUNT > 0 */
+    udp_len = ((u16)rxpkt[38] << 8) | rxpkt[39];
+    plen = udp_len - 8;
+    if (plen < 4) return 0;
+    for (i = 0; i < 4; i++) ip[i] = dns[plen - 4 + i];
+    return 1;
+}
+
 /* Set up RX (queue 0) and TX (queue 1), resolve the gateway with ARP, send an
  * ICMP echo request, then a DHCP DISCOVER, then a TCP handshake + HTTP/1.0
- * GET, then accept a TCP connection as a server.  Returns:
- *   6 = TCP server ok, 5 = HTTP ok (no server), 4 = DHCP ok (no TCP),
- *   3 = ping ok (no DHCP), 2 = ARP ok (no ICMP), 1 = TX ok, 0 = error. */
+ * GET, then accept a TCP connection as a server, then a DNS A query.  Returns:
+ *   7 = DNS ok, 6 = TCP server ok (no DNS), 5 = HTTP ok (no server),
+ *   4 = DHCP ok (no TCP), 3 = ping ok (no DHCP), 2 = ARP ok (no ICMP),
+ *   1 = TX ok, 0 = error. */
 u64 schild_virtio_net_test(void)
 {
     volatile u32 *regs;
@@ -915,6 +979,75 @@ u64 schild_virtio_net_test(void)
             }
             if (!ok) return 5;
         }
-        return 6;
     }
+
+    /* DNS client: resolve "example.com" via the SLIRP DNS server (10.0.2.3). */
+    {
+        u32 last_used = rx_used->idx;
+        int found = 0;
+
+        rx_desc[0].addr  = dma_pa + 0x2000;
+        rx_desc[0].len   = 1510;
+        rx_desc[0].flags = 2;
+        rx_desc[0].next  = 0;
+        rx_desc[1].addr  = dma_pa + 0x3000;
+        rx_desc[1].len   = 1510;
+        rx_desc[1].flags = 2;
+        rx_desc[1].next  = 0;
+        rx_avail->ring[rx_avail->idx % VQ_NUM] = 0;
+        rx_avail->idx = rx_avail->idx + 1;
+        rx_avail->ring[rx_avail->idx % VQ_NUM] = 1;
+        rx_avail->idx = rx_avail->idx + 1;
+        __asm__ volatile("dmb sy" ::: "memory");
+        mmio32w(regs, VMMIO_QUEUE_NOTIFY, 0);
+
+        pkt = dma + 0x6000;
+        for (i = 0; i < 10; i++) pkt[i] = 0x00;    /* virtio_net_hdr */
+        build_dns_frame(pkt + 10, gw_mac, offered_ip);
+        tx_desc[0].addr  = dma_pa + 0x6000;
+        tx_desc[0].len   = 10 + 14 + 20 + 8 + 29;
+        tx_desc[0].flags = 0;
+        tx_desc[0].next  = 0;
+        tx_avail->ring[tx_avail->idx % VQ_NUM] = 0;
+        tx_avail->idx = tx_avail->idx + 1;
+        __asm__ volatile("dmb sy" ::: "memory");
+        mmio32w(regs, VMMIO_QUEUE_NOTIFY, 1);
+
+        for (spins = 0; spins < 2000000000 && !found; spins++) {
+            if (rx_used->idx > last_used) {
+                int k;
+                for (k = 0; k < 2 && !found; k++) {
+                    const volatile u8 *rxpkt = dma + 0x2000 + k * 0x1000 + 10;
+                    u8 ip[4];
+                    if (parse_dns_reply(rxpkt, ip)) {
+                        schild_sel4_debug_putchar('[');
+                        schild_sel4_debug_putchar('d');
+                        schild_sel4_debug_putchar('n');
+                        schild_sel4_debug_putchar('s');
+                        schild_sel4_debug_putchar(']');
+                        schild_sel4_debug_putchar(' ');
+                        put_dec(ip[0]); schild_sel4_debug_putchar('.');
+                        put_dec(ip[1]); schild_sel4_debug_putchar('.');
+                        put_dec(ip[2]); schild_sel4_debug_putchar('.');
+                        put_dec(ip[3]);
+                        schild_sel4_debug_putchar('\n');
+                        found = 1;
+                    }
+                }
+                last_used = rx_used->idx;
+                if (!found) {
+                    rx_desc[0].addr  = dma_pa + 0x2000;
+                    rx_desc[0].len   = 1510;
+                    rx_desc[0].flags = 2;
+                    rx_desc[0].next  = 0;
+                    rx_avail->ring[rx_avail->idx % VQ_NUM] = 0;
+                    rx_avail->idx = rx_avail->idx + 1;
+                    __asm__ volatile("dmb sy" ::: "memory");
+                    mmio32w(regs, VMMIO_QUEUE_NOTIFY, 0);
+                }
+            }
+        }
+        if (!found) return 6;
+    }
+    return 7;
 }

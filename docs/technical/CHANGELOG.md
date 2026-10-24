@@ -6,6 +6,20 @@
 > *pending* or *target* have not yet been validated. Formal-verification
 > coverage is stated per-module, never as an aggregate percentage.
 
+## v1.0.0-pre (2026-10-24) — AArch64: virtio-net DNS client under seL4 (QEMU)
+
+**Validated: the Ada seL4 root task sends a DNS A query for `example.com` (UDP, `53000 → 10.0.2.3:53`) and parses the A-record answer (`virtio-net DNS: OK`, `[dns] 8.6.112.0`).**
+
+- `sel4_mmio.c`: DNS query builder (header + QNAME + QTYPE/QCLASS), UDP frame
+  to the SLIRP DNS server, and a reply parser (ID + QR + ANCOUNT, extracting
+  the last A record's RDATA).
+- QEMU's SLIRP forwards `10.0.2.3:53` to the host resolver; the reply carries
+  two A records (the environment's resolver returns filter IPs), and the last
+  one is printed over UART.
+- Full stack now covers ARP, ICMP, DHCP, TCP client/server, HTTP and DNS.
+- Next step: driver refactoring (interrupts / descriptor ring), or proper TCP
+  ACKs of received data.
+
 ## v1.0.0-pre (2026-10-24) — AArch64: virtio-net TCP server under seL4 (QEMU)
 
 **Validated: the Ada seL4 root task passively opens a TCP connection on port 8081 (SYN → SYN-ACK → ACK) to a host client forwarded through SLIRP `hostfwd` (`virtio-net TCP server: OK`).**

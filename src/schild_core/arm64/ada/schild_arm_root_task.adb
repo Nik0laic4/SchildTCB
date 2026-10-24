@@ -70,7 +70,9 @@ begin
    declare
       R : Unsigned_64 := Virtio_Net_Test;
    begin
-      if R = 6 then
+      if R = 7 then
+         Debug_Put_Line ("virtio-net DNS: OK");
+      elsif R = 6 then
          Debug_Put_Line ("virtio-net TCP server: OK");
       elsif R = 5 then
          Debug_Put_Line ("virtio-net HTTP: OK");
