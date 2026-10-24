@@ -12,7 +12,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Install system dependencies (grub-mkrescue)
         run: |
@@ -56,3 +56,44 @@ jobs:
         run: |
           cd src/schild_core
           bash scripts/verify.sh
+
+  # Manual-only: the full 185-module SPARK Level-4 proof takes tens of minutes,
+  # so it is NOT run on every push. Trigger: Actions -> CI -> Run workflow.
+  prove-full:
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Install Alire
+        run: |
+          mkdir -p "$HOME/.local/bin"
+          curl -fsSL -o alr.zip https://github.com/alire-project/alire/releases/download/v2.1.1/alr-2.1.1-bin-x86_64-linux.zip
+          unzip -o alr.zip -d alr-dist
+          ALR_BIN="$(find alr-dist -name alr -type f | head -1)"
+          echo "alr at: $ALR_BIN"
+          cp "$ALR_BIN" "$HOME/.local/bin/alr"
+          chmod +x "$HOME/.local/bin/alr"
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+          "$HOME/.local/bin/alr" --version
+
+      - name: Install Ada/SPARK toolchain
+        run: |
+          alr -n toolchain --select gnat_native=14.2.1
+          alr -n toolchain --select gprbuild=22.0.1
+          alr -n install gnatprove
+          echo "$HOME/.alire/bin" >> "$GITHUB_PATH"
+
+      - name: SPARK full proof (185 kernel modules, Level 4)
+        run: |
+          cd src/schild_core
+          bash scripts/prove_kernel.sh
+
+      - name: Upload proof report
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: proof-report
+          path: src/schild_core/obj/proof/report.txt
+          if-no-files-found: warn
