@@ -6,6 +6,26 @@
 > *pending* or *target* have not yet been validated. Formal-verification
 > coverage is stated per-module, never as an aggregate percentage.
 
+## v1.0.0-pre (2026-10-24) — AArch64: bare-metal Ada runtime validated in QEMU; Ada seL4 root task built
+
+**Validated in QEMU: the Zero-Footprint-Profile runtime (`bare_runtime`) compiles and runs on AArch64 (cross-GNAT 14), printing over the PL011 UART of `qemu-system-aarch64 -M virt` — no hardware, no OS.**
+
+- `arm64/ada/` added: two self-contained artifacts that reuse the x86_64 recipe
+  (Ada `--RTS=bare_runtime` + a C shim for the `__gnat_rcheck_*` / libc / unwind
+  stubs that the ZFP sources intentionally omit).
+- **Artifact 1 (validated):** `hello_world.adb` + `uart.*` + `start.S` +
+  `linker_bare.ld` + `runtime_stubs.c` + `build_bare.sh` boot in QEMU and print
+  `Hello from Ada (AArch64)!` (sum(1..5) = 0xf).  Proves the bare-metal runtime
+  works on ARM64.
+- **Artifact 2 (compiled, run pending):** `schild_arm_root_task.adb` +
+  `sel4_syscall.*` (seL4 DebugPutChar via `svc #0`) + `root_start.S` +
+  `root_linker.ld` + `sel4_stubs.c` + `build_root.sh` produce `root_task.elf`
+  (AArch64 ELF, entry `0x60000000`, `svc` present, Ada entry symbol present).
+  Booting it under the seL4 elfloader is *pending*: the seL4 project (kernel +
+  elfloader via `repo`) is not checked out on this machine.
+- `bare_runtime/adainclude/system.ads` is architecture-portable
+  (`Standard'Word_Size`), so the x86_64 ZFP runtime needed no change for AArch64.
+
 ## v1.0.0-pre (2026-10-24) — ARM64 (AArch64) port: full QEMU cycle works
 
 **Validated in QEMU: the complete seL4 AArch64 stack — ELF loader → kernel → root task — boots and prints `Hello, Schild TCB (ARM64 root task)!`.**

@@ -6,6 +6,7 @@
 ## Структура
 - `apps/hello/` — минимальная C root-задача (печать через `seL4_DebugPutChar`, syscall -9).
 - `src/` — ранние эксперименты (start.S + debug_io.c, прямая линковка — **не работает без elfloader**, оставлено как история).
+- `ada/` — **Ada/SPARK root-задача** + валидация bare-metal runtime на AArch64 (см. `ada/README.md`).
 
 ## Сборка и запуск (через seL4_tools)
 ```bash
@@ -28,6 +29,6 @@ ninja
 ```
 
 ## Следующие шаги
+- **Ada root-задача** — runtime валидирован в QEMU, root task компилируется в валидный ELF; осталось прогнать его под elfloader (нужен seL4-проект на диске).
 - Драйвер Ethernet **GENET** (Pi 4) — вместо e1000e.
-- Порт **Ada root-задачи** (нужен bare-metal runtime для AArch64).
 - Сеть в QEMU (virtio-net) до покупки Pi 4B.
