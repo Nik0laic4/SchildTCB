@@ -66,12 +66,14 @@ begin
       Debug_Put_Line ("virtio-net: mapping failed");
    end if;
 
-   --  Net test: send an ARP request and wait for the reply.
+   --  Net test: ARP resolution + ICMP echo (ping) to the gateway.
    declare
       R : Unsigned_64 := Virtio_Net_Test;
    begin
-      if R = 2 then
-         Debug_Put_Line ("virtio-net TX+RX: OK");
+      if R = 3 then
+         Debug_Put_Line ("virtio-net ping: OK");
+      elsif R = 2 then
+         Debug_Put_Line ("virtio-net TX+RX (ARP): OK, ICMP: none");
       elsif R = 1 then
          Debug_Put_Line ("virtio-net TX: OK, RX: none");
       else

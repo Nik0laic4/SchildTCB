@@ -279,9 +279,99 @@ static void build_arp_request(volatile u8 *pkt)
     for (i = 0; i < 4; i++) pkt[38 + i] = gateway_ip[i];  /* target IP */
 }
 
-/* Set up RX (queue 0) and TX (queue 1), send an ARP request, and check that the
- * device both consumes the TX and delivers the ARP reply into RX.  Returns:
- *   2 = TX + RX ok, 1 = TX ok (no RX), 0 = error. */
+/* 16-bit one's-complement checksum over `data` (network byte order). */
+static u16 csum16(const volatile u8 *data, int len)
+{
+    u32 sum = 0;
+    int i;
+
+    for (i = 0; i + 1 < len; i += 2)
+        sum += ((u32)data[i] << 8) | (u32)data[i + 1];
+    if (i < len)
+        sum += (u32)data[i] << 8;
+    while (sum >> 16)
+        sum = (sum & 0xffff) + (sum >> 16);
+    return (u16)~sum;
+}
+
+/* Build a 20-byte IPv4 header (checksum computed). */
+static void build_ipv4(volatile u8 *p, int total_len, int proto,
+                       const u8 *src_ip, const u8 *dst_ip)
+{
+    int i;
+    u16 c;
+
+    p[0] = 0x45;                       /* version 4, IHL 5 */
+    p[1] = 0x00;                       /* TOS */
+    p[2] = (u8)(total_len >> 8);
+    p[3] = (u8)total_len;
+    p[4] = 0x00; p[5] = 0x01;          /* identification */
+    p[6] = 0x00; p[7] = 0x00;          /* flags + fragment offset */
+    p[8] = 0x40;                       /* TTL = 64 */
+    p[9] = (u8)proto;                  /* 1 = ICMP */
+    p[10] = 0x00; p[11] = 0x00;        /* checksum */
+    for (i = 0; i < 4; i++) p[12 + i] = src_ip[i];
+    for (i = 0; i < 4; i++) p[16 + i] = dst_ip[i];
+    c = csum16(p, 20);
+    p[10] = (u8)(c >> 8);
+    p[11] = (u8)c;
+}
+
+/* Build an ICMP echo request (header + payload, checksum computed). */
+static void build_icmp_echo(volatile u8 *p, const char *payload, int plen)
+{
+    int i;
+    u16 c;
+
+    p[0] = 0x08;                       /* type = echo request */
+    p[1] = 0x00;                       /* code */
+    p[2] = 0x00; p[3] = 0x00;          /* checksum */
+    p[4] = 0x12; p[5] = 0x34;          /* identifier */
+    p[6] = 0x00; p[7] = 0x01;          /* sequence number */
+    for (i = 0; i < plen; i++) p[8 + i] = (u8)payload[i];
+    c = csum16(p, 8 + plen);
+    p[2] = (u8)(c >> 8);
+    p[3] = (u8)c;
+}
+
+/* Build an Ethernet + IPv4 + ICMP echo request (50 bytes) to `dst_mac`. */
+static void build_icmp_frame(volatile u8 *pkt, const u8 *dst_mac)
+{
+    static const u8 gw_ip[4]    = { 10, 0, 2, 2 };
+    static const u8 guest_ip[4] = { 10, 0, 2, 15 };
+    int i;
+
+    for (i = 0; i < 6; i++) pkt[i] = dst_mac[i];      /* dst MAC = gateway */
+    for (i = 0; i < 6; i++) pkt[6 + i] = net_mac[i];  /* src MAC = ours */
+    pkt[12] = 0x08; pkt[13] = 0x00;                    /* EtherType = IPv4 */
+    build_ipv4(pkt + 14, 20 + 8 + 8, 1, guest_ip, gw_ip);
+    build_icmp_echo(pkt + 14 + 20, "SchildTC", 8);
+}
+
+/* Extract the gateway MAC from an ARP reply (Ethernet frame, no virtio_net_hdr).
+ * Returns 1 on success. */
+static int parse_arp_reply(const volatile u8 *rxpkt, u8 *gw_mac)
+{
+    int i;
+
+    if (rxpkt[12] != 0x08 || rxpkt[13] != 0x06) return 0;  /* EtherType = ARP */
+    if (rxpkt[20] != 0x00 || rxpkt[21] != 0x02) return 0;  /* opcode = reply  */
+    for (i = 0; i < 6; i++) gw_mac[i] = rxpkt[22 + i];     /* sender MAC     */
+    return 1;
+}
+
+/* Verify a received Ethernet frame is an ICMP echo reply. */
+static int verify_icmp_reply(const volatile u8 *rxpkt)
+{
+    if (rxpkt[12] != 0x08 || rxpkt[13] != 0x00) return 0;  /* EtherType = IPv4 */
+    if (rxpkt[14 + 9] != 0x01) return 0;                    /* protocol = ICMP */
+    if (rxpkt[14 + 20] != 0x00) return 0;                   /* type = echo reply */
+    return 1;
+}
+
+/* Set up RX (queue 0) and TX (queue 1), resolve the gateway with ARP, then send
+ * an ICMP echo request and check the reply.  Returns:
+ *   3 = ping ok, 2 = ARP ok (no ICMP), 1 = TX ok, 0 = error. */
 u64 schild_virtio_net_test(void)
 {
     volatile u32 *regs;
@@ -291,6 +381,7 @@ u64 schild_virtio_net_test(void)
     volatile struct vring_avail *rx_avail, *tx_avail;
     volatile struct vring_used *rx_used, *tx_used;
     volatile u8 *pkt;
+    u8 gw_mac[6];
     int i, spins;
     u64 tx_ok, rx_ok;
 
@@ -362,13 +453,45 @@ u64 schild_virtio_net_test(void)
     }
     rx_ok = (rx_used->idx >= 1);
     if (rx_ok) {
-        /* Skip the 10-byte virtio_net_hdr and verify it is an ARP reply. */
+        /* Skip the 10-byte virtio_net_hdr and extract the gateway MAC. */
         volatile u8 *rxpkt = dma + 0x2000 + 10;
-        if (rxpkt[12] != 0x08 || rxpkt[13] != 0x06 ||   /* EtherType = ARP  */
-            rxpkt[20] != 0x00 || rxpkt[21] != 0x02) {   /* opcode = reply  */
-            rx_ok = 0;
-        }
+        if (!parse_arp_reply(rxpkt, gw_mac)) rx_ok = 0;
     }
+    if (!rx_ok) return tx_ok ? 1 : 0;
 
-    return rx_ok ? 2 : (tx_ok ? 1 : 0);
+    /* ICMP round-trip: re-arm the queues and send an ICMP echo request. */
+    rx_desc[0].addr  = dma_pa + 0x2000;
+    rx_desc[0].len   = 1510;
+    rx_desc[0].flags = 2;
+    rx_desc[0].next  = 0;
+    rx_avail->ring[rx_avail->idx % VQ_NUM] = 0;
+    rx_avail->idx = rx_avail->idx + 1;
+
+    pkt = dma + 0x6000;
+    for (i = 0; i < 10; i++) pkt[i] = 0x00;    /* virtio_net_hdr */
+    build_icmp_frame(pkt + 10, gw_mac);
+    for (i = 60; i < 70; i++) pkt[i] = 0x00;   /* pad frame to 60 bytes */
+    tx_desc[0].addr  = dma_pa + 0x6000;
+    tx_desc[0].len   = 70;
+    tx_desc[0].flags = 0;
+    tx_desc[0].next  = 0;
+    tx_avail->ring[tx_avail->idx % VQ_NUM] = 0;
+    tx_avail->idx = tx_avail->idx + 1;
+    __asm__ volatile("dmb sy" ::: "memory");
+
+    mmio32w(regs, VMMIO_QUEUE_NOTIFY, 0);
+    mmio32w(regs, VMMIO_QUEUE_NOTIFY, 1);
+
+    for (spins = 0; spins < 1000000; spins++) {
+        if (tx_used->idx >= 2) break;
+    }
+    for (spins = 0; spins < 5000000 && rx_used->idx < 2; spins++) {
+    }
+    if (rx_used->idx < 2) return 2;   /* ARP ok, no ICMP reply */
+
+    {
+        volatile u8 *rxpkt = dma + 0x2000 + 10;
+        if (!verify_icmp_reply(rxpkt)) return 2;
+    }
+    return 3;
 }

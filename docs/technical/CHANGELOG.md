@@ -6,6 +6,20 @@
 > *pending* or *target* have not yet been validated. Formal-verification
 > coverage is stated per-module, never as an aggregate percentage.
 
+## v1.0.0-pre (2026-10-24) — AArch64: virtio-net ICMP echo (ping) under seL4 (QEMU)
+
+**Validated: the Ada seL4 root task resolves the gateway via ARP and completes an ICMP echo round-trip (`virtio-net ping: OK`).**
+
+- `sel4_mmio.c`: 16-bit one's-complement checksum, IPv4 header + ICMP echo
+  request builders, ARP-reply parser (gateway MAC) and ICMP-reply verifier.
+- Full flow: ARP request → ARP reply (gateway MAC `52:55:0a:00:02:02`) → ICMP
+  echo request → ICMP echo reply, with the RX/TX queues re-armed between the
+  two round-trips.
+- QEMU's user-mode netdev answers `IP 10.0.2.2 > 10.0.2.15: ICMP echo reply`
+  (confirmed via `-object filter-dump`).
+- This completes the minimal TCP/IP stack (ARP + ICMP echo) for connectivity
+  validation under seL4; next step is the higher-level stack (UDP/TCP).
+
 ## v1.0.0-pre (2026-10-24) — AArch64: virtio-net RX (ARP round-trip) under seL4 (QEMU)
 
 **Validated: the Ada seL4 root task sends an ARP request for the SLIRP gateway (10.0.2.2) and receives the ARP reply through the RX virtqueue used ring (`virtio-net TX+RX: OK`).**
