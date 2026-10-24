@@ -6,6 +6,20 @@
 > *pending* or *target* have not yet been validated. Formal-verification
 > coverage is stated per-module, never as an aggregate percentage.
 
+## v1.0.0-pre (2026-10-24) — AArch64: virtio-net MMIO mapped into the seL4 VSpace; MAC read under seL4
+
+**Validated: the Ada seL4 root task maps the virtio-mmio device region into its VSpace and reads the virtio-net MAC (`52:54:00:12:34:56`) under seL4 in QEMU.**
+
+- `sel4_mmio.c`: minimal seL4 object-management sequence — parse BootInfo →
+  find device untyped → `Untyped_Retype` (2 MiB `LargePage`) → `ARM_Page_Map`
+  (into the root VSpace) → read.  `root_start.S` saves the BootInfo/IPC pointers.
+- The root task now prints `virtio-net MAC = ...` after the banner.
+- Discovered: this build is **non-MCS** (`CONFIG_KERNEL_MCS` disabled), so the
+  BootInfo has no `schedcontrol` field (untyped @ offset 152) and the `Call`
+  syscall has no reply register (x6); labels `UntypedRetype=1`, `ARMPageMap=40`;
+  object type `seL4_ARM_LargePageObject=8`.
+- Next: set up the virtqueues for real TX/RX.
+
 ## v1.0.0-pre (2026-10-24) — AArch64: virtio-mmio driver + virtio-net MAC probe (QEMU)
 
 **Validated: the Ada virtio-mmio driver brings a virtio-net device into the DRIVER state and reads its MAC address in `qemu-system-aarch64`.**

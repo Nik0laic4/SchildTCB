@@ -20,6 +20,7 @@ provide the seL4 root task written in Ada.
 | `root_start.S` | seL4 root-task entry point. |
 | `root_linker.ld` | seL4 root-task layout (entry `_sel4_start`, load @ `0x400000`). |
 | `sel4_stubs.c` | seL4 `svc #0` shim + GNAT runtime stubs. |
+| `sel4_mmio.c` | seL4 MMIO map (BootInfo → device untyped → retype → VSpace map). |
 | `build_root.sh` | Build the seL4 root task + validate the ELF. |
 | `virtio_mmio.ads` / `.adb` | virtio-mmio transport driver (probe + MAC read). |
 | `virtio_probe.adb` | Bare-metal virtio-net probe (validated in QEMU). |
@@ -119,9 +120,25 @@ attaches the first `-device` to the **last** virtio-mmio slot (bus.31 @
 virtio-net found, MAC = 52:54:00:12:34:56
 ```
 
-This validates the `Virtio_MMIO` driver in isolation (EL1, direct MMIO).  Next
-steps: map the virtio-mmio region into the seL4 root-task VSpace, then set up
-the virtqueues for real TX/RX.
+This validates the `Virtio_MMIO` driver in isolation (EL1, direct MMIO).
+
+## Artifact 4 — virtio-net MMIO under seL4 (validated)
+
+The seL4 root task (`schild_arm_root_task.adb` + `sel4_mmio.c`) maps the
+virtio-mmio device region into its VSpace and reads the virtio-net MAC under
+seL4.  Validated output (after `Booting all finished, dropped to user space`):
+
+```
+virtio-net MAC = 52:54:00:12:34:56
+```
+
+`sel4_mmio.c` performs the minimal seL4 object-management sequence: parse
+BootInfo → find the device untyped → `Untyped_Retype` (2 MiB `LargePage`) →
+`ARM_Page_Map` into the root VSpace → read the config space.  This build is
+**non-MCS**, so there is no `schedcontrol` field in BootInfo and no reply
+register on the `Call` syscall.
+
+Next step: set up the virtqueues for real TX/RX.
 
 ## Requirements
 
