@@ -37,6 +37,17 @@ jobs:
           alr -n toolchain --select gprbuild
           alr -n install gnatprove
 
+      - name: Locate toolchain (debug)
+        run: |
+          echo "=== alr toolchain list ==="
+          alr toolchain --list || true
+          echo "=== toolchains dir ==="
+          ls -la "$HOME/.local/share/alire/toolchains/" || echo "NO TOOLCHAINS DIR"
+          echo "=== find gnat gcc ==="
+          find "$HOME" -maxdepth 7 -name gcc -path '*gnat*' 2>/dev/null | head
+          echo "=== find gnatprove ==="
+          find "$HOME" -maxdepth 7 -name gnatprove 2>/dev/null | head
+
       - name: Build (bare-metal kernel + ISO)
         run: |
           cd src/schild_core
