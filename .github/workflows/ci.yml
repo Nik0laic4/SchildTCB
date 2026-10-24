@@ -1,0 +1,43 @@
+name: CI
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+  workflow_dispatch:
+
+jobs:
+  build-and-verify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install system dependencies (grub-mkrescue)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y grub-pc-bin grub-common xorriso mtools
+
+      - name: Install Alire
+        run: |
+          curl -fsSL https://alire.ada.dev/alr-setup | sh
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+
+      - name: Install Ada/SPARK toolchain
+        run: |
+          alr toolchain --install gnat_native
+          alr toolchain --install gprbuild
+          alr toolchain --select gnat_native
+          alr toolchain --select gprbuild
+          alr install gnatprove
+
+      - name: Build (bare-metal kernel + ISO)
+        run: |
+          cd src/schild_core
+          ./build.sh
+
+      - name: SPARK verify (root-task daemons, Level 4)
+        run: |
+          cd src/schild_core
+          bash scripts/verify.sh
