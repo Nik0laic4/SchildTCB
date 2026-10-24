@@ -6,6 +6,19 @@
 > *pending* or *target* have not yet been validated. Formal-verification
 > coverage is stated per-module, never as an aggregate percentage.
 
+## v1.0.0-pre (2026-10-24) — AArch64: virtio-net virtqueue TX under seL4 (QEMU)
+
+**Validated: the Ada seL4 root task sets up RX + TX virtqueues in a DMA frame, submits a small Ethernet frame, and the virtio-net device consumes it (TX used ring advances, `virtio-net TX: OK`).**
+
+- `sel4_mmio.c`: DMA frame (retype RAM untyped → 2 MiB `LargePage` → map), split
+  virtqueues (descriptor/available/used rings), device init (features →
+  FEATURES_OK → queues → DRIVER_OK), kick, used-ring poll.
+- Discovered: QEMU's virtio-mmio reports **Version=1 (legacy)**, so the queues
+  use `GuestPageSize` (0x028) + `QueueAlign` (0x03c) + `QueuePFN` (0x040), not
+  the modern `QueueReady`/`QueueDesc` registers.  Writing `GuestPageSize` was
+  the missing piece for TX to complete.
+- Next: receive packets (RX) and build a TCP/IP stack.
+
 ## v1.0.0-pre (2026-10-24) — AArch64: virtio-net MMIO mapped into the seL4 VSpace; MAC read under seL4
 
 **Validated: the Ada seL4 root task maps the virtio-mmio device region into its VSpace and reads the virtio-net MAC (`52:54:00:12:34:56`) under seL4 in QEMU.**

@@ -138,7 +138,16 @@ BootInfo → find the device untyped → `Untyped_Retype` (2 MiB `LargePage`) �
 **non-MCS**, so there is no `schedcontrol` field in BootInfo and no reply
 register on the `Call` syscall.
 
-Next step: set up the virtqueues for real TX/RX.
+The root task also sets up RX + TX virtqueues (legacy virtio-mmio:
+`GuestPageSize` + `QueueAlign` + `QueuePFN`) in a DMA frame and submits a small
+Ethernet frame; the device consumes it (TX used ring advances):
+
+```
+virtio-net MAC = 52:54:00:12:34:56
+virtio-net TX: OK
+```
+
+Next step: receive packets (RX) and build a TCP/IP stack.
 
 ## Requirements
 

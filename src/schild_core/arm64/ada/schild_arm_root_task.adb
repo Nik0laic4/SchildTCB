@@ -22,6 +22,11 @@ is
      with Import, Convention => C, External_Name => "schild_virtio_mac",
           Global => null;
 
+   --  Set up a TX virtqueue, submit a frame, and check it is consumed.
+   function Virtio_Net_Test return Unsigned_64
+     with Import, Convention => C, External_Name => "schild_virtio_net_test",
+          Global => null;
+
    Counter : Word := 0;
    Mac     : Unsigned_64;
    Hex     : constant String := "0123456789abcdef";
@@ -60,6 +65,17 @@ begin
    else
       Debug_Put_Line ("virtio-net: mapping failed");
    end if;
+
+   --  TX test: set up a virtqueue and submit a small Ethernet frame.
+   declare
+      R : Unsigned_64 := Virtio_Net_Test;
+   begin
+      if R /= 0 then
+         Debug_Put_Line ("virtio-net TX: OK");
+      else
+         Debug_Put_Line ("virtio-net TX: failed");
+      end if;
+   end;
 
    --  Halt: the kernel does not expect the root task to return.
    loop
