@@ -6,6 +6,20 @@
 > *pending* or *target* have not yet been validated. Formal-verification
 > coverage is stated per-module, never as an aggregate percentage.
 
+## v1.0.0-pre (2026-10-24) — AArch64: virtio-net TCP server under seL4 (QEMU)
+
+**Validated: the Ada seL4 root task passively opens a TCP connection on port 8081 (SYN → SYN-ACK → ACK) to a host client forwarded through SLIRP `hostfwd` (`virtio-net TCP server: OK`).**
+
+- `sel4_mmio.c`: `build_tcp_frame` now takes explicit sport/dport; the server
+  arm parses the incoming SYN (client ISN + port) and replies with SYN-ACK
+  (server ISN `0x87654321`), then verifies the client ACK.
+- The RX loop skips the HTTP server's retransmissions (we never ACK the HTTP
+  response) by filtering on destination port 8081 and re-arming buffers.
+- Validated with `-netdev user,hostfwd=tcp::8081-:8081` + a Python client
+  (`connected OK`); pcap shows `[S]` → `[S.]` → `[.]` on 8081.
+- Full stack now covers both client and server roles over virtio-net.
+- Next step: a DNS-over-UDP client, or driver refactoring (interrupts / ring).
+
 ## v1.0.0-pre (2026-10-24) — AArch64: virtio-net HTTP client + body parse under seL4 (QEMU)
 
 **Validated: the Ada seL4 root task sends `GET / HTTP/1.0` over a TCP connection to a host HTTP server via the SLIRP gateway, receives `HTTP/1.0 200 OK`, and prints the response body over UART (`virtio-net HTTP: OK`, `[body] SchildTCB-body`).**
