@@ -36,6 +36,7 @@ jobs:
           alr -n toolchain --select gnat_native=14.2.1
           alr -n toolchain --select gprbuild=22.0.1
           alr -n install gnatprove
+          echo "$HOME/.alire/bin" >> "$GITHUB_PATH"
 
       - name: Locate toolchain (debug)
         run: |
