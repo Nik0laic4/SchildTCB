@@ -140,21 +140,23 @@ register on the `Call` syscall.
 
 The root task also sets up RX + TX virtqueues (legacy virtio-mmio:
 `GuestPageSize` + `QueueAlign` + `QueuePFN`) in a 2 MiB DMA frame and runs the
-minimal TCP/IP stack: ARP resolution, ICMP echo (ping), then a DHCP DISCOVER
-(UDP broadcast) that leases `10.0.2.15` from QEMU's SLIRP server:
+minimal TCP/IP stack: ARP resolution, ICMP echo (ping), DHCP (UDP), then a TCP
+3-way handshake + data exchange to a host service via the SLIRP gateway
+(`10.0.2.2:8080`):
 
 ```
 virtio-net MAC = 52:54:00:12:34:56
-virtio-net DHCP: OK
+virtio-net TCP: OK
 ```
 
 The virtio-net buffers carry a 10-byte `virtio_net_hdr` prefix before the
-Ethernet frame (the device consumes the first 10 bytes as the header, so the
-driver must allocate `len = 10 + frame` for both RX and TX).  Validated with
-`-object filter-dump`: ARP request/reply → ICMP echo request/reply →
-`BOOTP/DHCP, Request` → `BOOTP/DHCP, Reply` (`Your-IP 10.0.2.15`).
+Ethernet frame.  QEMU's SLIRP forwards the gateway `10.0.2.2` to the host
+loopback, so the guest reaches a host TCP service directly (deterministic, no
+internet).  Validated with `-object filter-dump` + a Python echo server on the
+host: ARP → ICMP → `BOOTP/DHCP` → `Flags [S]`/`[S.]`/`[P.]` TCP handshake and
+data (`ping` → `host-ack`).
 
-Next step: a TCP client (3-way handshake) over the DHCP-leased address.
+Next step: an HTTP client (TCP + HTTP/1.0 GET) over virtio-net.
 
 ## Requirements
 
