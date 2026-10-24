@@ -490,9 +490,10 @@ static void build_tcp(volatile u8 *p, u16 sport, u16 dport,
     p[17] = (u8)c;
 }
 
-/* Build an Ethernet + IPv4 + TCP segment (sport 12345, dport 8080). */
+/* Build an Ethernet + IPv4 + TCP segment. */
 static void build_tcp_frame(volatile u8 *pkt, const u8 *dst_mac,
                             const u8 *src_ip, const u8 *dst_ip,
+                            u16 sport, u16 dport,
                             u32 seq, u32 ack, u8 flags,
                             const volatile u8 *payload, int plen)
 {
@@ -501,7 +502,7 @@ static void build_tcp_frame(volatile u8 *pkt, const u8 *dst_mac,
     for (i = 0; i < 6; i++) pkt[i] = dst_mac[i];
     for (i = 0; i < 6; i++) pkt[6 + i] = net_mac[i];
     pkt[12] = 0x08; pkt[13] = 0x00;   /* EtherType = IPv4 */
-    build_tcp(pkt + 14 + 20, 12345, 8080, seq, ack, flags,
+    build_tcp(pkt + 14 + 20, sport, dport, seq, ack, flags,
               src_ip, dst_ip, payload, plen);
     build_ipv4(pkt + 14, 20 + 20 + plen, 6, src_ip, dst_ip);
 }
@@ -552,9 +553,9 @@ static void print_http_body(const volatile u8 *p, int len)
 
 /* Set up RX (queue 0) and TX (queue 1), resolve the gateway with ARP, send an
  * ICMP echo request, then a DHCP DISCOVER, then a TCP handshake + HTTP/1.0
- * GET, checking each reply.  Returns:
- *   5 = HTTP ok, 4 = DHCP ok (no TCP), 3 = ping ok (no DHCP),
- *   2 = ARP ok (no ICMP), 1 = TX ok, 0 = error. */
+ * GET, then accept a TCP connection as a server.  Returns:
+ *   6 = TCP server ok, 5 = HTTP ok (no server), 4 = DHCP ok (no TCP),
+ *   3 = ping ok (no DHCP), 2 = ARP ok (no ICMP), 1 = TX ok, 0 = error. */
 u64 schild_virtio_net_test(void)
 {
     volatile u32 *regs;
@@ -731,7 +732,7 @@ u64 schild_virtio_net_test(void)
         pkt = dma + 0x6000;
         for (i = 0; i < 10; i++) pkt[i] = 0x00;    /* virtio_net_hdr */
         build_tcp_frame(pkt + 10, gw_mac, offered_ip, host_ip,
-                        isn, 0, 0x02, 0, 0);
+                        12345, 8080, isn, 0, 0x02, 0, 0);
         tx_desc[0].addr  = dma_pa + 0x6000;
         tx_desc[0].len   = 10 + 14 + 20 + 20;
         tx_desc[0].flags = 0;
@@ -778,7 +779,7 @@ u64 schild_virtio_net_test(void)
         pkt = dma + 0x6000;
         for (i = 0; i < 10; i++) pkt[i] = 0x00;    /* virtio_net_hdr */
         build_tcp_frame(pkt + 10, gw_mac, offered_ip, host_ip,
-                        isn + 1, server_isn + 1, 0x18, http_get, 18);
+                        12345, 8080, isn + 1, server_isn + 1, 0x18, http_get, 18);
         tx_desc[0].addr  = dma_pa + 0x6000;
         tx_desc[0].len   = 10 + 14 + 20 + 20 + 18;
         tx_desc[0].flags = 0;
@@ -814,6 +815,106 @@ u64 schild_virtio_net_test(void)
             }
             if (!ok) return 4;
         }
-        return 5;
+    }
+
+    /* TCP server: passive open on port 8081 (the host connects via hostfwd). */
+    {
+        static const u8 host_ip[4] = { 10, 0, 2, 2 };
+        const u32 sisn = 0x87654321u;
+        u32 client_isn = 0;
+        u16 client_port = 0;
+
+        /* Wait for an incoming SYN on port 8081.  The HTTP server keeps
+         * retransmitting (we never ACK its response), so ignore non-SYN
+         * packets and keep polling. */
+        {
+            u32 last_used = rx_used->idx;
+            int found = 0;
+
+            rx_desc[0].addr  = dma_pa + 0x2000;
+            rx_desc[0].len   = 1510;
+            rx_desc[0].flags = 2;
+            rx_desc[0].next  = 0;
+            rx_desc[1].addr  = dma_pa + 0x3000;
+            rx_desc[1].len   = 1510;
+            rx_desc[1].flags = 2;
+            rx_desc[1].next  = 0;
+            rx_avail->ring[rx_avail->idx % VQ_NUM] = 0;
+            rx_avail->idx = rx_avail->idx + 1;
+            rx_avail->ring[rx_avail->idx % VQ_NUM] = 1;
+            rx_avail->idx = rx_avail->idx + 1;
+            __asm__ volatile("dmb sy" ::: "memory");
+            mmio32w(regs, VMMIO_QUEUE_NOTIFY, 0);
+
+            for (spins = 0; spins < 2000000000 && !found; spins++) {
+                if (rx_used->idx > last_used) {
+                    int k;
+                    for (k = 0; k < 2 && !found; k++) {
+                        const volatile u8 *rxpkt = dma + 0x2000 + k * 0x1000 + 10;
+                        const volatile u8 *tpayload;
+                        u32 seq, ack; u8 fl; int pl;
+                        if (parse_tcp(rxpkt, &seq, &ack, &fl, &tpayload, &pl) &&
+                            (fl & 0x02) && !(fl & 0x10) &&
+                            (((u16)rxpkt[36] << 8) | rxpkt[37]) == 8081) {
+                            client_isn = seq;
+                            client_port = ((u16)rxpkt[34] << 8) | rxpkt[35];
+                            found = 1;
+                        }
+                    }
+                    last_used = rx_used->idx;
+                    if (!found) {
+                        /* Re-arm descriptor 0 for the next packet. */
+                        rx_desc[0].addr  = dma_pa + 0x2000;
+                        rx_desc[0].len   = 1510;
+                        rx_desc[0].flags = 2;
+                        rx_desc[0].next  = 0;
+                        rx_avail->ring[rx_avail->idx % VQ_NUM] = 0;
+                        rx_avail->idx = rx_avail->idx + 1;
+                        __asm__ volatile("dmb sy" ::: "memory");
+                        mmio32w(regs, VMMIO_QUEUE_NOTIFY, 0);
+                    }
+                }
+            }
+            if (!found) return 5;
+        }
+
+        /* SYN-ACK. */
+        pkt = dma + 0x6000;
+        for (i = 0; i < 10; i++) pkt[i] = 0x00;    /* virtio_net_hdr */
+        build_tcp_frame(pkt + 10, gw_mac, offered_ip, host_ip,
+                        8081, client_port, sisn, client_isn + 1, 0x12, 0, 0);
+        tx_desc[0].addr  = dma_pa + 0x6000;
+        tx_desc[0].len   = 10 + 14 + 20 + 20;
+        tx_desc[0].flags = 0;
+        tx_desc[0].next  = 0;
+        tx_avail->ring[tx_avail->idx % VQ_NUM] = 0;
+        tx_avail->idx = tx_avail->idx + 1;
+        __asm__ volatile("dmb sy" ::: "memory");
+        mmio32w(regs, VMMIO_QUEUE_NOTIFY, 1);
+
+        for (spins = 0; spins < 1000000; spins++) {
+            if (tx_used->idx >= 6) break;
+        }
+
+        /* Wait for the client ACK. */
+        for (spins = 0; spins < 5000000 && rx_used->idx < 8; spins++) {
+        }
+        if (rx_used->idx < 8) return 5;   /* SYN-ACK sent, no ACK */
+
+        {
+            int k, ok = 0;
+            for (k = 0; k < 2 && !ok; k++) {
+                const volatile u8 *rxpkt = dma + 0x2000 + k * 0x1000 + 10;
+                const volatile u8 *tpayload;
+                u32 seq2, ack2; u8 fl2; int pl2;
+                if (parse_tcp(rxpkt, &seq2, &ack2, &fl2, &tpayload, &pl2) &&
+                    (fl2 & 0x10) && !(fl2 & 0x02) && ack2 == sisn + 1 &&
+                    (((u16)rxpkt[36] << 8) | rxpkt[37]) == 8081) {
+                    ok = 1;
+                }
+            }
+            if (!ok) return 5;
+        }
+        return 6;
     }
 }
