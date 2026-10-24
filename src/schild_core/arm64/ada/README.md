@@ -146,6 +146,7 @@ minimal TCP/IP stack: ARP resolution, ICMP echo (ping), DHCP (UDP), a TCP
 
 ```
 virtio-net MAC = 52:54:00:12:34:56
+[body] SchildTCB-body
 virtio-net HTTP: OK
 ```
 
@@ -156,7 +157,7 @@ internet).  Validated with `-object filter-dump` + `python3 -m http.server` on
 the host: ARP → ICMP → `BOOTP/DHCP` → `[S]`/`[S.]`/`[P.]` TCP handshake →
 `GET / HTTP/1.0` → `HTTP/1.0 200 OK`.
 
-Next step: parse the HTTP response body and, later, a TCP server / DNS client.
+Next step: a TCP server (guest listens on a port) or a DNS-over-UDP client.
 
 ## Requirements
 

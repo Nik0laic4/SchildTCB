@@ -528,6 +528,28 @@ static int parse_tcp(const volatile u8 *rxpkt, u32 *seq, u32 *ack, u8 *flags,
     return 1;
 }
 
+extern void schild_sel4_debug_putchar(char c);
+
+/* Print the HTTP response body (bytes after the "\r\n\r\n" separator). */
+static void print_http_body(const volatile u8 *p, int len)
+{
+    int i, j;
+    for (i = 0; i + 3 < len; i++) {
+        if (p[i] == '\r' && p[i+1] == '\n' && p[i+2] == '\r' && p[i+3] == '\n') {
+            schild_sel4_debug_putchar('[');
+            schild_sel4_debug_putchar('b');
+            schild_sel4_debug_putchar('o');
+            schild_sel4_debug_putchar('d');
+            schild_sel4_debug_putchar('y');
+            schild_sel4_debug_putchar(']');
+            schild_sel4_debug_putchar(' ');
+            for (j = i + 4; j < len; j++) schild_sel4_debug_putchar((char)p[j]);
+            schild_sel4_debug_putchar('\n');
+            return;
+        }
+    }
+}
+
 /* Set up RX (queue 0) and TX (queue 1), resolve the gateway with ARP, send an
  * ICMP echo request, then a DHCP DISCOVER, then a TCP handshake + HTTP/1.0
  * GET, checking each reply.  Returns:
@@ -787,6 +809,7 @@ u64 schild_virtio_net_test(void)
                     tpayload[0] == 'H' && tpayload[1] == 'T' && tpayload[2] == 'T' &&
                     tpayload[3] == 'P' && tpayload[4] == '/') {
                     ok = 1;
+                    print_http_body(tpayload, pl2);
                 }
             }
             if (!ok) return 4;
