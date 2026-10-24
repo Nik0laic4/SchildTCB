@@ -6,6 +6,21 @@
 > *pending* or *target* have not yet been validated. Formal-verification
 > coverage is stated per-module, never as an aggregate percentage.
 
+## v1.0.0-pre (2026-10-24) — AArch64: virtio-net RX (ARP round-trip) under seL4 (QEMU)
+
+**Validated: the Ada seL4 root task sends an ARP request for the SLIRP gateway (10.0.2.2) and receives the ARP reply through the RX virtqueue used ring (`virtio-net TX+RX: OK`).**
+
+- `sel4_mmio.c`: prepends the 10-byte `virtio_net_hdr` to RX/TX buffers
+  (`len = 10 + frame`) — the missing piece; without it the device treated the
+  first 10 bytes of the Ethernet frame as the header and sent a truncated frame.
+- RX flow validated end-to-end: empty RX buffer (flags=WRITE) → kick RX →
+  kick TX (ARP request) → poll TX used ring → poll RX used ring → verify the
+  received frame is an ARP reply (EtherType 0x0806, opcode 2).
+- QEMU's user-mode netdev answers with
+  `ARP, Reply 10.0.2.2 is-at 52:55:0a:00:02:02` (confirmed via
+  `-object filter-dump`).
+- Next: a minimal TCP/IP stack (ARP cache + ICMP echo) over virtio-net.
+
 ## v1.0.0-pre (2026-10-24) — AArch64: virtio-net virtqueue TX under seL4 (QEMU)
 
 **Validated: the Ada seL4 root task sets up RX + TX virtqueues in a DMA frame, submits a small Ethernet frame, and the virtio-net device consumes it (TX used ring advances, `virtio-net TX: OK`).**

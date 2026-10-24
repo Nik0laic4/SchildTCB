@@ -209,6 +209,7 @@ struct vring_used {
 static inline u32 mmio32(volatile u32 *b, u32 off)   { return b[off / 4]; }
 static inline void mmio32w(volatile u32 *b, u32 off, u32 v) { b[off / 4] = v; }
 
+
 /* Retype a RAM untyped into a 2 MiB large page mapped at `vaddr`; return its
  * physical address (for DMA), or 0 on failure. */
 static u64 alloc_dma_2m(u64 vaddr)
@@ -253,9 +254,34 @@ static void setup_queue(volatile u32 *regs, u32 qidx, u64 q_pa, u16 qnum)
     mmio32w(regs, VMMIO_QUEUE_PFN, (u32)(q_pa >> 12));  /* PFN = phys / 4096 */
 }
 
-/* Set up RX (queue 0) and TX (queue 1), submit a small Ethernet frame, and
- * check that the device consumes it (TX used ring advances).  Returns 1 on
- * success, 0 on error. */
+/* Our MAC (matches the -device virtio-net-device,mac=... command line). */
+static const u8 net_mac[6] = { 0x52, 0x54, 0x00, 0x12, 0x34, 0x56 };
+
+/* Build an Ethernet + ARP request (42 bytes) for the SLIRP gateway (10.0.2.2).
+ * This elicits a deterministic ARP reply from QEMU's user-mode netdev. */
+static void build_arp_request(volatile u8 *pkt)
+{
+    static const u8 gateway_ip[4] = { 10, 0, 2, 2 };
+    static const u8 guest_ip[4]   = { 10, 0, 2, 15 };
+    int i;
+
+    for (i = 0; i < 6; i++) pkt[i] = 0xff;               /* dst = broadcast */
+    for (i = 0; i < 6; i++) pkt[6 + i] = net_mac[i];     /* src = our MAC */
+    pkt[12] = 0x08; pkt[13] = 0x06;                       /* EtherType = ARP */
+    pkt[14] = 0x00; pkt[15] = 0x01;                       /* htype = Ethernet */
+    pkt[16] = 0x08; pkt[17] = 0x00;                       /* ptype = IPv4 */
+    pkt[18] = 0x06;                                        /* hlen = 6 */
+    pkt[19] = 0x04;                                        /* plen = 4 */
+    pkt[20] = 0x00; pkt[21] = 0x01;                       /* op = request */
+    for (i = 0; i < 6; i++) pkt[22 + i] = net_mac[i];     /* sender MAC */
+    for (i = 0; i < 4; i++) pkt[28 + i] = guest_ip[i];    /* sender IP */
+    for (i = 0; i < 6; i++) pkt[32 + i] = 0x00;           /* target MAC */
+    for (i = 0; i < 4; i++) pkt[38 + i] = gateway_ip[i];  /* target IP */
+}
+
+/* Set up RX (queue 0) and TX (queue 1), send an ARP request, and check that the
+ * device both consumes the TX and delivers the ARP reply into RX.  Returns:
+ *   2 = TX + RX ok, 1 = TX ok (no RX), 0 = error. */
 u64 schild_virtio_net_test(void)
 {
     volatile u32 *regs;
@@ -263,9 +289,10 @@ u64 schild_virtio_net_test(void)
     volatile u8 *dma;
     volatile struct vring_desc *rx_desc, *tx_desc;
     volatile struct vring_avail *rx_avail, *tx_avail;
-    volatile struct vring_used *tx_used;
+    volatile struct vring_used *rx_used, *tx_used;
     volatile u8 *pkt;
     int i, spins;
+    u64 tx_ok, rx_ok;
 
     regs = get_dev_regs();
     if (regs == 0 || regs[0] != 0x74726976u) return 0;
@@ -274,7 +301,8 @@ u64 schild_virtio_net_test(void)
     mmio32w(regs, VMMIO_STATUS, 0);
     mmio32w(regs, VMMIO_STATUS, VIRTIO_STATUS_ACKNOWLEDGE);
     mmio32w(regs, VMMIO_STATUS, VIRTIO_STATUS_ACKNOWLEDGE | VIRTIO_STATUS_DRIVER);
-    mmio32w(regs, VMMIO_DRIVER_FEATURES, 0);
+    mmio32w(regs, 0x024, 0);                 /* DriverFeaturesSel = page 0 */
+    mmio32w(regs, VMMIO_DRIVER_FEATURES, 1u << 5);  /* accept VIRTIO_NET_F_MAC */
     mmio32w(regs, VMMIO_STATUS,
             VIRTIO_STATUS_ACKNOWLEDGE | VIRTIO_STATUS_DRIVER | VIRTIO_STATUS_FEATURES_OK);
     mmio32w(regs, 0x028, 4096);   /* GuestPageSize (legacy) */
@@ -288,6 +316,7 @@ u64 schild_virtio_net_test(void)
     setup_queue(regs, 0, dma_pa, VQ_NUM);
     rx_desc  = (volatile struct vring_desc *)(dma + 0);
     rx_avail = (volatile struct vring_avail *)(dma + vring_avail_off(VQ_NUM));
+    rx_used  = (volatile struct vring_used *)(dma + vring_used_off(VQ_NUM));
 
     /* TX queue (index 1) at DMA offset 0x4000 (2 pages past RX). */
     setup_queue(regs, 1, dma_pa + 0x4000, VQ_NUM);
@@ -295,19 +324,21 @@ u64 schild_virtio_net_test(void)
     tx_avail = (volatile struct vring_avail *)(dma + 0x4000 + vring_avail_off(VQ_NUM));
     tx_used  = (volatile struct vring_used *)(dma + 0x4000 + vring_used_off(VQ_NUM));
 
-    /* RX: one empty buffer the device may write into. */
+    /* RX: one empty buffer the device may write into (virtio_net_hdr + frame). */
     rx_desc[0].addr  = dma_pa + 0x2000;   /* buffer past the RX used ring */
-    rx_desc[0].len   = 1500;
+    rx_desc[0].len   = 1510;
     rx_desc[0].flags = 2;   /* WRITE: device writes into the buffer */
     rx_desc[0].next  = 0;
     rx_avail->ring[0] = 0;
     rx_avail->idx = 1;
 
-    /* TX: one small Ethernet frame. */
+    /* TX: a 10-byte virtio_net_hdr + an ARP request (60-byte Ethernet frame). */
     pkt = dma + 0x6000;                     /* past the TX used ring */
-    for (i = 0; i < 60; i++) pkt[i] = (u8)i;
+    for (i = 0; i < 10; i++) pkt[i] = 0x00; /* virtio_net_hdr (no offloads) */
+    build_arp_request(pkt + 10);
+    for (i = 52; i < 70; i++) pkt[i] = 0x00;/* pad Ethernet frame to 60 bytes */
     tx_desc[0].addr  = dma_pa + 0x6000;
-    tx_desc[0].len   = 60;
+    tx_desc[0].len   = 70;
     tx_desc[0].flags = 0;
     tx_desc[0].next  = 0;
     tx_avail->ring[0] = 0;
@@ -324,6 +355,20 @@ u64 schild_virtio_net_test(void)
     for (spins = 0; spins < 1000000; spins++) {
         if (tx_used->idx >= 1) break;
     }
+    tx_ok = (tx_used->idx >= 1);
 
-    return (tx_used->idx >= 1) ? 1 : 0;
+    /* Poll RX for the ARP reply. */
+    for (spins = 0; spins < 5000000 && rx_used->idx < 1; spins++) {
+    }
+    rx_ok = (rx_used->idx >= 1);
+    if (rx_ok) {
+        /* Skip the 10-byte virtio_net_hdr and verify it is an ARP reply. */
+        volatile u8 *rxpkt = dma + 0x2000 + 10;
+        if (rxpkt[12] != 0x08 || rxpkt[13] != 0x06 ||   /* EtherType = ARP  */
+            rxpkt[20] != 0x00 || rxpkt[21] != 0x02) {   /* opcode = reply  */
+            rx_ok = 0;
+        }
+    }
+
+    return rx_ok ? 2 : (tx_ok ? 1 : 0);
 }

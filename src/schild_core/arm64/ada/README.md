@@ -139,15 +139,22 @@ BootInfo → find the device untyped → `Untyped_Retype` (2 MiB `LargePage`) �
 register on the `Call` syscall.
 
 The root task also sets up RX + TX virtqueues (legacy virtio-mmio:
-`GuestPageSize` + `QueueAlign` + `QueuePFN`) in a DMA frame and submits a small
-Ethernet frame; the device consumes it (TX used ring advances):
+`GuestPageSize` + `QueueAlign` + `QueuePFN`) in a 2 MiB DMA frame, submits an
+ARP request for the SLIRP gateway (10.0.2.2) and receives the ARP reply back
+through the RX used ring:
 
 ```
 virtio-net MAC = 52:54:00:12:34:56
-virtio-net TX: OK
+virtio-net TX+RX: OK
 ```
 
-Next step: receive packets (RX) and build a TCP/IP stack.
+The virtio-net buffers carry a 10-byte `virtio_net_hdr` prefix before the
+Ethernet frame (the device consumes the first 10 bytes as the header, so the
+driver must allocate `len = 10 + frame` for both RX and TX).  RX validated:
+QEMU's user-mode netdev answers the ARP request with
+`ARP, Reply 10.0.2.2 is-at 52:55:0a:00:02:02`.
+
+Next step: a minimal TCP/IP stack (ARP + ICMP echo) over virtio-net.
 
 ## Requirements
 

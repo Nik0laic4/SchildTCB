@@ -66,14 +66,16 @@ begin
       Debug_Put_Line ("virtio-net: mapping failed");
    end if;
 
-   --  TX test: set up a virtqueue and submit a small Ethernet frame.
+   --  Net test: send an ARP request and wait for the reply.
    declare
       R : Unsigned_64 := Virtio_Net_Test;
    begin
-      if R /= 0 then
-         Debug_Put_Line ("virtio-net TX: OK");
+      if R = 2 then
+         Debug_Put_Line ("virtio-net TX+RX: OK");
+      elsif R = 1 then
+         Debug_Put_Line ("virtio-net TX: OK, RX: none");
       else
-         Debug_Put_Line ("virtio-net TX: failed");
+         Debug_Put_Line ("virtio-net: failed");
       end if;
    end;
 
