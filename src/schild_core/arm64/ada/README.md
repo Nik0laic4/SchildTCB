@@ -140,25 +140,25 @@ register on the `Call` syscall.
 
 The root task also sets up RX + TX virtqueues (legacy virtio-mmio:
 `GuestPageSize` + `QueueAlign` + `QueuePFN`) in a 2 MiB DMA frame and runs the
-minimal TCP/IP stack in both roles: client (ARP, ICMP echo, DHCP, TCP
-handshake, HTTP/1.0 GET to `10.0.2.2:8080`) and server (passive open on `8081`,
-reached via `hostfwd`):
+minimal TCP/IP stack end-to-end: ARP, ICMP echo (ping), DHCP (UDP), a TCP
+client + HTTP/1.0 GET to `10.0.2.2:8080`, a TCP server on `8081` (via
+`hostfwd`), and a DNS A query to `10.0.2.3`:
 
 ```
 virtio-net MAC = 52:54:00:12:34:56
 [body] SchildTCB-body
-virtio-net TCP server: OK
+[dns] 8.6.112.0
+virtio-net DNS: OK
 ```
 
 The virtio-net buffers carry a 10-byte `virtio_net_hdr` prefix before the
 Ethernet frame.  QEMU's SLIRP forwards the gateway `10.0.2.2` to the host
-loopback, so the guest reaches a host service directly (deterministic, no
-internet).  Validated with `-object filter-dump` + a Python HTTP server and a
-Python TCP client on the host: ARP → ICMP → `BOOTP/DHCP` → TCP client +
-`HTTP/1.0 200 OK`, then a host `hostfwd` connection (`[S]`/`[S.]`/`[.]` on
-8081).
+loopback, so the guest reaches host services directly (deterministic, no
+internet beyond DNS).  Validated with `-object filter-dump` + Python HTTP/TCP
+servers/clients on the host: ARP → ICMP → `BOOTP/DHCP` → TCP client +
+`HTTP/1.0 200 OK` → `hostfwd` `[S]`/`[S.]`/`[.]` → DNS `A? example.com`.
 
-Next step: a DNS-over-UDP client, or driver refactoring (interrupts / ring).
+Next step: driver refactoring (interrupts / descriptor ring).
 
 ## Requirements
 
