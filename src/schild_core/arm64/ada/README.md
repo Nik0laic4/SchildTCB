@@ -139,22 +139,22 @@ BootInfo → find the device untyped → `Untyped_Retype` (2 MiB `LargePage`) �
 register on the `Call` syscall.
 
 The root task also sets up RX + TX virtqueues (legacy virtio-mmio:
-`GuestPageSize` + `QueueAlign` + `QueuePFN`) in a 2 MiB DMA frame, resolves the
-SLIRP gateway (10.0.2.2) via ARP, then completes an ICMP echo round-trip
-(ping) — the minimal TCP/IP stack:
+`GuestPageSize` + `QueueAlign` + `QueuePFN`) in a 2 MiB DMA frame and runs the
+minimal TCP/IP stack: ARP resolution, ICMP echo (ping), then a DHCP DISCOVER
+(UDP broadcast) that leases `10.0.2.15` from QEMU's SLIRP server:
 
 ```
 virtio-net MAC = 52:54:00:12:34:56
-virtio-net ping: OK
+virtio-net DHCP: OK
 ```
 
 The virtio-net buffers carry a 10-byte `virtio_net_hdr` prefix before the
 Ethernet frame (the device consumes the first 10 bytes as the header, so the
 driver must allocate `len = 10 + frame` for both RX and TX).  Validated with
-`-object filter-dump`: ARP request → `ARP, Reply 10.0.2.2 is-at
-52:55:0a:00:02:02` → `ICMP echo request` → `ICMP echo reply`.
+`-object filter-dump`: ARP request/reply → ICMP echo request/reply →
+`BOOTP/DHCP, Request` → `BOOTP/DHCP, Reply` (`Your-IP 10.0.2.15`).
 
-Next step: a higher-level stack (UDP/TCP) over virtio-net.
+Next step: a TCP client (3-way handshake) over the DHCP-leased address.
 
 ## Requirements
 

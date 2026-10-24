@@ -369,9 +369,91 @@ static int verify_icmp_reply(const volatile u8 *rxpkt)
     return 1;
 }
 
-/* Set up RX (queue 0) and TX (queue 1), resolve the gateway with ARP, then send
- * an ICMP echo request and check the reply.  Returns:
- *   3 = ping ok, 2 = ARP ok (no ICMP), 1 = TX ok, 0 = error. */
+/* Build a UDP datagram (8-byte header + payload, checksum computed over the
+ * IPv4 pseudo-header). */
+static void build_udp(volatile u8 *p, u16 sport, u16 dport,
+                      const u8 *src_ip, const u8 *dst_ip,
+                      const volatile u8 *payload, int plen)
+{
+    u32 sum = 0;
+    u16 c;
+    int i;
+
+    p[0] = (u8)(sport >> 8); p[1] = (u8)sport;
+    p[2] = (u8)(dport >> 8); p[3] = (u8)dport;
+    p[4] = (u8)((8 + plen) >> 8); p[5] = (u8)(8 + plen);
+    p[6] = 0x00; p[7] = 0x00;
+    for (i = 0; i < plen; i++) p[8 + i] = payload[i];
+
+    /* Pseudo-header: src IP, dst IP, zero+protocol, UDP length. */
+    for (i = 0; i < 4; i += 2) sum += ((u32)src_ip[i] << 8) | src_ip[i + 1];
+    for (i = 0; i < 4; i += 2) sum += ((u32)dst_ip[i] << 8) | dst_ip[i + 1];
+    sum += 17;
+    sum += 8 + plen;
+    for (i = 0; i + 1 < 8 + plen; i += 2)
+        sum += ((u32)p[i] << 8) | p[i + 1];
+    if (i < 8 + plen)
+        sum += (u32)p[i] << 8;
+    while (sum >> 16)
+        sum = (sum & 0xffff) + (sum >> 16);
+    c = (u16)~sum;
+    if (c == 0) c = 0xffff;
+    p[6] = (u8)(c >> 8);
+    p[7] = (u8)c;
+}
+
+/* Build a BOOTP/DHCP DISCOVER message (300 bytes). */
+static void build_dhcp_discover(volatile u8 *p)
+{
+    int i;
+
+    for (i = 0; i < 300; i++) p[i] = 0x00;
+    p[0] = 0x01;             /* op = BOOTREQUEST */
+    p[1] = 0x01;             /* htype = Ethernet */
+    p[2] = 0x06;             /* hlen = 6 */
+    p[4] = 0x12; p[5] = 0x34; p[6] = 0x56; p[7] = 0x78;   /* xid */
+    p[10] = 0x80;            /* flags = broadcast */
+    for (i = 0; i < 6; i++) p[28 + i] = net_mac[i];        /* chaddr */
+    p[236] = 0x63; p[237] = 0x82; p[238] = 0x53; p[239] = 0x63;  /* cookie */
+    p[240] = 53; p[241] = 1; p[242] = 1;   /* option 53: message type = DISCOVER */
+    p[243] = 255;                           /* option 255: end */
+}
+
+/* Build an Ethernet + IPv4 + UDP + DHCP DISCOVER frame (342 bytes). */
+static void build_dhcp_frame(volatile u8 *pkt)
+{
+    static const u8 zero_ip[4]  = { 0, 0, 0, 0 };
+    static const u8 bcast_ip[4] = { 255, 255, 255, 255 };
+    volatile u8 *udp  = pkt + 14 + 20;
+    volatile u8 *dhcp = udp + 8;
+    int i;
+
+    for (i = 0; i < 6; i++) pkt[i] = 0xff;              /* dst = broadcast */
+    for (i = 0; i < 6; i++) pkt[6 + i] = net_mac[i];    /* src = our MAC */
+    pkt[12] = 0x08; pkt[13] = 0x00;                      /* EtherType = IPv4 */
+
+    build_dhcp_discover(dhcp);
+    build_udp(udp, 68, 67, zero_ip, bcast_ip, dhcp, 300);
+    build_ipv4(pkt + 14, 20 + 8 + 300, 17, zero_ip, bcast_ip);
+}
+
+/* Extract the offered IP (yiaddr) from a received DHCP OFFER. */
+static int parse_dhcp_offer(const volatile u8 *rxpkt, u8 *offered_ip)
+{
+    int i;
+
+    if (rxpkt[12] != 0x08 || rxpkt[13] != 0x00) return 0;  /* EtherType = IPv4 */
+    if (rxpkt[23] != 0x11) return 0;                        /* proto = UDP */
+    if (rxpkt[36] != 0x00 || rxpkt[37] != 0x44) return 0;   /* UDP dport = 68 */
+    if (rxpkt[42] != 0x02) return 0;                        /* DHCP op = BOOTREPLY */
+    for (i = 0; i < 4; i++) offered_ip[i] = rxpkt[42 + 16 + i];  /* yiaddr */
+    return 1;
+}
+
+/* Set up RX (queue 0) and TX (queue 1), resolve the gateway with ARP, send an
+ * ICMP echo request, then a DHCP DISCOVER, checking each reply.  Returns:
+ *   4 = DHCP ok, 3 = ping ok (no DHCP), 2 = ARP ok (no ICMP), 1 = TX ok,
+ *   0 = error. */
 u64 schild_virtio_net_test(void)
 {
     volatile u32 *regs;
@@ -382,6 +464,7 @@ u64 schild_virtio_net_test(void)
     volatile struct vring_used *rx_used, *tx_used;
     volatile u8 *pkt;
     u8 gw_mac[6];
+    u8 offered_ip[4];
     int i, spins;
     u64 tx_ok, rx_ok;
 
@@ -493,5 +576,39 @@ u64 schild_virtio_net_test(void)
         volatile u8 *rxpkt = dma + 0x2000 + 10;
         if (!verify_icmp_reply(rxpkt)) return 2;
     }
-    return 3;
+
+    /* DHCP round-trip: re-arm the queues and send a DHCP DISCOVER. */
+    rx_desc[0].addr  = dma_pa + 0x2000;
+    rx_desc[0].len   = 1510;
+    rx_desc[0].flags = 2;
+    rx_desc[0].next  = 0;
+    rx_avail->ring[rx_avail->idx % VQ_NUM] = 0;
+    rx_avail->idx = rx_avail->idx + 1;
+
+    pkt = dma + 0x6000;
+    for (i = 0; i < 10; i++) pkt[i] = 0x00;    /* virtio_net_hdr */
+    build_dhcp_frame(pkt + 10);
+    tx_desc[0].addr  = dma_pa + 0x6000;
+    tx_desc[0].len   = 10 + 342;
+    tx_desc[0].flags = 0;
+    tx_desc[0].next  = 0;
+    tx_avail->ring[tx_avail->idx % VQ_NUM] = 0;
+    tx_avail->idx = tx_avail->idx + 1;
+    __asm__ volatile("dmb sy" ::: "memory");
+
+    mmio32w(regs, VMMIO_QUEUE_NOTIFY, 0);
+    mmio32w(regs, VMMIO_QUEUE_NOTIFY, 1);
+
+    for (spins = 0; spins < 1000000; spins++) {
+        if (tx_used->idx >= 3) break;
+    }
+    for (spins = 0; spins < 5000000 && rx_used->idx < 3; spins++) {
+    }
+    if (rx_used->idx < 3) return 3;   /* ping ok, no DHCP offer */
+
+    {
+        volatile u8 *rxpkt = dma + 0x2000 + 10;
+        if (!parse_dhcp_offer(rxpkt, offered_ip)) return 3;
+    }
+    return 4;
 }
