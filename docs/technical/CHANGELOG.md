@@ -6,6 +6,20 @@
 > *pending* or *target* have not yet been validated. Formal-verification
 > coverage is stated per-module, never as an aggregate percentage.
 
+## v1.0.0-pre (2026-10-24) — AArch64: virtio-net DHCP (UDP) under seL4 (QEMU)
+
+**Validated: the Ada seL4 root task sends a DHCP DISCOVER (UDP broadcast, `0.0.0.0:68` → `255.255.255.255:67`) and receives the DHCP OFFER (`Your-IP 10.0.2.15`) from QEMU's SLIRP server (`virtio-net DHCP: OK`).**
+
+- `sel4_mmio.c`: UDP datagram builder (8-byte header + IPv4 pseudo-header
+  checksum), 300-byte BOOTP/DHCP DISCOVER builder (op=1, flags=broadcast,
+  chaddr=MAC, cookie, option 53 = DISCOVER), and a DHCP OFFER parser
+  (op=BOOTREPLY, UDP dport 68, yiaddr extraction).
+- Full stack now validated end-to-end in one boot: ARP resolution → ICMP echo
+  (ping) → DHCP DISCOVER → DHCP OFFER, re-arming the RX/TX queues between each
+  round-trip.
+- This removes the hardcoded guest IP path; next step is a TCP client
+  (3-way handshake) over the DHCP-leased address.
+
 ## v1.0.0-pre (2026-10-24) — AArch64: virtio-net ICMP echo (ping) under seL4 (QEMU)
 
 **Validated: the Ada seL4 root task resolves the gateway via ARP and completes an ICMP echo round-trip (`virtio-net ping: OK`).**
