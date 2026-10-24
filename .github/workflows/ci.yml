@@ -21,8 +21,11 @@ jobs:
 
       - name: Install Alire
         run: |
-          curl -fsSL https://alire.ada.dev/alr-setup | sh
-          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+          curl -fsSL https://alire.ada.dev/alr-setup | bash
+          ALR_BIN="$(find "$HOME" -name alr -type f 2>/dev/null | head -1)"
+          echo "alr binary: $ALR_BIN"
+          echo "$(dirname "$ALR_BIN")" >> "$GITHUB_PATH"
+          "$ALR_BIN" --version
 
       - name: Install Ada/SPARK toolchain
         run: |
