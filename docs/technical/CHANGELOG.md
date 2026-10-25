@@ -6,6 +6,21 @@
 > *pending* or *target* have not yet been validated. Formal-verification
 > coverage is stated per-module, never as an aggregate percentage.
 
+## v1.0.0-pre (2026-10-24) — AArch64: virtio-net IRQ via seL4 Notifications (QEMU)
+
+**Validated: the virtio-net IRQ (GIC SPI 47 = GIC IRQ 79) is bound to a seL4 Notification and polled non-blockingly + Acked; the full stack passes end-to-end (`virtio-net DNS: OK`, `[body] SchildTCB-body`, `[dns] ...`, `[irq] 75–151` across runs).**
+
+- `sel4_mmio.c`: `net_init` retypes a notification object, mints it badged with
+  the IRQ (79) via `CNode_Mint` (label 21), then `IRQControl_Get` (label 26) +
+  `IRQHandler_SetNotification` (label 28).  `irq_poll` does `seL4_NBRecv`
+  (syscall -8) → ISR read (0x060) → `IRQHandler_Ack` (label 27).
+- `tx_send`/`rx_wait` and the TCP-server/DNS search loops now wait on the
+  notification instead of busy-reading the used ring; the used-ring drain is
+  retained as a safety net (single-threaded root task → `seL4_Poll`, non-
+  blocking; a blocking `seL4_Wait` needs a second thread).
+- Validated under the same QEMU `-netdev user` + `hostfwd` harness.
+
+
 ## v1.0.0-pre (2026-10-24) — AArch64: virtio-net descriptor-ring refactor (QEMU)
 
 **Validated: the seL4 root task's virtio-net driver now uses honest split-ring management (RX buffer pool + rotating TX descriptors) instead of re-arming descriptor 0; the full stack still passes end-to-end (`virtio-net DNS: OK`, `[body] SchildTCB-body`, `[dns] ...`).**
