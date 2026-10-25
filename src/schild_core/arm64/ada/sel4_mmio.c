@@ -89,10 +89,10 @@ static u64 map_page(u64 page_cap, u64 vaddr)
  *
  * The virtio-net device is on virtio-mmio slot 31 (0x0a00_3e00), whose GIC
  * interrupt is SPI 47 = GIC IRQ 32 + 47 = 79 (qemu-arm-virt, NUM_PPI=32).
- * We bind that IRQ to a seL4 notification (badged with 79).  The root task is
- * single-threaded, so we poll the notification non-blockingly (seL4_NBRecv)
- * instead of busy-reading the used ring; on delivery we read the virtio ISR
- * status register (0x060) and Ack the IRQ.
+ * We bind that IRQ to a seL4 notification (badged with 79).  A dedicated
+ * waiter thread blocks on that notification (seL4_Wait), Acks the IRQ, and
+ * signals a second notification that the main thread blocks on; the main
+ * thread then drains the used ring.  No busy-polling.
  * ============================================================================= */
 
 #define VIRTIO_MMIO_IRQ 79
@@ -102,27 +102,10 @@ static u64 map_page(u64 page_cap, u64 vaddr)
 #define ROOT_CNODE_DEPTH 64
 
 /* File-scope caps for the IRQ notification path (populated by net_init). */
-static u64 net_irq_ntfn;      /* badged notification cap (CPtr) */
+static u64 net_irq_ntfn;      /* badged IRQ notification cap (CPtr) */
 static u64 net_irq_handler;   /* IRQ handler cap (CPtr) */
+static u64 net_main_ntfn;     /* waiter -> main "IRQ arrived" notification */
 static u32 net_irq_count;     /* IRQs delivered through the notification */
-
-/* seL4_NBRecv (seL4_SysNBRecv = -8): non-blocking receive on a notification.
- * Returns the notification badge in x0: 0 = empty, non-zero = signaled. */
-static inline u64 sel4_nbrecv(u64 src)
-{
-    register u64 x0 asm("x0") = src;
-    register u64 x1 asm("x1");
-    register u64 x2 asm("x2");
-    register u64 x3 asm("x3");
-    register u64 x4 asm("x4");
-    register u64 x5 asm("x5");
-    register u64 x7 asm("x7") = -8;   /* seL4_SysNBRecv */
-    __asm__ volatile("svc #0"
-                     : "+r"(x0), "=r"(x1), "=r"(x2), "=r"(x3), "=r"(x4), "=r"(x5)
-                     : "r"(x7)
-                     : "memory");
-    return x0;
-}
 
 /* IRQControl_Get: label IRQIssueIRQHandler=26, extraCaps=1 (root CNode), len=3. */
 static u64 sel4_irq_control_get(u64 irq_control, u64 irq, u64 index, u64 depth)
@@ -205,6 +188,64 @@ static u64 retype_notification(u64 untyped_cap, u64 target_slot)
     set_mr(4, target_slot);
     set_mr(5, 1);
     return info_label(sel4_call(untyped_cap, info, 3 /* NotificationObject */, 5, 0, 0));
+}
+
+/* seL4_Signal (seL4_SysSend = -3): empty signal on a notification. */
+static inline void sel4_signal(u64 dest)
+{
+    register u64 x0 asm("x0") = dest;
+    register u64 x1 asm("x1") = 0;   /* empty message info */
+    register u64 x7 asm("x7") = -3;  /* seL4_SysSend */
+    __asm__ volatile("svc #0" : "+r"(x0), "+r"(x1) : "r"(x7) : "memory");
+}
+
+/* seL4_Wait (seL4_SysRecv = -5): blocking receive on a notification.  Returns
+ * the badge once the notification is signaled. */
+static inline u64 sel4_wait(u64 src)
+{
+    register u64 x0 asm("x0") = src;
+    register u64 x1 asm("x1");
+    register u64 x2 asm("x2");
+    register u64 x3 asm("x3");
+    register u64 x4 asm("x4");
+    register u64 x5 asm("x5");
+    register u64 x7 asm("x7") = -5;   /* seL4_SysRecv */
+    __asm__ volatile("svc #0"
+                     : "+r"(x0), "=r"(x1), "=r"(x2), "=r"(x3), "=r"(x4), "=r"(x5)
+                     : "r"(x7)
+                     : "memory");
+    return x0;
+}
+
+/* TCB_Configure: label TCBConfigure=5, extraCaps=3 (cspace/vspace/bufferFrame),
+ * len=4 (non-MCS: MR0=fault_ep, MR1=cspace_root_data, MR2=vspace_root_data,
+ * MR3=buffer). */
+static u64 sel4_tcb_configure(u64 tcb, u64 fault_ep, u64 cspace_root, u64 cspace_root_data,
+                              u64 vspace_root, u64 vspace_root_data, u64 buffer, u64 buffer_frame)
+{
+    u64 info = (5ULL << 12) | (3ULL << 7) | 4ULL;
+    set_cap(0, cspace_root);
+    set_cap(1, vspace_root);
+    set_cap(2, buffer_frame);
+    return info_label(sel4_call(tcb, info, fault_ep, cspace_root_data, vspace_root_data, buffer));
+}
+
+/* TCB_WriteRegisters: label TCBWriteRegisters=3, extraCaps=0, len=4.  Writes
+ * pc + sp (count=2) and resumes the thread. */
+static u64 sel4_tcb_write_registers(u64 tcb, u64 pc, u64 sp)
+{
+    u64 info = (3ULL << 12) | 0ULL | 4ULL;
+    return info_label(sel4_call(tcb, info, 1 /* resume */, 2 /* count */, pc, sp));
+}
+
+/* Retype a TCB object (seL4_TCBBits=11 non-MCS) from a fresh RAM untyped. */
+static u64 retype_tcb(u64 untyped_cap, u64 target_slot)
+{
+    u64 info = (1ULL << 12) | (1ULL << 7) | 6ULL;  /* UntypedRetype: label=1, extraCaps=1, len=6 */
+    set_cap(0, 2);
+    set_mr(4, target_slot);
+    set_mr(5, 1);
+    return info_label(sel4_call(untyped_cap, info, 1 /* TCBObject */, 11 /* TCBBits */, 0, 0));
 }
 
 /* Map the physical device region at `phys` into the VSpace at `vaddr`.
@@ -780,17 +821,27 @@ static inline void net_barrier(void)
     __asm__ volatile("dmb sy" ::: "memory");
 }
 
-/* Poll the virtio IRQ notification once.  Returns the ISR status if an IRQ was
- * delivered (and clears the device ISR + Acks), else 0. */
+/* Waiter thread: blocks on the IRQ notification, Acks the IRQ, and wakes the
+ * main thread via the "IRQ arrived" notification.  Runs on its own stack
+ * (reuses an unused region of the DMA frame). */
+#define WAITER_STACK_OFF   0x100000  /* 1 MiB into the 2 MiB DMA frame */
+#define WAITER_STACK_SIZE  0x4000    /* 16 KiB */
+
+static void __attribute__((noreturn)) irq_waiter(void)
+{
+    for (;;) {
+        (void)sel4_wait(net_irq_ntfn);
+        (void)sel4_irq_handler_ack(net_irq_handler);
+        sel4_signal(net_main_ntfn);
+    }
+}
+
+/* Block until the waiter signals that a virtio IRQ was delivered. */
 static u32 irq_poll(void)
 {
-    if (sel4_nbrecv(net_irq_ntfn) == 0) return 0;
+    (void)sel4_wait(net_main_ntfn);
     net_irq_count++;
-    {
-        u32 isr = mmio32(net_regs, VMMIO_ISR);
-        sel4_irq_handler_ack(net_irq_handler);
-        return isr;
-    }
+    return 1;
 }
 
 /* Post descriptor `d` to the RX avail ring (device may write into it). */
@@ -916,6 +967,29 @@ static int net_init(void)
         if (sel4_irq_handler_set_ntfn(irq_handler_slot, badged_slot) != 0) return 0;
         net_irq_ntfn = badged_slot;
         net_irq_handler = irq_handler_slot;
+    }
+
+    /* Second notification: the waiter signals it to wake the main thread. */
+    {
+        u64 main_ntfn_slot = next_slot++;
+        u64 ram = find_ram_untyped(5);
+        if (ram == (u64)-1) return 0;
+        mark_untyped_used(ram);
+        if (retype_notification(ram, main_ntfn_slot) != 0) return 0;
+        net_main_ntfn = main_ntfn_slot;
+    }
+
+    /* Waiter thread: blocks on the IRQ notification and forwards IRQs. */
+    {
+        u64 tcb_slot = next_slot++;
+        u64 ram = find_ram_untyped(11);
+        if (ram == (u64)-1) return 0;
+        mark_untyped_used(ram);
+        if (retype_tcb(ram, tcb_slot) != 0) return 0;
+        if (sel4_tcb_configure(tcb_slot, 0 /* fault_ep */, 2 /* cspace_root */, 0,
+                              3 /* vspace_root */, 0, 0 /* buffer */, 0 /* bufferFrame */) != 0) return 0;
+        if (sel4_tcb_write_registers(tcb_slot, (u64)irq_waiter,
+                                     (u64)net_dma + WAITER_STACK_OFF + WAITER_STACK_SIZE) != 0) return 0;
     }
 
     /* RX queue (index 0) at DMA offset 0. */

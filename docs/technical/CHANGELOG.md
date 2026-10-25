@@ -6,6 +6,15 @@
 > *pending* or *target* have not yet been validated. Formal-verification
 > coverage is stated per-module, never as an aggregate percentage.
 
+## v1.0.0-pre (2026-10-24) — AArch64: virtio-net IRQ waiter thread (blocking seL4_Wait)
+
+**Validated: the IRQ notification is now consumed by a dedicated waiter TCB that blocks with `seL4_Wait`, Acks the IRQ, and signals the main thread; the main thread blocks instead of polling (`virtio-net DNS: OK`, `[irq] 102–220` across runs).**
+
+- `sel4_mmio.c`: added a second TCB (retype + `TCB_Configure` + `TCB_WriteRegisters`), a second notification (`main_ntfn`), and the `irq_waiter` loop (`seL4_Wait` → `IRQHandler_Ack` → `seL4_Signal`).  `irq_poll` now blocks on `main_ntfn`.
+- Replaced the non-blocking `seL4_NBRecv` poll with blocking `seL4_Wait` — no busy-poll left in the IRQ path.
+- The waiter thread's stack reuses an unused region of the 2 MiB DMA frame; no separate IPC buffer is needed (Ack/Signal/Wait carry no message).
+
+
 ## v1.0.0-pre (2026-10-24) — AArch64: virtio-net IRQ via seL4 Notifications (QEMU)
 
 **Validated: the virtio-net IRQ (GIC SPI 47 = GIC IRQ 79) is bound to a seL4 Notification and polled non-blockingly + Acked; the full stack passes end-to-end (`virtio-net DNS: OK`, `[body] SchildTCB-body`, `[dns] ...`, `[irq] 75–151` across runs).**
