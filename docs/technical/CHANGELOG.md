@@ -6,6 +6,24 @@
 > *pending* or *target* have not yet been validated. Formal-verification
 > coverage is stated per-module, never as an aggregate percentage.
 
+## v1.0.0-pre (2026-10-24) — AArch64: virtio-net descriptor-ring refactor (QEMU)
+
+**Validated: the seL4 root task's virtio-net driver now uses honest split-ring management (RX buffer pool + rotating TX descriptors) instead of re-arming descriptor 0; the full stack still passes end-to-end (`virtio-net DNS: OK`, `[body] SchildTCB-body`, `[dns] ...`).**
+
+- `sel4_mmio.c`: replaced the manual `descriptor 0` re-arm with `net_init()` +
+  ring helpers (`rx_post`, `rx_poll`/`rx_wait`, `rx_recycle`, `tx_buffer`/
+  `tx_send`); `avail_idx`/`used_idx` now advance monotonically.
+- DMA frame re-laid out: RX desc/avail `0x0000`, RX used `0x1000`, 4× RX
+  buffers (`0x2000 + d·0x1000`), TX desc/avail `0x6000`, TX used `0x7000`,
+  4× TX buffers (`0x8000 + d·0x1000`).
+- The used ring's per-entry descriptor id now selects the RX buffer (no
+  hardcoded descriptor 0); consumed RX buffers are recycled through the avail
+  ring.
+- Busy-poll is retained; IRQ routing via seL4 Notifications is the remaining
+  driver step (separate task — needs `-netdev socket`/tap because QEMU SLIRP
+  delivers interrupts unreliably).
+
+
 ## v1.0.0-pre (2026-10-24) — AArch64: virtio-net DNS client under seL4 (QEMU)
 
 **Validated: the Ada seL4 root task sends a DNS A query for `example.com` (UDP, `53000 → 10.0.2.3:53`) and parses the A-record answer (`virtio-net DNS: OK`, `[dns] 8.6.112.0`).**

@@ -614,171 +614,260 @@ static int parse_dns_reply(const volatile u8 *rxpkt, u8 *ip)
     return 1;
 }
 
-/* Set up RX (queue 0) and TX (queue 1), resolve the gateway with ARP, send an
- * ICMP echo request, then a DHCP DISCOVER, then a TCP handshake + HTTP/1.0
- * GET, then accept a TCP connection as a server, then a DNS A query.  Returns:
- *   7 = DNS ok, 6 = TCP server ok (no DNS), 5 = HTTP ok (no server),
- *   4 = DHCP ok (no TCP), 3 = ping ok (no DHCP), 2 = ARP ok (no ICMP),
- *   1 = TX ok, 0 = error. */
-u64 schild_virtio_net_test(void)
+/* =============================================================================
+ * virtio-net virtqueue driver: honest split-ring management.
+ *
+ * Replaces the earlier "re-arm descriptor 0" scheme with a proper descriptor
+ * ring: an RX buffer pool (one WRITE descriptor per buffer, recycled through
+ * the used ring) and rotating TX descriptors.  avail_idx/used_idx advance
+ * monotonically; the device's per-entry descriptor id (from the used ring) is
+ * what selects the buffer, never a hardcoded descriptor 0.
+ *
+ * Busy-poll is retained for now -- IRQ routing is a separate follow-up.
+ * ============================================================================= */
+
+/* DMA frame layout (single 2 MiB frame mapped at 0x600000):
+ *
+ *   RX desc/avail    0x0000   (page 0)
+ *   RX used          0x1000   (page 1)
+ *   RX buffers       0x2000 + d * 0x1000   (4 x 4096, len 1510)
+ *   TX desc/avail    0x6000   (page 6)
+ *   TX used          0x7000   (page 7)
+ *   TX buffers       0x8000 + d * 0x1000   (4 x 4096)
+ */
+#define RX_BUF_BASE    0x2000
+#define RX_BUF_STRIDE  0x1000
+#define TX_QUEUE_BASE  0x6000
+#define TX_BUF_BASE    0x8000
+#define TX_BUF_STRIDE  0x1000
+#define NET_BUF_LEN    1510
+
+/* File-scope device/ring state (populated by net_init). */
+static volatile u32 *net_regs;
+static volatile u8  *net_dma;
+static u64           net_dma_pa;
+static volatile struct vring_desc  *net_rx_desc;
+static volatile struct vring_avail *net_rx_avail;
+static volatile struct vring_used  *net_rx_used;
+static volatile struct vring_desc  *net_tx_desc;
+static volatile struct vring_avail *net_tx_avail;
+static volatile struct vring_used  *net_tx_used;
+static u16 net_rx_last_used;   /* used->idx entries consumed so far */
+static u16 net_tx_last_used;   /* used->idx entries consumed so far (TX) */
+static u16 net_tx_next;        /* rotating TX descriptor id */
+
+static inline void net_barrier(void)
 {
-    volatile u32 *regs;
+    __asm__ volatile("dmb sy" ::: "memory");
+}
+
+/* Post descriptor `d` to the RX avail ring (device may write into it). */
+static void rx_post(u16 d)
+{
+    net_rx_avail->ring[net_rx_avail->idx % VQ_NUM] = d;
+    net_rx_avail->idx = (u16)(net_rx_avail->idx + 1);
+    net_barrier();
+}
+
+static void rx_kick(void)
+{
+    mmio32w(net_regs, VMMIO_QUEUE_NOTIFY, 0);
+}
+
+/* Return the id of the next used RX descriptor, or -1 if none is pending. */
+static int rx_poll(void)
+{
+    u16 d;
+    if (net_rx_used->idx == net_rx_last_used) return -1;
+    d = net_rx_used->ring[net_rx_last_used % VQ_NUM].id;
+    net_rx_last_used = (u16)(net_rx_last_used + 1);
+    return (int)d;
+}
+
+/* Spin up to `timeout` iterations for one received frame. */
+static int rx_wait(u32 timeout)
+{
+    u32 spins;
+    for (spins = 0; spins < timeout; spins++) {
+        int d = rx_poll();
+        if (d >= 0) return d;
+    }
+    return -1;
+}
+
+/* Pointer to the Ethernet frame of a received descriptor (past the 10-byte
+ * virtio_net_hdr). */
+static const volatile u8 *rx_frame(int d)
+{
+    return (const volatile u8 *)(net_dma + RX_BUF_BASE + (u64)d * RX_BUF_STRIDE + 10);
+}
+
+/* Give a consumed RX buffer back to the device. */
+static void rx_recycle(u16 d)
+{
+    rx_post(d);
+    rx_kick();
+}
+
+/* Buffer for the next rotating TX descriptor. */
+static volatile u8 *tx_buffer(void)
+{
+    return (volatile u8 *)(net_dma + TX_BUF_BASE + (u64)net_tx_next * TX_BUF_STRIDE);
+}
+
+/* Submit the current TX buffer (len bytes incl. virtio_net_hdr) and wait for
+ * the device to consume it.  Returns 1 on success, 0 on timeout. */
+static int tx_send(u32 len)
+{
+    u16 d = net_tx_next;
+    u32 spins;
+
+    net_tx_desc[d].addr  = net_dma_pa + TX_BUF_BASE + (u64)d * TX_BUF_STRIDE;
+    net_tx_desc[d].len   = len;
+    net_tx_desc[d].flags = 0;
+    net_tx_desc[d].next  = 0;
+    net_tx_avail->ring[net_tx_avail->idx % VQ_NUM] = d;
+    net_tx_avail->idx = (u16)(net_tx_avail->idx + 1);
+    net_barrier();
+    mmio32w(net_regs, VMMIO_QUEUE_NOTIFY, 1);
+
+    for (spins = 0; spins < 1000000; spins++) {
+        if (net_tx_used->idx > net_tx_last_used) break;
+    }
+    if (net_tx_used->idx <= net_tx_last_used) return 0;
+    net_tx_last_used = (u16)(net_tx_last_used + 1);
+    net_tx_next = (u16)((d + 1) % VQ_NUM);
+    return 1;
+}
+
+/* Reset + feature negotiation + queue setup + RX pool.  Returns 1 on success. */
+static int net_init(void)
+{
     u64 dma_pa;
     volatile u8 *dma;
-    volatile struct vring_desc *rx_desc, *tx_desc;
-    volatile struct vring_avail *rx_avail, *tx_avail;
-    volatile struct vring_used *rx_used, *tx_used;
-    volatile u8 *pkt;
-    u8 gw_mac[6];
-    u8 offered_ip[4];
-    int i, spins;
-    u64 tx_ok, rx_ok;
+    int i;
 
-    regs = get_dev_regs();
-    if (regs == 0 || regs[0] != 0x74726976u) return 0;
+    net_regs = get_dev_regs();
+    if (net_regs == 0 || net_regs[0] != 0x74726976u) return 0;
 
     /* Reset + ACKNOWLEDGE + DRIVER + FEATURES_OK. */
-    mmio32w(regs, VMMIO_STATUS, 0);
-    mmio32w(regs, VMMIO_STATUS, VIRTIO_STATUS_ACKNOWLEDGE);
-    mmio32w(regs, VMMIO_STATUS, VIRTIO_STATUS_ACKNOWLEDGE | VIRTIO_STATUS_DRIVER);
-    mmio32w(regs, 0x024, 0);                 /* DriverFeaturesSel = page 0 */
-    mmio32w(regs, VMMIO_DRIVER_FEATURES, 1u << 5);  /* accept VIRTIO_NET_F_MAC */
-    mmio32w(regs, VMMIO_STATUS,
+    mmio32w(net_regs, VMMIO_STATUS, 0);
+    mmio32w(net_regs, VMMIO_STATUS, VIRTIO_STATUS_ACKNOWLEDGE);
+    mmio32w(net_regs, VMMIO_STATUS, VIRTIO_STATUS_ACKNOWLEDGE | VIRTIO_STATUS_DRIVER);
+    mmio32w(net_regs, 0x024, 0);                 /* DriverFeaturesSel = page 0 */
+    mmio32w(net_regs, VMMIO_DRIVER_FEATURES, 1u << 5);  /* accept VIRTIO_NET_F_MAC */
+    mmio32w(net_regs, VMMIO_STATUS,
             VIRTIO_STATUS_ACKNOWLEDGE | VIRTIO_STATUS_DRIVER | VIRTIO_STATUS_FEATURES_OK);
-    mmio32w(regs, 0x028, 4096);   /* GuestPageSize (legacy) */
+    mmio32w(net_regs, 0x028, 4096);   /* GuestPageSize (legacy) */
 
     /* Allocate a 2 MiB DMA frame. */
     dma_pa = alloc_dma_2m(0x600000ULL);
     if (dma_pa == 0) return 0;
     dma = (volatile u8 *)0x600000ULL;
+    net_dma = dma;
+    net_dma_pa = dma_pa;
 
-    /* RX queue (index 0) at DMA offset 0 (desc/avail in page 0, used in page 1). */
-    setup_queue(regs, 0, dma_pa, VQ_NUM);
-    rx_desc  = (volatile struct vring_desc *)(dma + 0);
-    rx_avail = (volatile struct vring_avail *)(dma + vring_avail_off(VQ_NUM));
-    rx_used  = (volatile struct vring_used *)(dma + vring_used_off(VQ_NUM));
+    /* RX queue (index 0) at DMA offset 0. */
+    setup_queue(net_regs, 0, dma_pa, VQ_NUM);
+    net_rx_desc  = (volatile struct vring_desc *)(dma + 0);
+    net_rx_avail = (volatile struct vring_avail *)(dma + vring_avail_off(VQ_NUM));
+    net_rx_used  = (volatile struct vring_used *)(dma + vring_used_off(VQ_NUM));
 
-    /* TX queue (index 1) at DMA offset 0x4000 (2 pages past RX). */
-    setup_queue(regs, 1, dma_pa + 0x4000, VQ_NUM);
-    tx_desc  = (volatile struct vring_desc *)(dma + 0x4000);
-    tx_avail = (volatile struct vring_avail *)(dma + 0x4000 + vring_avail_off(VQ_NUM));
-    tx_used  = (volatile struct vring_used *)(dma + 0x4000 + vring_used_off(VQ_NUM));
+    /* TX queue (index 1) at DMA offset TX_QUEUE_BASE. */
+    setup_queue(net_regs, 1, dma_pa + TX_QUEUE_BASE, VQ_NUM);
+    net_tx_desc  = (volatile struct vring_desc *)(dma + TX_QUEUE_BASE);
+    net_tx_avail = (volatile struct vring_avail *)(dma + TX_QUEUE_BASE + vring_avail_off(VQ_NUM));
+    net_tx_used  = (volatile struct vring_used *)(dma + TX_QUEUE_BASE + vring_used_off(VQ_NUM));
 
-    /* RX: one empty buffer the device may write into (virtio_net_hdr + frame). */
-    rx_desc[0].addr  = dma_pa + 0x2000;   /* buffer past the RX used ring */
-    rx_desc[0].len   = 1510;
-    rx_desc[0].flags = 2;   /* WRITE: device writes into the buffer */
-    rx_desc[0].next  = 0;
-    rx_avail->ring[0] = 0;
-    rx_avail->idx = 1;
+    /* Fresh ring headers (the DMA frame is not pre-zeroed). */
+    net_rx_avail->flags = 0;
+    net_rx_avail->idx   = 0;
+    net_rx_used->flags  = 0;
+    net_rx_used->idx    = 0;
+    net_tx_avail->flags = 0;
+    net_tx_avail->idx   = 0;
+    net_tx_used->flags  = 0;
+    net_tx_used->idx    = 0;
 
-    /* TX: a 10-byte virtio_net_hdr + an ARP request (60-byte Ethernet frame). */
-    pkt = dma + 0x6000;                     /* past the TX used ring */
-    for (i = 0; i < 10; i++) pkt[i] = 0x00; /* virtio_net_hdr (no offloads) */
-    build_arp_request(pkt + 10);
-    for (i = 52; i < 70; i++) pkt[i] = 0x00;/* pad Ethernet frame to 60 bytes */
-    tx_desc[0].addr  = dma_pa + 0x6000;
-    tx_desc[0].len   = 70;
-    tx_desc[0].flags = 0;
-    tx_desc[0].next  = 0;
-    tx_avail->ring[0] = 0;
-    tx_avail->idx = 1;
-    __asm__ volatile("dmb sy" ::: "memory");
+    /* RX pool: one WRITE descriptor per buffer, all posted up front. */
+    for (i = 0; i < VQ_NUM; i++) {
+        net_rx_desc[i].addr  = dma_pa + RX_BUF_BASE + (u64)i * RX_BUF_STRIDE;
+        net_rx_desc[i].len   = NET_BUF_LEN;
+        net_rx_desc[i].flags = 2;   /* WRITE */
+        net_rx_desc[i].next  = 0;
+        rx_post((u16)i);
+    }
+    rx_kick();
 
-    /* DRIVER_OK, then kick RX and TX. */
-    mmio32w(regs, VMMIO_STATUS,
+    net_rx_last_used = 0;
+    net_tx_last_used = 0;
+    net_tx_next      = 0;
+
+    /* DRIVER_OK. */
+    mmio32w(net_regs, VMMIO_STATUS,
             VIRTIO_STATUS_ACKNOWLEDGE | VIRTIO_STATUS_DRIVER |
             VIRTIO_STATUS_FEATURES_OK | VIRTIO_STATUS_DRIVER_OK);
-    mmio32w(regs, VMMIO_QUEUE_NOTIFY, 0);   /* kick RX (queue 0) */
-    mmio32w(regs, VMMIO_QUEUE_NOTIFY, 1);   /* kick TX (queue 1) */
 
-    for (spins = 0; spins < 1000000; spins++) {
-        if (tx_used->idx >= 1) break;
-    }
-    tx_ok = (tx_used->idx >= 1);
+    return 1;
+}
 
-    /* Poll RX for the ARP reply. */
-    for (spins = 0; spins < 5000000 && rx_used->idx < 1; spins++) {
-    }
-    rx_ok = (rx_used->idx >= 1);
-    if (rx_ok) {
-        /* Skip the 10-byte virtio_net_hdr and extract the gateway MAC. */
-        volatile u8 *rxpkt = dma + 0x2000 + 10;
-        if (!parse_arp_reply(rxpkt, gw_mac)) rx_ok = 0;
-    }
-    if (!rx_ok) return tx_ok ? 1 : 0;
+/* Run the minimal TCP/IP stack end-to-end over the virtio-net device:
+ * ARP -> ICMP echo -> DHCP -> TCP client + HTTP GET -> TCP server (hostfwd)
+ * -> DNS A query.  Returns (same contract as before):
+ *   7 = DNS ok, 6 = TCP server ok (no DNS), 5 = HTTP ok (no server),
+ *   4 = DHCP ok (no TCP), 3 = ping ok (no DHCP), 2 = ARP ok (no ICMP),
+ *   1 = TX ok, 0 = error. */
+u64 schild_virtio_net_test(void)
+{
+    u8 gw_mac[6];
+    u8 offered_ip[4];
+    int d;
+    u32 spins;
 
-    /* ICMP round-trip: re-arm the queues and send an ICMP echo request. */
-    rx_desc[0].addr  = dma_pa + 0x2000;
-    rx_desc[0].len   = 1510;
-    rx_desc[0].flags = 2;
-    rx_desc[0].next  = 0;
-    rx_avail->ring[rx_avail->idx % VQ_NUM] = 0;
-    rx_avail->idx = rx_avail->idx + 1;
+    if (!net_init()) return 0;
 
-    pkt = dma + 0x6000;
-    for (i = 0; i < 10; i++) pkt[i] = 0x00;    /* virtio_net_hdr */
-    build_icmp_frame(pkt + 10, gw_mac);
-    for (i = 60; i < 70; i++) pkt[i] = 0x00;   /* pad frame to 60 bytes */
-    tx_desc[0].addr  = dma_pa + 0x6000;
-    tx_desc[0].len   = 70;
-    tx_desc[0].flags = 0;
-    tx_desc[0].next  = 0;
-    tx_avail->ring[tx_avail->idx % VQ_NUM] = 0;
-    tx_avail->idx = tx_avail->idx + 1;
-    __asm__ volatile("dmb sy" ::: "memory");
-
-    mmio32w(regs, VMMIO_QUEUE_NOTIFY, 0);
-    mmio32w(regs, VMMIO_QUEUE_NOTIFY, 1);
-
-    for (spins = 0; spins < 1000000; spins++) {
-        if (tx_used->idx >= 2) break;
-    }
-    for (spins = 0; spins < 5000000 && rx_used->idx < 2; spins++) {
-    }
-    if (rx_used->idx < 2) return 2;   /* ARP ok, no ICMP reply */
-
+    /* ARP: resolve the SLIRP gateway (10.0.2.2). */
     {
-        volatile u8 *rxpkt = dma + 0x2000 + 10;
-        if (!verify_icmp_reply(rxpkt)) return 2;
+        volatile u8 *pkt = tx_buffer();
+        int i;
+        for (i = 0; i < 10; i++) pkt[i] = 0x00;   /* virtio_net_hdr */
+        build_arp_request(pkt + 10);
+        for (i = 52; i < 70; i++) pkt[i] = 0x00;   /* pad to 60 bytes */
+        if (!tx_send(70)) return 0;
     }
+    d = rx_wait(5000000);
+    if (d < 0) return 1;
+    if (!parse_arp_reply(rx_frame(d), gw_mac)) { rx_recycle((u16)d); return 1; }
+    rx_recycle((u16)d);
 
-    /* DHCP round-trip: re-arm the queues and send a DHCP DISCOVER. */
-    rx_desc[0].addr  = dma_pa + 0x2000;
-    rx_desc[0].len   = 1510;
-    rx_desc[0].flags = 2;
-    rx_desc[0].next  = 0;
-    rx_avail->ring[rx_avail->idx % VQ_NUM] = 0;
-    rx_avail->idx = rx_avail->idx + 1;
-
-    pkt = dma + 0x6000;
-    for (i = 0; i < 10; i++) pkt[i] = 0x00;    /* virtio_net_hdr */
-    build_dhcp_frame(pkt + 10);
-    tx_desc[0].addr  = dma_pa + 0x6000;
-    tx_desc[0].len   = 10 + 342;
-    tx_desc[0].flags = 0;
-    tx_desc[0].next  = 0;
-    tx_avail->ring[tx_avail->idx % VQ_NUM] = 0;
-    tx_avail->idx = tx_avail->idx + 1;
-    __asm__ volatile("dmb sy" ::: "memory");
-
-    mmio32w(regs, VMMIO_QUEUE_NOTIFY, 0);
-    mmio32w(regs, VMMIO_QUEUE_NOTIFY, 1);
-
-    for (spins = 0; spins < 1000000; spins++) {
-        if (tx_used->idx >= 3) break;
-    }
-    for (spins = 0; spins < 5000000 && rx_used->idx < 3; spins++) {
-    }
-    if (rx_used->idx < 3) return 3;   /* ping ok, no DHCP offer */
-
+    /* ICMP echo (ping). */
     {
-        volatile u8 *rxpkt = dma + 0x2000 + 10;
-        if (!parse_dhcp_offer(rxpkt, offered_ip)) return 3;
+        volatile u8 *pkt = tx_buffer();
+        int i;
+        for (i = 0; i < 10; i++) pkt[i] = 0x00;
+        build_icmp_frame(pkt + 10, gw_mac);
+        for (i = 60; i < 70; i++) pkt[i] = 0x00;   /* pad to 60 bytes */
+        if (!tx_send(70)) return 2;
     }
+    d = rx_wait(5000000);
+    if (d < 0) return 2;
+    if (!verify_icmp_reply(rx_frame(d))) { rx_recycle((u16)d); return 2; }
+    rx_recycle((u16)d);
 
-    /* TCP round-trip: 3-way handshake (SYN -> SYN-ACK -> ACK) + an HTTP/1.0
-     * GET to a host service reached via the SLIRP gateway (10.0.2.2). */
+    /* DHCP DISCOVER (UDP broadcast). */
+    {
+        volatile u8 *pkt = tx_buffer();
+        int i;
+        for (i = 0; i < 10; i++) pkt[i] = 0x00;
+        build_dhcp_frame(pkt + 10);
+        if (!tx_send(10 + 342)) return 3;
+    }
+    d = rx_wait(5000000);
+    if (d < 0) return 3;
+    if (!parse_dhcp_offer(rx_frame(d), offered_ip)) { rx_recycle((u16)d); return 3; }
+    rx_recycle((u16)d);
+
+    /* TCP client: SYN -> SYN-ACK -> ACK + HTTP/1.0 GET. */
     {
         static const u8 host_ip[4] = { 10, 0, 2, 2 };
         static const u8 http_get[18] = "GET / HTTP/1.0\r\n\r\n";
@@ -786,96 +875,58 @@ u64 schild_virtio_net_test(void)
         u32 server_isn = 0;
 
         /* SYN. */
-        rx_desc[0].addr  = dma_pa + 0x2000;
-        rx_desc[0].len   = 1510;
-        rx_desc[0].flags = 2;
-        rx_desc[0].next  = 0;
-        rx_avail->ring[rx_avail->idx % VQ_NUM] = 0;
-        rx_avail->idx = rx_avail->idx + 1;
-
-        pkt = dma + 0x6000;
-        for (i = 0; i < 10; i++) pkt[i] = 0x00;    /* virtio_net_hdr */
-        build_tcp_frame(pkt + 10, gw_mac, offered_ip, host_ip,
-                        12345, 8080, isn, 0, 0x02, 0, 0);
-        tx_desc[0].addr  = dma_pa + 0x6000;
-        tx_desc[0].len   = 10 + 14 + 20 + 20;
-        tx_desc[0].flags = 0;
-        tx_desc[0].next  = 0;
-        tx_avail->ring[tx_avail->idx % VQ_NUM] = 0;
-        tx_avail->idx = tx_avail->idx + 1;
-        __asm__ volatile("dmb sy" ::: "memory");
-
-        mmio32w(regs, VMMIO_QUEUE_NOTIFY, 0);
-        mmio32w(regs, VMMIO_QUEUE_NOTIFY, 1);
-
-        for (spins = 0; spins < 1000000; spins++) {
-            if (tx_used->idx >= 4) break;
-        }
-        for (spins = 0; spins < 5000000 && rx_used->idx < 4; spins++) {
-        }
-        if (rx_used->idx < 4) return 4;   /* DHCP ok, no SYN-ACK */
-
         {
-            const volatile u8 *rxpkt = dma + 0x2000 + 10;
+            volatile u8 *pkt = tx_buffer();
+            int i;
+            for (i = 0; i < 10; i++) pkt[i] = 0x00;
+            build_tcp_frame(pkt + 10, gw_mac, offered_ip, host_ip,
+                            12345, 8080, isn, 0, 0x02, 0, 0);
+            if (!tx_send(10 + 14 + 20 + 20)) return 4;
+        }
+        d = rx_wait(5000000);
+        if (d < 0) return 4;
+        {
+            const volatile u8 *f = rx_frame(d);
             const volatile u8 *tpayload;
             u32 seq, ack; u8 fl; int pl;
-            if (!parse_tcp(rxpkt, &seq, &ack, &fl, &tpayload, &pl)) return 4;
-            if ((fl & 0x12) != 0x12) return 4;   /* not SYN+ACK */
-            if (ack != isn + 1) return 4;
+            if (!parse_tcp(f, &seq, &ack, &fl, &tpayload, &pl) ||
+                (fl & 0x12) != 0x12 || ack != isn + 1) {
+                rx_recycle((u16)d);
+                return 4;
+            }
             server_isn = seq;
         }
+        rx_recycle((u16)d);
 
-        /* ACK + HTTP GET.  Two RX buffers: the server replies with a pure ACK
-         * first, then the HTTP response. */
-        rx_desc[0].addr  = dma_pa + 0x2000;
-        rx_desc[0].len   = 1510;
-        rx_desc[0].flags = 2;
-        rx_desc[0].next  = 0;
-        rx_desc[1].addr  = dma_pa + 0x3000;
-        rx_desc[1].len   = 1510;
-        rx_desc[1].flags = 2;
-        rx_desc[1].next  = 0;
-        rx_avail->ring[rx_avail->idx % VQ_NUM] = 0;
-        rx_avail->idx = rx_avail->idx + 1;
-        rx_avail->ring[rx_avail->idx % VQ_NUM] = 1;
-        rx_avail->idx = rx_avail->idx + 1;
-
-        pkt = dma + 0x6000;
-        for (i = 0; i < 10; i++) pkt[i] = 0x00;    /* virtio_net_hdr */
-        build_tcp_frame(pkt + 10, gw_mac, offered_ip, host_ip,
-                        12345, 8080, isn + 1, server_isn + 1, 0x18, http_get, 18);
-        tx_desc[0].addr  = dma_pa + 0x6000;
-        tx_desc[0].len   = 10 + 14 + 20 + 20 + 18;
-        tx_desc[0].flags = 0;
-        tx_desc[0].next  = 0;
-        tx_avail->ring[tx_avail->idx % VQ_NUM] = 0;
-        tx_avail->idx = tx_avail->idx + 1;
-        __asm__ volatile("dmb sy" ::: "memory");
-
-        mmio32w(regs, VMMIO_QUEUE_NOTIFY, 0);
-        mmio32w(regs, VMMIO_QUEUE_NOTIFY, 1);
-
-        for (spins = 0; spins < 1000000; spins++) {
-            if (tx_used->idx >= 5) break;
-        }
-        for (spins = 0; spins < 5000000 && rx_used->idx < 6; spins++) {
-        }
-        if (rx_used->idx < 6) return 4;   /* handshake ok, no HTTP reply */
-
+        /* ACK + HTTP GET.  The server replies with a pure ACK first, then the
+         * HTTP response. */
         {
-            /* The HTTP response is in one of the two RX buffers. */
-            int k, ok = 0;
-            for (k = 0; k < 2 && !ok; k++) {
-                const volatile u8 *rxpkt = dma + 0x2000 + k * 0x1000 + 10;
-                const volatile u8 *tpayload;
-                u32 seq2, ack2; u8 fl2; int pl2;
-                if (parse_tcp(rxpkt, &seq2, &ack2, &fl2, &tpayload, &pl2) &&
-                    (fl2 & 0x10) && pl2 >= 5 &&
-                    tpayload[0] == 'H' && tpayload[1] == 'T' && tpayload[2] == 'T' &&
-                    tpayload[3] == 'P' && tpayload[4] == '/') {
-                    ok = 1;
-                    print_http_body(tpayload, pl2);
+            volatile u8 *pkt = tx_buffer();
+            int i;
+            for (i = 0; i < 10; i++) pkt[i] = 0x00;
+            build_tcp_frame(pkt + 10, gw_mac, offered_ip, host_ip,
+                            12345, 8080, isn + 1, server_isn + 1, 0x18, http_get, 18);
+            if (!tx_send(10 + 14 + 20 + 20 + 18)) return 4;
+        }
+        {
+            int tries, ok = 0;
+            for (tries = 0; tries < 4 && !ok; tries++) {
+                d = rx_wait(5000000);
+                if (d < 0) break;
+                {
+                    const volatile u8 *f = rx_frame(d);
+                    const volatile u8 *tpayload;
+                    u32 seq2, ack2; u8 fl2; int pl2;
+                    if (parse_tcp(f, &seq2, &ack2, &fl2, &tpayload, &pl2) &&
+                        (fl2 & 0x10) && pl2 >= 5 &&
+                        tpayload[0] == 'H' && tpayload[1] == 'T' &&
+                        tpayload[2] == 'T' && tpayload[3] == 'P' &&
+                        tpayload[4] == '/') {
+                        ok = 1;
+                        print_http_body(tpayload, pl2);
+                    }
                 }
+                rx_recycle((u16)d);
             }
             if (!ok) return 4;
         }
@@ -888,166 +939,96 @@ u64 schild_virtio_net_test(void)
         u32 client_isn = 0;
         u16 client_port = 0;
 
-        /* Wait for an incoming SYN on port 8081.  The HTTP server keeps
-         * retransmitting (we never ACK its response), so ignore non-SYN
-         * packets and keep polling. */
+        /* Wait for an incoming SYN, ignoring the HTTP server's retransmits. */
         {
-            u32 last_used = rx_used->idx;
             int found = 0;
-
-            rx_desc[0].addr  = dma_pa + 0x2000;
-            rx_desc[0].len   = 1510;
-            rx_desc[0].flags = 2;
-            rx_desc[0].next  = 0;
-            rx_desc[1].addr  = dma_pa + 0x3000;
-            rx_desc[1].len   = 1510;
-            rx_desc[1].flags = 2;
-            rx_desc[1].next  = 0;
-            rx_avail->ring[rx_avail->idx % VQ_NUM] = 0;
-            rx_avail->idx = rx_avail->idx + 1;
-            rx_avail->ring[rx_avail->idx % VQ_NUM] = 1;
-            rx_avail->idx = rx_avail->idx + 1;
-            __asm__ volatile("dmb sy" ::: "memory");
-            mmio32w(regs, VMMIO_QUEUE_NOTIFY, 0);
-
             for (spins = 0; spins < 2000000000 && !found; spins++) {
-                if (rx_used->idx > last_used) {
-                    int k;
-                    for (k = 0; k < 2 && !found; k++) {
-                        const volatile u8 *rxpkt = dma + 0x2000 + k * 0x1000 + 10;
-                        const volatile u8 *tpayload;
-                        u32 seq, ack; u8 fl; int pl;
-                        if (parse_tcp(rxpkt, &seq, &ack, &fl, &tpayload, &pl) &&
-                            (fl & 0x02) && !(fl & 0x10) &&
-                            (((u16)rxpkt[36] << 8) | rxpkt[37]) == 8081) {
-                            client_isn = seq;
-                            client_port = ((u16)rxpkt[34] << 8) | rxpkt[35];
-                            found = 1;
-                        }
-                    }
-                    last_used = rx_used->idx;
-                    if (!found) {
-                        /* Re-arm descriptor 0 for the next packet. */
-                        rx_desc[0].addr  = dma_pa + 0x2000;
-                        rx_desc[0].len   = 1510;
-                        rx_desc[0].flags = 2;
-                        rx_desc[0].next  = 0;
-                        rx_avail->ring[rx_avail->idx % VQ_NUM] = 0;
-                        rx_avail->idx = rx_avail->idx + 1;
-                        __asm__ volatile("dmb sy" ::: "memory");
-                        mmio32w(regs, VMMIO_QUEUE_NOTIFY, 0);
+                d = rx_poll();
+                if (d < 0) continue;
+                {
+                    const volatile u8 *f = rx_frame(d);
+                    const volatile u8 *tpayload;
+                    u32 seq, ack; u8 fl; int pl;
+                    if (parse_tcp(f, &seq, &ack, &fl, &tpayload, &pl) &&
+                        (fl & 0x02) && !(fl & 0x10) &&
+                        (((u16)f[36] << 8) | f[37]) == 8081) {
+                        client_isn = seq;
+                        client_port = ((u16)f[34] << 8) | f[35];
+                        found = 1;
                     }
                 }
+                rx_recycle((u16)d);
             }
             if (!found) return 5;
         }
 
         /* SYN-ACK. */
-        pkt = dma + 0x6000;
-        for (i = 0; i < 10; i++) pkt[i] = 0x00;    /* virtio_net_hdr */
-        build_tcp_frame(pkt + 10, gw_mac, offered_ip, host_ip,
-                        8081, client_port, sisn, client_isn + 1, 0x12, 0, 0);
-        tx_desc[0].addr  = dma_pa + 0x6000;
-        tx_desc[0].len   = 10 + 14 + 20 + 20;
-        tx_desc[0].flags = 0;
-        tx_desc[0].next  = 0;
-        tx_avail->ring[tx_avail->idx % VQ_NUM] = 0;
-        tx_avail->idx = tx_avail->idx + 1;
-        __asm__ volatile("dmb sy" ::: "memory");
-        mmio32w(regs, VMMIO_QUEUE_NOTIFY, 1);
-
-        for (spins = 0; spins < 1000000; spins++) {
-            if (tx_used->idx >= 6) break;
+        {
+            volatile u8 *pkt = tx_buffer();
+            int i;
+            for (i = 0; i < 10; i++) pkt[i] = 0x00;
+            build_tcp_frame(pkt + 10, gw_mac, offered_ip, host_ip,
+                            8081, client_port, sisn, client_isn + 1, 0x12, 0, 0);
+            if (!tx_send(10 + 14 + 20 + 20)) return 5;
         }
 
         /* Wait for the client ACK. */
-        for (spins = 0; spins < 5000000 && rx_used->idx < 8; spins++) {
-        }
-        if (rx_used->idx < 8) return 5;   /* SYN-ACK sent, no ACK */
-
         {
-            int k, ok = 0;
-            for (k = 0; k < 2 && !ok; k++) {
-                const volatile u8 *rxpkt = dma + 0x2000 + k * 0x1000 + 10;
-                const volatile u8 *tpayload;
-                u32 seq2, ack2; u8 fl2; int pl2;
-                if (parse_tcp(rxpkt, &seq2, &ack2, &fl2, &tpayload, &pl2) &&
-                    (fl2 & 0x10) && !(fl2 & 0x02) && ack2 == sisn + 1 &&
-                    (((u16)rxpkt[36] << 8) | rxpkt[37]) == 8081) {
-                    ok = 1;
+            int tries, ok = 0;
+            for (tries = 0; tries < 4 && !ok; tries++) {
+                d = rx_wait(5000000);
+                if (d < 0) break;
+                {
+                    const volatile u8 *f = rx_frame(d);
+                    const volatile u8 *tpayload;
+                    u32 seq2, ack2; u8 fl2; int pl2;
+                    if (parse_tcp(f, &seq2, &ack2, &fl2, &tpayload, &pl2) &&
+                        (fl2 & 0x10) && !(fl2 & 0x02) && ack2 == sisn + 1 &&
+                        (((u16)f[36] << 8) | f[37]) == 8081) {
+                        ok = 1;
+                    }
                 }
+                rx_recycle((u16)d);
             }
             if (!ok) return 5;
         }
     }
 
-    /* DNS client: resolve "example.com" via the SLIRP DNS server (10.0.2.3). */
+    /* DNS client: resolve "example.com" via SLIRP DNS (10.0.2.3). */
     {
-        u32 last_used = rx_used->idx;
-        int found = 0;
-
-        rx_desc[0].addr  = dma_pa + 0x2000;
-        rx_desc[0].len   = 1510;
-        rx_desc[0].flags = 2;
-        rx_desc[0].next  = 0;
-        rx_desc[1].addr  = dma_pa + 0x3000;
-        rx_desc[1].len   = 1510;
-        rx_desc[1].flags = 2;
-        rx_desc[1].next  = 0;
-        rx_avail->ring[rx_avail->idx % VQ_NUM] = 0;
-        rx_avail->idx = rx_avail->idx + 1;
-        rx_avail->ring[rx_avail->idx % VQ_NUM] = 1;
-        rx_avail->idx = rx_avail->idx + 1;
-        __asm__ volatile("dmb sy" ::: "memory");
-        mmio32w(regs, VMMIO_QUEUE_NOTIFY, 0);
-
-        pkt = dma + 0x6000;
-        for (i = 0; i < 10; i++) pkt[i] = 0x00;    /* virtio_net_hdr */
+        volatile u8 *pkt = tx_buffer();
+        int i;
+        for (i = 0; i < 10; i++) pkt[i] = 0x00;
         build_dns_frame(pkt + 10, gw_mac, offered_ip);
-        tx_desc[0].addr  = dma_pa + 0x6000;
-        tx_desc[0].len   = 10 + 14 + 20 + 8 + 29;
-        tx_desc[0].flags = 0;
-        tx_desc[0].next  = 0;
-        tx_avail->ring[tx_avail->idx % VQ_NUM] = 0;
-        tx_avail->idx = tx_avail->idx + 1;
-        __asm__ volatile("dmb sy" ::: "memory");
-        mmio32w(regs, VMMIO_QUEUE_NOTIFY, 1);
-
+        if (!tx_send(10 + 14 + 20 + 8 + 29)) return 6;
+    }
+    {
+        int found = 0;
         for (spins = 0; spins < 2000000000 && !found; spins++) {
-            if (rx_used->idx > last_used) {
-                int k;
-                for (k = 0; k < 2 && !found; k++) {
-                    const volatile u8 *rxpkt = dma + 0x2000 + k * 0x1000 + 10;
-                    u8 ip[4];
-                    if (parse_dns_reply(rxpkt, ip)) {
-                        schild_sel4_debug_putchar('[');
-                        schild_sel4_debug_putchar('d');
-                        schild_sel4_debug_putchar('n');
-                        schild_sel4_debug_putchar('s');
-                        schild_sel4_debug_putchar(']');
-                        schild_sel4_debug_putchar(' ');
-                        put_dec(ip[0]); schild_sel4_debug_putchar('.');
-                        put_dec(ip[1]); schild_sel4_debug_putchar('.');
-                        put_dec(ip[2]); schild_sel4_debug_putchar('.');
-                        put_dec(ip[3]);
-                        schild_sel4_debug_putchar('\n');
-                        found = 1;
-                    }
-                }
-                last_used = rx_used->idx;
-                if (!found) {
-                    rx_desc[0].addr  = dma_pa + 0x2000;
-                    rx_desc[0].len   = 1510;
-                    rx_desc[0].flags = 2;
-                    rx_desc[0].next  = 0;
-                    rx_avail->ring[rx_avail->idx % VQ_NUM] = 0;
-                    rx_avail->idx = rx_avail->idx + 1;
-                    __asm__ volatile("dmb sy" ::: "memory");
-                    mmio32w(regs, VMMIO_QUEUE_NOTIFY, 0);
+            d = rx_poll();
+            if (d < 0) continue;
+            {
+                const volatile u8 *f = rx_frame(d);
+                u8 ip[4];
+                if (parse_dns_reply(f, ip)) {
+                    schild_sel4_debug_putchar('[');
+                    schild_sel4_debug_putchar('d');
+                    schild_sel4_debug_putchar('n');
+                    schild_sel4_debug_putchar('s');
+                    schild_sel4_debug_putchar(']');
+                    schild_sel4_debug_putchar(' ');
+                    put_dec(ip[0]); schild_sel4_debug_putchar('.');
+                    put_dec(ip[1]); schild_sel4_debug_putchar('.');
+                    put_dec(ip[2]); schild_sel4_debug_putchar('.');
+                    put_dec(ip[3]);
+                    schild_sel4_debug_putchar('\n');
+                    found = 1;
                 }
             }
+            rx_recycle((u16)d);
         }
         if (!found) return 6;
     }
+
     return 7;
 }
