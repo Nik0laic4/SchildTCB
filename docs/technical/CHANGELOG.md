@@ -6,6 +6,13 @@
 > *pending* or *target* have not yet been validated. Formal-verification
 > coverage is stated per-module, never as an aggregate percentage.
 
+## v1.0.0-pre (2026-10-25) — AArch64: deterministic `-netdev socket` network backend
+
+**Validated: a host-side Python peer (`net_peer.py`) replaces SLIRP for the E2E test — it answers ARP/ICMP/DHCP/TCP(HTTP)/DNS and initiates the TCP-server handshake with fixed addresses (`[dns] 1.2.3.4`, `[irq] 70`, `virtio-net: OK (own VSpace + ELF child)`), fully reproducible and offline; `run_net_test.py --backend socket` selects it, SLIRP stays the default.**
+
+- `net_peer.py`: speaks QEMU's socket framing (uint32_be length + Ethernet frame); proxy-ARP, ICMP echo, DHCP OFFER, HTTP server (8080), a TCP client that initiates the guest's 8081 handshake, and a DNS A reply.
+- `run_net_test.py`: `--backend {slirp,socket}`; the socket backend runs the peer in a thread and QEMU with `-netdev socket,connect=127.0.0.1:5555`.
+
 ## v1.0.0-pre (2026-10-25) — AArch64: reproducible validation harness
 
 **Validated: `run_net_test.py` (committed) builds the root task + child ELF, injects the root task into the elfloader, rebuilds the image, runs QEMU with the host HTTP/TCP services, polls the serial log for the success marker and exits 0/1 (`[harness] PASS: virtio-net E2E in an ELF child (own VSpace)`, ~5 s once the marker appears).**
