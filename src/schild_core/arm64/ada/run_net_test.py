@@ -35,9 +35,12 @@ import sys
 import threading
 import time
 
+import net_peer
+
 SUCCESS_MARKER = b"virtio-net: OK"
 FAIL_MARKER = b"virtio-net elf child: failed"
 RESP = b"HTTP/1.0 200 OK\r\nContent-Length: 13\r\n\r\nSchildTCB-body"
+PEER_PORT = 5555
 
 
 def http_server():
@@ -77,6 +80,8 @@ def main():
                    help="seL4 build directory (default: /home/null/sel4proj/build)")
     p.add_argument("--timeout", type=int, default=30,
                    help="QEMU timeout in seconds (default: 30)")
+    p.add_argument("--backend", choices=("slirp", "socket"), default="slirp",
+                   help="network backend: slirp (default) or deterministic socket peer")
     args = p.parse_args()
 
     # Keep the harness's own progress lines ordered relative to the subprocess
@@ -119,16 +124,26 @@ def main():
     if os.path.exists(log):
         os.remove(log)
 
-    threading.Thread(target=http_server, daemon=True).start()
-    threading.Thread(target=tcp_client, daemon=True).start()
-    time.sleep(0.5)
+    stop_event = threading.Event()
+    if args.backend == "socket":
+        # Deterministic backend: the host peer answers ARP/ICMP/DHCP/TCP/DNS.
+        threading.Thread(target=net_peer.run, args=(PEER_PORT, stop_event),
+                         daemon=True).start()
+        time.sleep(0.3)  # let the peer bind + listen before QEMU connects
+        netdev = "socket,id=n0,connect=127.0.0.1:%d" % PEER_PORT
+    else:
+        # SLIRP backend: host HTTP server + TCP client via hostfwd.
+        threading.Thread(target=http_server, daemon=True).start()
+        threading.Thread(target=tcp_client, daemon=True).start()
+        time.sleep(0.5)
+        netdev = "user,id=n0,hostfwd=tcp::8081-:8081"
 
     qemu = subprocess.Popen([
         "qemu-system-aarch64",
         "-machine", "virt,gic-version=2", "-cpu", "cortex-a53", "-m", "size=2G",
         "-no-reboot", "-display", "none", "-monitor", "none",
         "-serial", "file:" + log,
-        "-netdev", "user,id=n0,hostfwd=tcp::8081-:8081",
+        "-netdev", netdev,
         "-device", "virtio-net-device,netdev=n0,mac=52:54:00:12:34:56",
         "-kernel", kernel,
     ])
@@ -145,6 +160,7 @@ def main():
                 break
         time.sleep(0.25)
 
+    stop_event.set()
     qemu.terminate()
     try:
         qemu.wait(timeout=5)
