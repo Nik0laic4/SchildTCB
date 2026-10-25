@@ -6,6 +6,15 @@
 > *pending* or *target* have not yet been validated. Formal-verification
 > coverage is stated per-module, never as an aggregate percentage.
 
+## v1.0.0-pre (2026-10-25) — AArch64: virtio-net driver + protocol in an ELF child process (own VSpace)
+
+**Validated: the virtio-net driver + full protocol stack (ARP→ICMP→DHCP→TCP/HTTP→TCP server→DNS) now run in a child process with its OWN VSpace; the root brings the device up, hands the device MMIO + DMA frame to the child's VSpace (unmap + remap), and the child re-attaches from a fixed layout and drives the device (`virtio-net: OK (own VSpace + ELF child)`, with `[body] SchildTCB-body`, `[dns] ...`, `[irq] N`).**
+
+- `sel4_mmio.c`: `schild_map_mmio`/`alloc_dma_2m` now record the device/DMA large-page caps (`dev_page_cap`/`dma_page_cap`) for remap.  Added `schild_net_elf_child_main` (child entry: re-attach driver state from the fixed handoff layout, derive the DMA PA from RX descriptor 0, run IRQ + protocol, signal) and `schild_net_elf_child_test` (root: device init → child VSpace → page tables → unmap/remap device + DMA into the child VSpace → load ELF → IPC-buffer frame → CSpace grants → child TCB with its own VSpace + IPC buffer → wait).
+- `build_root.sh`: the child ELF is built from the same `sel4_mmio.c` + `net_test.c` + `sel4_stubs.c` sources with `-ffunction-sections -fdata-sections --gc-sections`, dropping the root-only platform code (BootInfo/MMIO-map/child-spawn/VSpace loader) and keeping only the driver + protocol + syscall shims.
+- `schild_arm_root_task.adb`: calls `schild_net_elf_child_test`; the shared-VSpace net child and the minimal ELF demo are superseded.
+- The child's IPC buffer is a dedicated 4 KiB frame mapped at 0x900000 in the child VSpace and passed to `TCB_Configure` as `buffer`/`bufferFrame`.
+
 ## v1.0.0-pre (2026-10-25) — AArch64: child process in its own VSpace (separate page table + ELF loader)
 
 **Validated: the root task creates a separate VSpace (VSpaceObject + ASID pool + ASID assignment), loads a self-contained child ELF into it (code RX / data RW+NX, cacheable) and runs the child TCB with its own CSpace + VSpace; the child prints from its own address space and signals badge 42 (`[elf] child process running in its own VSpace`, `elf child: OK (separate VSpace + ELF)`), while the net child test keeps passing (`virtio-net DNS: OK (child)`).**

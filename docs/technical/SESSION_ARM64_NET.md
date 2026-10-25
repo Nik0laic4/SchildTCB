@@ -5,8 +5,8 @@
 
 ## 1. Git-состояние
 
-- Ветка **`arm64`** = `da7fdae` (1 коммит впереди `origin/arm64` = `d6b3c8a`), **не запушена**.
-- `master` = `d6b3c8a` (= `origin/master`). Рабочее дерево чистое.
+- Ветка **`arm64`** = `46c79aa` (1 коммит впереди `origin/arm64` = `fc1fc95`), **не запушена**.
+- `master` = `fc1fc95` (= `origin/master`). Рабочее дерево чистое.
 - Репозиторий: `/home/null/Рабочий стол/SchildTCB`.
 
 Коммиты (по порядку):
@@ -21,6 +21,8 @@
 | `5ac4ad1` | Драйвер IRQ-пути + протокол в изолированном child-домене |
 | `d6b3c8a` | Документация: актуализация статуса + session handoff |
 | `da7fdae` | Child-процесс в своём VSpace (отдельный page table + ELF-загрузчик) |
+| `fc1fc95` | Документация: актуализация process-isolation статуса |
+| `46c79aa` | virtio-net драйвер + протокол в ELF-child (отдельный VSpace) |
 
 ## 2. Что сделано и валидировано (QEMU `-M virt`, SLIRP + hostfwd)
 
@@ -31,16 +33,14 @@ virtio-net MAC = 52:54:00:12:34:56
 [body] SchildTCB-body
 [dns] 8.6.112.0
 [irq] 49
-virtio-net DNS: OK (child)
-[elf] child process running in its own VSpace
-elf child: OK (separate VSpace + ELF)
+virtio-net: OK (own VSpace + ELF child)
 ```
 
 - Стек: ARP → ICMP → DHCP → TCP-клиент/HTTP → TCP-сервер → DNS.
 - Кольцо дескрипторов: split-ring, RX-пул (4 буфера, рециклинг через used ring) + ротация TX; `avail_idx`/`used_idx` монотонны, выбор буфера по `used->ring[i].id`.
 - IRQ: `IRQControl_Get` → Notification (badge 79) → waiter-тред (`seL4_Wait`) → Ack → signal main-тред.
 - Изоляция: драйвер IRQ-пути + протокол выполняются в **child-домене со своим CSpace** (16-слотовый CNode: self CNode + RAM untyped + IRQ handler + VSpace + result notification). Device (MMIO/DMA/queues) инициализирует root-задача. VSpace — **общий** (см. следующий пункт).
-- **Полная process-изоляция**: root создаёт **отдельный VSpace** (VSpaceObject + ASID pool + ASID assignment) и загружает **дочерний ELF** (`child.elf`) — child-процесс печатает из своего адресного пространства и сигналит badge 42 (`elf child: OK (separate VSpace + ELF)`).
+- **Полная process-изоляция**: root создаёт **отдельный VSpace** (VSpaceObject + ASID pool + ASID assignment), загружает **дочерний ELF** с драйвером + протоколом и передаёт device MMIO + DMA в VSpace ребёнка — net-драйвер + протокол выполняются в ELF-child (`virtio-net: OK (own VSpace + ELF child)`).
 
 ## 3. Архитектура (файлы)
 
@@ -119,7 +119,7 @@ python3 /tmp/run_net_test.py
 
 ## 6. Известные ограничения / долг
 
-- **VSpace**: отдельный VSpace валидирован на минимальном ELF-child (`elf child: OK`); net-драйвер всё ещё в child-домене с общим VSpace (изоляция на уровне капабилити).
+- **VSpace**: net-драйвер + протокол теперь выполняются в ELF-child с отдельным VSpace (`virtio-net: OK (own VSpace + ELF child)`); device MMIO + DMA передаются в VSpace ребёнка.
 - **Параметры захардкожены**: MAC `52:54:00:12:34:56`, guest IP `10.0.2.15` (несмотря на парсинг DHCP), шлюз `10.0.2.2`, DNS `10.0.2.3`, порты 8080/8081.
 - **TCP не настоящий**: полученные данные не ACK-аются («we never ACK»), нет FIN/teardown → ретрансмитный шум `[irq]`.
 - **Сырой syscall-слой** (hand-rolled labels/offsets) вместо libsel4/vka.
@@ -128,14 +128,10 @@ python3 /tmp/run_net_test.py
 
 ## 7. Осталось (по приоритету)
 
-1. **Перенос virtio-net драйвера/протокола в ELF-child-процесс** — механизм
-   «отдельный VSpace + загрузка ELF» валидирован (`elf child: OK`); net-драйвер
-   пока работает в child-домене с общим VSpace (нужен device/DMA handoff в
-   новый VSpace).
-2. **Минимальный TCP ACK** полученных данных — уберёт ретрансмитный шум.
-3. **Повторяемая валидация** — скрипт + `-netdev socket`/tap вместо ручного
+1. **Минимальный TCP ACK** полученных данных — уберёт ретрансмитный шум.
+2. **Повторяемая валидация** — скрипт + `-netdev socket`/tap вместо ручного
    SLIRP-харнесса.
-4. **Процесс:** запушить `arm64` (1 коммит `da7fdae` впереди origin), решить
+3. **Процесс:** запушить `arm64` (1 коммит `46c79aa` впереди origin), решить
    судьбу `master`, зафиксировать `libarchive-c`.
-5. **Целевое железо:** драйвер **GENET** (Pi 4) вместо virtio-net.
+4. **Целевое железо:** драйвер **GENET** (Pi 4) вместо virtio-net.
 
