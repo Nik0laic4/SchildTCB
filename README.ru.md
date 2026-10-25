@@ -52,6 +52,7 @@ Schild TCB — исследовательский прототип довере�
 Ветка **`arm64`** нацелена на **Raspberry Pi 4B** (BCM2711) — **формально верифицированную AArch64**-платформу seL4 (4× Cortex-A72, SMP, отладка по UART):
 
 - Полный цикл в QEMU работает: ELF loader → ядро seL4 → root task → вывод по UART.
+- **virtio-net в QEMU** — валидирован end-to-end: ARP → ICMP → DHCP → TCP/HTTP → TCP-сервер → DNS, с split-ring кольцом дескрипторов, IRQ через seL4 Notifications (блокирующий `seL4_Wait` в waiter-треде) и драйвером + протоколом в **изолированном child-домене** со своим CSpace.
 - Инструментарий: QEMU aarch64, `gcc/g++-aarch64-linux-gnu`, `gnat-aarch64`, `repo`, `protoc`, `dtc`.
 - У Raspberry Pi **нет SMMU**, поэтому DMA-изоляция на этой платформе вне скоупа.
 
