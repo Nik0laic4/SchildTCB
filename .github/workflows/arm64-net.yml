@@ -6,10 +6,12 @@ on:
     paths:
       - 'src/schild_core/arm64/**'
       - 'docs/technical/**'
+      - '.github/workflows/**'
   pull_request:
     branches: [arm64, master]
     paths:
       - 'src/schild_core/arm64/**'
+      - '.github/workflows/**'
   workflow_dispatch:
 
 jobs:
