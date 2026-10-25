@@ -58,7 +58,7 @@
   - `ASSURANCE.md` §3 («`prove_kernel.sh` currently reports `not-proved: 5`»)
     → помечено как историческое (закрыто в Phase 1).
 - ✅ Счётчики модулей выровнены (W4-сессия): README/PASSPORT приведены к
-  каноничным **185** (108 proved + 40 skipped + 37 no-body). Каноничный
+  каноничным **185** (108 proved + 39 skipped + 38 no-body). Каноничный
   счётчик — `prove_kernel.sh` → `obj/proof/report.txt`; хардкодить число в
   доках не следует.
 

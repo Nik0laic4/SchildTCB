@@ -21,7 +21,7 @@ Schild TCB — исследовательский прототип довере�
 
 **Достижения текущей версии:**
 
-- 185 модулей ядра в proof-наборе, SPARK Level 4, `not-proved: 0`.
+- 108 из 185 модулей ядра доказаны на SPARK Level 4 (`not-proved: 0`); остальные 77 — вне proof (драйверы/платформа `SPARK_Mode => Off` либо без доказуемого тела).
 - 7 демонов root-задачи доказаны в `verify.gpr` (Level 4): MLS, Config, Audit,
   Boot, HM Model, Launch Model, Root Task.
 - Сборка: 179 объектов (базовая) / 184 (полная), 0 ошибок.
@@ -168,7 +168,7 @@ sudo dd if=schild_os.iso of=/dev/sdX bs=4M status=progress oflag=sync && sync
 |---|---|---|
 | Сборка (базовая) | `./build.sh` | 179 объектов, 0 ошибок |
 | Сборка (полная) | `SCHILD_PROFILE=private ./build.sh` | 184 объекта, 0 ошибок |
-| Доказательство ядра | `scripts/prove_kernel.sh` | 185 модулей, `not-proved: 0` |
+| Доказательство ядра | `scripts/prove_kernel.sh` | 108 proved / 77 вне proof, `not-proved: 0` |
 | Демоны root-задачи | `scripts/verify.sh` | все VC доказаны |
 | Boot smoke (standalone) | `run_tests.sh` | Long Mode → e1000e → SMP → MLS → :80 |
 | Crash-containment | `SEL4_PRIMARY=1 run_tests.sh` | `[FAULT] Caught fault` + `[CONTAINMENT] core alive` |
