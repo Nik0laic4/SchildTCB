@@ -218,7 +218,7 @@ QEMU **20/20**; bare-metal `[NVFS]` без регрессий.
 
 ## 6. ARM64 (AArch64) — сетевое направление (2026-10-24)
 
-Ветка `arm64` (HEAD `5ac4ad1`) — virtio-net в QEMU `qemu-arm-virt` как
+Ветка `arm64` (HEAD `da7fdae`) — virtio-net в QEMU `qemu-arm-virt` как
 валидационный полигон перед целевой платформой **Raspberry Pi 4B** (BCM2711,
 верифицированная AArch64). Сеть здесь — средство валидации seL4+AArch64, а не
 продакшн-стек; на Pi 4 сетевая карта — **GENET**, а не virtio-net.
@@ -234,16 +234,19 @@ QEMU **20/20**; bare-metal `[NVFS]` без регрессий.
 | IRQ через seL4 Notifications + waiter-тред (`seL4_Wait`) | ✅ | `[irq] 31–49` |
 | Разделение драйвер (`virtio_net.h`) / тест (`net_test.c`) | ✅ | `build_root.sh` |
 | Изоляция: драйвер IRQ-пути + протокол в child-домене (свой CSpace) | ✅ | `virtio-net DNS: OK (child)` |
+| Полная process-изоляция: отдельный VSpace + загрузка ELF ребёнка | ✅ | `elf child: OK (separate VSpace + ELF)` |
 
 ### 6.2 Осталось (по приоритету)
 
-1. **Полная process-изоляция** — отдельный VSpace + загрузка ELF ребёнка
-   (сейчас VSpace общий; изоляция только на уровне капабилити).
+1. **Перенос virtio-net драйвера/протокола в ELF-child-процесс** — механизм
+   «отдельный VSpace + загрузка ELF» валидирован на минимальном child-процессе
+   (`elf child: OK`); осталось перенести net-драйвер (сейчас работает в
+   child-домене с общим VSpace, нужен device/DMA handoff в новый VSpace).
 2. **Минимальный TCP ACK** полученных данных — уберёт ретрансмитный шум.
 3. **Повторяемая валидация** — скрипт + `-netdev socket`/tap вместо ручного
    SLIRP-харнесса (SLIRP нестабилен по IRQ).
-4. **Процесс:** запушить `arm64`, синхронизировать `master`, зафиксировать
-   `libarchive-c` в окружении сборки.
+4. **Процесс:** запушить `arm64` (1 коммит `da7fdae` впереди origin), решить
+   судьбу `master`, зафиксировать `libarchive-c` в окружении сборки.
 5. **Целевое железо:** драйвер **GENET** (Pi 4) вместо virtio-net.
 
 Детали и gotchas — `docs/technical/SESSION_ARM64_NET.md`.

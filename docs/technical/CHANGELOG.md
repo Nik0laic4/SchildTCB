@@ -6,6 +6,16 @@
 > *pending* or *target* have not yet been validated. Formal-verification
 > coverage is stated per-module, never as an aggregate percentage.
 
+## v1.0.0-pre (2026-10-25) — AArch64: child process in its own VSpace (separate page table + ELF loader)
+
+**Validated: the root task creates a separate VSpace (VSpaceObject + ASID pool + ASID assignment), loads a self-contained child ELF into it (code RX / data RW+NX, cacheable) and runs the child TCB with its own CSpace + VSpace; the child prints from its own address space and signals badge 42 (`[elf] child process running in its own VSpace`, `elf child: OK (separate VSpace + ELF)`), while the net child test keeps passing (`virtio-net DNS: OK (child)`).**
+
+- `sel4_mmio.c`: added the VSpace/ELF machinery — `vspace_new` (VSpaceObject retype + `ARMASIDControlMakePool` + `ARMASIDPoolAssign`), `map_page_table` / `map_frame` / `unmap_frame`, `elf_load_segment` (a 4 KiB frame per page, filled via a root-VSpace scratch mapping at `COPY_VA`, then mapped RX or RW+NX), and `schild_elf_child_test` (VSpace + 3-level page-table setup + ELF load + child TCB with its own CSpace/VSpace + wait for badge).  AArch64 object types / invocation labels / rights / attributes are now named constants.
+- `child_main.c` + `child_start.S` + `child_linker.ld`: a minimal child process (DebugPutChar + signal slot 0), linked at 0x400000 with RX/RW segment separation.
+- `build_root.sh`: builds `obj_child/child.elf` and embeds it into the root ELF via `.incbin`.
+- `schild_arm_root_task.adb`: runs `schild_elf_child_test` after the net child test and reports the badge.
+- Gotchas fixed: the net child (same ELF, shared data) clobbers the file-scope `ipc_buf`, so the root restores it before its own syscalls; `seL4_CanRead` is bit 1 (value 2), not bit 0.
+
 ## v1.0.0-pre (2026-10-24) — AArch64: virtio-net driver in an isolated child domain
 
 **Validated: the driver IRQ path + protocol stack run in a child TCB with its own CSpace (16-slot CNode: self CNode + RAM untyped + IRQ handler + VSpace + result notification), sharing the device MMIO/DMA/queues initialized by the root; the child reports its result via a cross-domain notification (`virtio-net DNS: OK (child)`, `[irq] 31–49`).**

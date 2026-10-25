@@ -33,4 +33,5 @@ ninja
 - **virtio-net в QEMU** — ✅ валидированы TX + RX + ICMP echo + DHCP + TCP/HTTP + TCP-сервер + DNS под seL4 (см. `ada/README.md`).
 - Рефакторинг драйвера ✅: кольцо дескрипторов (split-ring: RX-пул + ротация TX, рециклинг через used ring) и маршрутизация virtio-IRQ через seL4 Notifications (`IRQControl_Get` → Notification → блокирующий `seL4_Wait` в waiter-треде + Ack).
 - Изоляция (increment 2) ✅: драйвер IRQ-пути + протокол выполняются в child-домене со своим CSpace (self CNode + RAM untyped + IRQ handler + VSpace + result notification); device (MMIO/DMA/queues) инициализирует root-задача, VSpace пока общий.
+- Полная process-изоляция (increment 3) ✅: root-задача создаёт **отдельный VSpace** (VSpaceObject + ASID pool + ASID assignment), загружает в него **дочерний ELF** (`child.elf`, код RX / данные RW+NX) и запускает child-TCB со своим CSpace + VSpace — `elf child: OK (separate VSpace + ELF)` (см. `ada/README.md`).
 - Драйвер Ethernet **GENET** (Pi 4) — вместо e1000e.

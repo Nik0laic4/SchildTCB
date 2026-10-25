@@ -5,8 +5,8 @@
 
 ## 1. Git-состояние
 
-- Ветка **`arm64`** = `5ac4ad1` (6 коммитов впереди `origin/arm64` = `eb9fff6`), **не запушена**.
-- `master` = `eb9fff6` (не менялся). Рабочее дерево чистое.
+- Ветка **`arm64`** = `da7fdae` (1 коммит впереди `origin/arm64` = `d6b3c8a`), **не запушена**.
+- `master` = `d6b3c8a` (= `origin/master`). Рабочее дерево чистое.
 - Репозиторий: `/home/null/Рабочий стол/SchildTCB`.
 
 Коммиты (по порядку):
@@ -19,6 +19,8 @@
 | `7aea82a` | Разделение драйвер (`virtio_net.h`) / тест (`net_test.c`) |
 | `1f425db` | Child-домен (свой CSpace + кросс-доменный signal) |
 | `5ac4ad1` | Драйвер IRQ-пути + протокол в изолированном child-домене |
+| `d6b3c8a` | Документация: актуализация статуса + session handoff |
+| `da7fdae` | Child-процесс в своём VSpace (отдельный page table + ELF-загрузчик) |
 
 ## 2. Что сделано и валидировано (QEMU `-M virt`, SLIRP + hostfwd)
 
@@ -30,22 +32,28 @@ virtio-net MAC = 52:54:00:12:34:56
 [dns] 8.6.112.0
 [irq] 49
 virtio-net DNS: OK (child)
+[elf] child process running in its own VSpace
+elf child: OK (separate VSpace + ELF)
 ```
 
 - Стек: ARP → ICMP → DHCP → TCP-клиент/HTTP → TCP-сервер → DNS.
 - Кольцо дескрипторов: split-ring, RX-пул (4 буфера, рециклинг через used ring) + ротация TX; `avail_idx`/`used_idx` монотонны, выбор буфера по `used->ring[i].id`.
 - IRQ: `IRQControl_Get` → Notification (badge 79) → waiter-тред (`seL4_Wait`) → Ack → signal main-тред.
-- Изоляция: драйвер IRQ-пути + протокол выполняются в **child-домене со своим CSpace** (16-слотовый CNode: self CNode + RAM untyped + IRQ handler + VSpace + result notification). Device (MMIO/DMA/queues) инициализирует root-задача. VSpace пока **общий**.
+- Изоляция: драйвер IRQ-пути + протокол выполняются в **child-домене со своим CSpace** (16-слотовый CNode: self CNode + RAM untyped + IRQ handler + VSpace + result notification). Device (MMIO/DMA/queues) инициализирует root-задача. VSpace — **общий** (см. следующий пункт).
+- **Полная process-изоляция**: root создаёт **отдельный VSpace** (VSpaceObject + ASID pool + ASID assignment) и загружает **дочерний ELF** (`child.elf`) — child-процесс печатает из своего адресного пространства и сигналит badge 42 (`elf child: OK (separate VSpace + ELF)`).
 
 ## 3. Архитектура (файлы)
 
 | Файл (`src/schild_core/arm64/ada/`) | Назначение |
 |---|---|
-| `sel4_mmio.c` | Платформа (сырые syscall-шиммы, retype, MMIO-маппинг) + драйвер `virtio_net_*` + child-spawn (`schild_spawn_net_child`, `schild_net_child_main`) |
+| `sel4_mmio.c` | Платформа (сырые syscall-шиммы, retype, MMIO-маппинг) + драйвер `virtio_net_*` + child-spawn + VSpace/ELF-загрузчик (`vspace_new`, `elf_load_segment`, `schild_elf_child_test`) |
 | `virtio_net.h` | Публичный API драйвера: `init`/`tx_buffer`/`tx_send`/`rx`/`rx_done`/`irq_count` |
 | `net_test.c` | Протокольный стек (build/parse) + `schild_virtio_net_run_test` (без init) |
-| `schild_arm_root_task.adb` | Ada/SPARK root-задача (вызывает `schild_net_child_test`) |
-| `build_root.sh` | Сборка ELF root-задачи + валидация |
+| `schild_arm_root_task.adb` | Ada/SPARK root-задача (вызывает `schild_net_child_test` + `schild_elf_child_test`) |
+| `build_root.sh` | Сборка root-задачи + child ELF (`child.elf`) + валидация обоих |
+| `child_main.c` | Тело child-процесса (DebugPutChar + signal slot 0) |
+| `child_start.S` | Entry child-процесса (стек в своём .bss) |
+| `child_linker.ld` | Лейаут child-процесса (RX/RW сегменты @ 0x400000) |
 
 Ключевые функции:
 
@@ -62,8 +70,12 @@ virtio-net DNS: OK (child)
 | root CNode depth | **64** (wordBits) | radix=13, guard=wordBits−13 (boot.c:280) |
 | CNode retype `size_bits` | **radix** (не radix+SlotBits) | `getObjectSize` сам добавляет `SlotBits` |
 | Invocation labels | UntypedRetype=1, TCBWriteRegisters=3, TCBConfigure=5, CNodeMint=21, IRQIssueIRQHandler=26, IRQAckIRQ=27, IRQSetIRQHandler=28, ARMPageMap=40 | non-MCS |
+| Labels (VSpace/ASID) | ARMPageTableMap=38, ARMPageTableUnmap=39, ARMPageMap=40, ARMPageUnmap=41, ARMASIDControlMakePool=47, ARMASIDPoolAssign=48 | non-MCS |
 | `seL4_NotificationObject`=3 (bits=5), `seL4_TCBObject`=1 (bits=11), `seL4_CapTableObject`=4, `seL4_SmallPageObject`=7 | | non-MCS AArch64 |
-| `seL4_CapIRQControl`=4, `seL4_CapInitThreadCNode`=2, `seL4_CapInitThreadVSpace`=3 | | фикс. слоты root CNode |
+| `seL4_ARM_VSpaceObject`=6 (bits=12), `seL4_ARM_HugePageObject`=5, `seL4_ARM_LargePageObject`=8 (bits=21), `seL4_ARM_PageTableObject`=9 (bits=12) | | non-MCS AArch64 |
+| `seL4_CapIRQControl`=4, `seL4_CapInitThreadCNode`=2, `seL4_CapInitThreadVSpace`=3, `seL4_CapASIDControl`=5 | | фикс. слоты root CNode |
+| `seL4_CapRights` | bit0=Write, bit1=Read (ReadOnly=2, ReadWrite=3) | права страниц |
+| VM attributes | PageCacheable=1, ExecuteNever=4 | `seL4_ARM_VMAttributes` |
 | Syscall ids | Call=-1, Send=-3, Recv=-5, NBRecv=-8, DebugPutChar=-9 | |
 
 ### Gotchas (важно для новой сессии)
@@ -74,6 +86,9 @@ virtio-net DNS: OK (child)
 4. **non-MCS `TCB_Configure`** берёт `fault_ep` первым MR (len=4), в отличие от MCS-варианта.
 5. **`seL4_Wait`/`seL4_NBRecv`** возвращают badge в x0; на AArch64 `capRegister == badgeRegister == 0` (x0).
 6. IRQ-notification badge 79 нужен только для NBRecv-различения; при блокирующем `seL4_Wait` badge не критичен.
+7. **VSpace AArch64 = 4 уровня (48-bit)**: VSpaceObject (root, 512 слотов) → 3×PageTableObject (L2/L1/L0) → small page (4 KiB). Для large page (2 MiB) нужны только L2+L1. `ARMPageTableMap` ставит таблицу на уровень, где остановился walk `lookupPTSlot`.
+8. **`ipc_buf` — общая переменная** (root и net-child в одном ELF): net-child переключает её на `CHILD_IPC_BUF_VA`; root обязан восстановить `ipc_buf = BootInfo.ipcBuffer` перед своими syscalls.
+9. **ASID pool** создаётся из 4 KiB untyped: `ARMASIDControlMakePool` (EC[0]=untyped, EC[1]=root CNode, MR[0]=slot, MR[1]=depth), затем `ARMASIDPoolAssign` (EC[0]=vspace). `seL4_CapASIDControl` = слот 5.
 
 ## 5. Как собирать и валидировать
 
@@ -104,7 +119,7 @@ python3 /tmp/run_net_test.py
 
 ## 6. Известные ограничения / долг
 
-- **VSpace общий** между root и child (память не изолирована; изоляция только на уровне капабилити).
+- **VSpace**: отдельный VSpace валидирован на минимальном ELF-child (`elf child: OK`); net-драйвер всё ещё в child-домене с общим VSpace (изоляция на уровне капабилити).
 - **Параметры захардкожены**: MAC `52:54:00:12:34:56`, guest IP `10.0.2.15` (несмотря на парсинг DHCP), шлюз `10.0.2.2`, DNS `10.0.2.3`, порты 8080/8081.
 - **TCP не настоящий**: полученные данные не ACK-аются («we never ACK»), нет FIN/teardown → ретрансмитный шум `[irq]`.
 - **Сырой syscall-слой** (hand-rolled labels/offsets) вместо libsel4/vka.
@@ -113,9 +128,14 @@ python3 /tmp/run_net_test.py
 
 ## 7. Осталось (по приоритету)
 
-1. **Полная process-изоляция** — отдельный VSpace + загрузка ELF ребёнка (сейчас VSpace общий).
+1. **Перенос virtio-net драйвера/протокола в ELF-child-процесс** — механизм
+   «отдельный VSpace + загрузка ELF» валидирован (`elf child: OK`); net-драйвер
+   пока работает в child-домене с общим VSpace (нужен device/DMA handoff в
+   новый VSpace).
 2. **Минимальный TCP ACK** полученных данных — уберёт ретрансмитный шум.
-3. **Повторяемая валидация** — скрипт + `-netdev socket`/tap вместо ручного SLIRP-харнесса.
-4. **Процесс:** запушить `arm64`, синхронизировать `master`, зафиксировать `libarchive-c`.
+3. **Повторяемая валидация** — скрипт + `-netdev socket`/tap вместо ручного
+   SLIRP-харнесса.
+4. **Процесс:** запушить `arm64` (1 коммит `da7fdae` впереди origin), решить
+   судьбу `master`, зафиксировать `libarchive-c`.
 5. **Целевое железо:** драйвер **GENET** (Pi 4) вместо virtio-net.
 
