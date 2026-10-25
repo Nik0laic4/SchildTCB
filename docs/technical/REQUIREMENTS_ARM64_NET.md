@@ -87,3 +87,6 @@ Common Criteria (см. `DEVELOPMENT_VECTORS.md`).
   (например, `/* ARM64-LLR-5.1: VSpace creation */`) и добавить **покрытие кода** в CI.
 - Механические проверки уже существуют (маркеры + `run_net_test.py` + валидация ELF в
   `build_root.sh`); этот документ лишь связывает их с требованиями.
+- **Покрытие кода (пилот)**: `build_proto_test.sh` + `proto_test.c` — host-side юнит-тест
+  чистой протокольной логики `net_test.c` с `gcov` (покрывает `HLR-3`/`LLR-3.1`,
+  `HLR-6`/`LLR-6.1`). Гоняется в CI (джоба `build-arm64`).
