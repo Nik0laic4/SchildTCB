@@ -20,7 +20,9 @@ provide the seL4 root task written in Ada.
 | `root_start.S` | seL4 root-task entry point. |
 | `root_linker.ld` | seL4 root-task layout (entry `_sel4_start`, load @ `0x400000`). |
 | `sel4_stubs.c` | seL4 `svc #0` shim + GNAT runtime stubs. |
-| `sel4_mmio.c` | seL4 MMIO map (BootInfo → device untyped → retype → VSpace map). |
+| `sel4_mmio.c` | seL4 platform layer (MMIO map, object retype, syscall shims) + virtio-net driver (split-ring RX pool / rotating TX, IRQ waiter thread). |
+| `virtio_net.h` | virtio-net driver public API (`init` / `tx` / `rx`). |
+| `net_test.c` | Minimal TCP/IP stack test (ARP→ICMP→DHCP→TCP/HTTP→TCP server→DNS) driven over `virtio_net_*`. |
 | `build_root.sh` | Build the seL4 root task + validate the ELF. |
 | `virtio_mmio.ads` / `.adb` | virtio-mmio transport driver (probe + MAC read). |
 | `virtio_probe.adb` | Bare-metal virtio-net probe (validated in QEMU). |

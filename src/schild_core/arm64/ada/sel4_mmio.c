@@ -21,10 +21,7 @@
  * Rights: seL4_ReadWrite = (0<<3)|(0<<2)|(1<<1)|(1<<0) = 3.
  */
 
-typedef unsigned long long u64;
-typedef unsigned int       u32;
-typedef unsigned short     u16;
-typedef unsigned char      u8;
+#include "virtio_net.h"
 
 extern u64 rt_bootinfo;      /* saved by root_start.S */
 static u64 ipc_buf;          /* BootInfo.ipcBuffer */
@@ -101,7 +98,7 @@ static u64 map_page(u64 page_cap, u64 vaddr)
  * wordBits - 13 (51), so the full slot is resolved at depth = wordBits. */
 #define ROOT_CNODE_DEPTH 64
 
-/* File-scope caps for the IRQ notification path (populated by net_init). */
+/* File-scope caps for the IRQ notification path (populated by virtio_net_init). */
 static u64 net_irq_ntfn;      /* badged IRQ notification cap (CPtr) */
 static u64 net_irq_handler;   /* IRQ handler cap (CPtr) */
 static u64 net_main_ntfn;     /* waiter -> main "IRQ arrived" notification */
@@ -414,366 +411,6 @@ static void setup_queue(volatile u32 *regs, u32 qidx, u64 q_pa, u16 qnum)
     mmio32w(regs, VMMIO_QUEUE_PFN, (u32)(q_pa >> 12));  /* PFN = phys / 4096 */
 }
 
-/* Our MAC (matches the -device virtio-net-device,mac=... command line). */
-static const u8 net_mac[6] = { 0x52, 0x54, 0x00, 0x12, 0x34, 0x56 };
-
-/* Build an Ethernet + ARP request (42 bytes) for the SLIRP gateway (10.0.2.2).
- * This elicits a deterministic ARP reply from QEMU's user-mode netdev. */
-static void build_arp_request(volatile u8 *pkt)
-{
-    static const u8 gateway_ip[4] = { 10, 0, 2, 2 };
-    static const u8 guest_ip[4]   = { 10, 0, 2, 15 };
-    int i;
-
-    for (i = 0; i < 6; i++) pkt[i] = 0xff;               /* dst = broadcast */
-    for (i = 0; i < 6; i++) pkt[6 + i] = net_mac[i];     /* src = our MAC */
-    pkt[12] = 0x08; pkt[13] = 0x06;                       /* EtherType = ARP */
-    pkt[14] = 0x00; pkt[15] = 0x01;                       /* htype = Ethernet */
-    pkt[16] = 0x08; pkt[17] = 0x00;                       /* ptype = IPv4 */
-    pkt[18] = 0x06;                                        /* hlen = 6 */
-    pkt[19] = 0x04;                                        /* plen = 4 */
-    pkt[20] = 0x00; pkt[21] = 0x01;                       /* op = request */
-    for (i = 0; i < 6; i++) pkt[22 + i] = net_mac[i];     /* sender MAC */
-    for (i = 0; i < 4; i++) pkt[28 + i] = guest_ip[i];    /* sender IP */
-    for (i = 0; i < 6; i++) pkt[32 + i] = 0x00;           /* target MAC */
-    for (i = 0; i < 4; i++) pkt[38 + i] = gateway_ip[i];  /* target IP */
-}
-
-/* 16-bit one's-complement checksum over `data` (network byte order). */
-static u16 csum16(const volatile u8 *data, int len)
-{
-    u32 sum = 0;
-    int i;
-
-    for (i = 0; i + 1 < len; i += 2)
-        sum += ((u32)data[i] << 8) | (u32)data[i + 1];
-    if (i < len)
-        sum += (u32)data[i] << 8;
-    while (sum >> 16)
-        sum = (sum & 0xffff) + (sum >> 16);
-    return (u16)~sum;
-}
-
-/* Build a 20-byte IPv4 header (checksum computed). */
-static void build_ipv4(volatile u8 *p, int total_len, int proto,
-                       const u8 *src_ip, const u8 *dst_ip)
-{
-    int i;
-    u16 c;
-
-    p[0] = 0x45;                       /* version 4, IHL 5 */
-    p[1] = 0x00;                       /* TOS */
-    p[2] = (u8)(total_len >> 8);
-    p[3] = (u8)total_len;
-    p[4] = 0x00; p[5] = 0x01;          /* identification */
-    p[6] = 0x00; p[7] = 0x00;          /* flags + fragment offset */
-    p[8] = 0x40;                       /* TTL = 64 */
-    p[9] = (u8)proto;                  /* 1 = ICMP */
-    p[10] = 0x00; p[11] = 0x00;        /* checksum */
-    for (i = 0; i < 4; i++) p[12 + i] = src_ip[i];
-    for (i = 0; i < 4; i++) p[16 + i] = dst_ip[i];
-    c = csum16(p, 20);
-    p[10] = (u8)(c >> 8);
-    p[11] = (u8)c;
-}
-
-/* Build an ICMP echo request (header + payload, checksum computed). */
-static void build_icmp_echo(volatile u8 *p, const char *payload, int plen)
-{
-    int i;
-    u16 c;
-
-    p[0] = 0x08;                       /* type = echo request */
-    p[1] = 0x00;                       /* code */
-    p[2] = 0x00; p[3] = 0x00;          /* checksum */
-    p[4] = 0x12; p[5] = 0x34;          /* identifier */
-    p[6] = 0x00; p[7] = 0x01;          /* sequence number */
-    for (i = 0; i < plen; i++) p[8 + i] = (u8)payload[i];
-    c = csum16(p, 8 + plen);
-    p[2] = (u8)(c >> 8);
-    p[3] = (u8)c;
-}
-
-/* Build an Ethernet + IPv4 + ICMP echo request (50 bytes) to `dst_mac`. */
-static void build_icmp_frame(volatile u8 *pkt, const u8 *dst_mac)
-{
-    static const u8 gw_ip[4]    = { 10, 0, 2, 2 };
-    static const u8 guest_ip[4] = { 10, 0, 2, 15 };
-    int i;
-
-    for (i = 0; i < 6; i++) pkt[i] = dst_mac[i];      /* dst MAC = gateway */
-    for (i = 0; i < 6; i++) pkt[6 + i] = net_mac[i];  /* src MAC = ours */
-    pkt[12] = 0x08; pkt[13] = 0x00;                    /* EtherType = IPv4 */
-    build_ipv4(pkt + 14, 20 + 8 + 8, 1, guest_ip, gw_ip);
-    build_icmp_echo(pkt + 14 + 20, "SchildTC", 8);
-}
-
-/* Extract the gateway MAC from an ARP reply (Ethernet frame, no virtio_net_hdr).
- * Returns 1 on success. */
-static int parse_arp_reply(const volatile u8 *rxpkt, u8 *gw_mac)
-{
-    int i;
-
-    if (rxpkt[12] != 0x08 || rxpkt[13] != 0x06) return 0;  /* EtherType = ARP */
-    if (rxpkt[20] != 0x00 || rxpkt[21] != 0x02) return 0;  /* opcode = reply  */
-    for (i = 0; i < 6; i++) gw_mac[i] = rxpkt[22 + i];     /* sender MAC     */
-    return 1;
-}
-
-/* Verify a received Ethernet frame is an ICMP echo reply. */
-static int verify_icmp_reply(const volatile u8 *rxpkt)
-{
-    if (rxpkt[12] != 0x08 || rxpkt[13] != 0x00) return 0;  /* EtherType = IPv4 */
-    if (rxpkt[14 + 9] != 0x01) return 0;                    /* protocol = ICMP */
-    if (rxpkt[14 + 20] != 0x00) return 0;                   /* type = echo reply */
-    return 1;
-}
-
-/* Build a UDP datagram (8-byte header + payload, checksum computed over the
- * IPv4 pseudo-header). */
-static void build_udp(volatile u8 *p, u16 sport, u16 dport,
-                      const u8 *src_ip, const u8 *dst_ip,
-                      const volatile u8 *payload, int plen)
-{
-    u32 sum = 0;
-    u16 c;
-    int i;
-
-    p[0] = (u8)(sport >> 8); p[1] = (u8)sport;
-    p[2] = (u8)(dport >> 8); p[3] = (u8)dport;
-    p[4] = (u8)((8 + plen) >> 8); p[5] = (u8)(8 + plen);
-    p[6] = 0x00; p[7] = 0x00;
-    for (i = 0; i < plen; i++) p[8 + i] = payload[i];
-
-    /* Pseudo-header: src IP, dst IP, zero+protocol, UDP length. */
-    for (i = 0; i < 4; i += 2) sum += ((u32)src_ip[i] << 8) | src_ip[i + 1];
-    for (i = 0; i < 4; i += 2) sum += ((u32)dst_ip[i] << 8) | dst_ip[i + 1];
-    sum += 17;
-    sum += 8 + plen;
-    for (i = 0; i + 1 < 8 + plen; i += 2)
-        sum += ((u32)p[i] << 8) | p[i + 1];
-    if (i < 8 + plen)
-        sum += (u32)p[i] << 8;
-    while (sum >> 16)
-        sum = (sum & 0xffff) + (sum >> 16);
-    c = (u16)~sum;
-    if (c == 0) c = 0xffff;
-    p[6] = (u8)(c >> 8);
-    p[7] = (u8)c;
-}
-
-/* Build a BOOTP/DHCP DISCOVER message (300 bytes). */
-static void build_dhcp_discover(volatile u8 *p)
-{
-    int i;
-
-    for (i = 0; i < 300; i++) p[i] = 0x00;
-    p[0] = 0x01;             /* op = BOOTREQUEST */
-    p[1] = 0x01;             /* htype = Ethernet */
-    p[2] = 0x06;             /* hlen = 6 */
-    p[4] = 0x12; p[5] = 0x34; p[6] = 0x56; p[7] = 0x78;   /* xid */
-    p[10] = 0x80;            /* flags = broadcast */
-    for (i = 0; i < 6; i++) p[28 + i] = net_mac[i];        /* chaddr */
-    p[236] = 0x63; p[237] = 0x82; p[238] = 0x53; p[239] = 0x63;  /* cookie */
-    p[240] = 53; p[241] = 1; p[242] = 1;   /* option 53: message type = DISCOVER */
-    p[243] = 255;                           /* option 255: end */
-}
-
-/* Build an Ethernet + IPv4 + UDP + DHCP DISCOVER frame (342 bytes). */
-static void build_dhcp_frame(volatile u8 *pkt)
-{
-    static const u8 zero_ip[4]  = { 0, 0, 0, 0 };
-    static const u8 bcast_ip[4] = { 255, 255, 255, 255 };
-    volatile u8 *udp  = pkt + 14 + 20;
-    volatile u8 *dhcp = udp + 8;
-    int i;
-
-    for (i = 0; i < 6; i++) pkt[i] = 0xff;              /* dst = broadcast */
-    for (i = 0; i < 6; i++) pkt[6 + i] = net_mac[i];    /* src = our MAC */
-    pkt[12] = 0x08; pkt[13] = 0x00;                      /* EtherType = IPv4 */
-
-    build_dhcp_discover(dhcp);
-    build_udp(udp, 68, 67, zero_ip, bcast_ip, dhcp, 300);
-    build_ipv4(pkt + 14, 20 + 8 + 300, 17, zero_ip, bcast_ip);
-}
-
-/* Extract the offered IP (yiaddr) from a received DHCP OFFER. */
-static int parse_dhcp_offer(const volatile u8 *rxpkt, u8 *offered_ip)
-{
-    int i;
-
-    if (rxpkt[12] != 0x08 || rxpkt[13] != 0x00) return 0;  /* EtherType = IPv4 */
-    if (rxpkt[23] != 0x11) return 0;                        /* proto = UDP */
-    if (rxpkt[36] != 0x00 || rxpkt[37] != 0x44) return 0;   /* UDP dport = 68 */
-    if (rxpkt[42] != 0x02) return 0;                        /* DHCP op = BOOTREPLY */
-    for (i = 0; i < 4; i++) offered_ip[i] = rxpkt[42 + 16 + i];  /* yiaddr */
-    return 1;
-}
-
-/* Build a TCP segment (20-byte header + payload, checksum computed over the
- * IPv4 pseudo-header). */
-static void build_tcp(volatile u8 *p, u16 sport, u16 dport,
-                      u32 seq, u32 ack, u8 flags,
-                      const u8 *src_ip, const u8 *dst_ip,
-                      const volatile u8 *payload, int plen)
-{
-    u32 sum = 0;
-    u16 c;
-    int i;
-
-    p[0] = (u8)(sport >> 8); p[1] = (u8)sport;
-    p[2] = (u8)(dport >> 8); p[3] = (u8)dport;
-    p[4] = (u8)(seq >> 24); p[5] = (u8)(seq >> 16);
-    p[6] = (u8)(seq >> 8); p[7] = (u8)seq;
-    p[8] = (u8)(ack >> 24); p[9] = (u8)(ack >> 16);
-    p[10] = (u8)(ack >> 8); p[11] = (u8)ack;
-    p[12] = 0x50;            /* data offset = 5 words (20 bytes) */
-    p[13] = flags;
-    p[14] = 0x20; p[15] = 0x00;   /* window = 8192 */
-    p[16] = 0x00; p[17] = 0x00;   /* checksum */
-    p[18] = 0x00; p[19] = 0x00;   /* urgent pointer */
-    for (i = 0; i < plen; i++) p[20 + i] = payload[i];
-
-    /* Pseudo-header: src IP, dst IP, zero+protocol(6), TCP length. */
-    for (i = 0; i < 4; i += 2) sum += ((u32)src_ip[i] << 8) | src_ip[i + 1];
-    for (i = 0; i < 4; i += 2) sum += ((u32)dst_ip[i] << 8) | dst_ip[i + 1];
-    sum += 6;
-    sum += 20 + plen;
-    for (i = 0; i + 1 < 20 + plen; i += 2)
-        sum += ((u32)p[i] << 8) | p[i + 1];
-    if (i < 20 + plen)
-        sum += (u32)p[i] << 8;
-    while (sum >> 16)
-        sum = (sum & 0xffff) + (sum >> 16);
-    c = (u16)~sum;
-    p[16] = (u8)(c >> 8);
-    p[17] = (u8)c;
-}
-
-/* Build an Ethernet + IPv4 + TCP segment. */
-static void build_tcp_frame(volatile u8 *pkt, const u8 *dst_mac,
-                            const u8 *src_ip, const u8 *dst_ip,
-                            u16 sport, u16 dport,
-                            u32 seq, u32 ack, u8 flags,
-                            const volatile u8 *payload, int plen)
-{
-    int i;
-
-    for (i = 0; i < 6; i++) pkt[i] = dst_mac[i];
-    for (i = 0; i < 6; i++) pkt[6 + i] = net_mac[i];
-    pkt[12] = 0x08; pkt[13] = 0x00;   /* EtherType = IPv4 */
-    build_tcp(pkt + 14 + 20, sport, dport, seq, ack, flags,
-              src_ip, dst_ip, payload, plen);
-    build_ipv4(pkt + 14, 20 + 20 + plen, 6, src_ip, dst_ip);
-}
-
-/* Parse a received TCP segment; fills seq/ack/flags/payload on success. */
-static int parse_tcp(const volatile u8 *rxpkt, u32 *seq, u32 *ack, u8 *flags,
-                     const volatile u8 **payload, int *plen)
-{
-    int ihl, doff, total;
-    const volatile u8 *tcp;
-
-    if (rxpkt[12] != 0x08 || rxpkt[13] != 0x00) return 0;   /* EtherType = IPv4 */
-    if (rxpkt[23] != 0x06) return 0;                         /* proto = TCP */
-    ihl = (rxpkt[14] & 0x0f) * 4;
-    tcp = rxpkt + 14 + ihl;
-    doff = (tcp[12] >> 4) * 4;
-    *seq   = ((u32)tcp[4] << 24) | ((u32)tcp[5] << 16) | ((u32)tcp[6] << 8) | tcp[7];
-    *ack   = ((u32)tcp[8] << 24) | ((u32)tcp[9] << 16) | ((u32)tcp[10] << 8) | tcp[11];
-    *flags = tcp[13];
-    *payload = tcp + doff;
-    total = ((u16)rxpkt[16] << 8) | rxpkt[17];
-    *plen = total - ihl - doff;
-    if (*plen < 0) *plen = 0;
-    return 1;
-}
-
-extern void schild_sel4_debug_putchar(char c);
-
-/* Print the HTTP response body (bytes after the "\r\n\r\n" separator). */
-static void print_http_body(const volatile u8 *p, int len)
-{
-    int i, j;
-    for (i = 0; i + 3 < len; i++) {
-        if (p[i] == '\r' && p[i+1] == '\n' && p[i+2] == '\r' && p[i+3] == '\n') {
-            schild_sel4_debug_putchar('[');
-            schild_sel4_debug_putchar('b');
-            schild_sel4_debug_putchar('o');
-            schild_sel4_debug_putchar('d');
-            schild_sel4_debug_putchar('y');
-            schild_sel4_debug_putchar(']');
-            schild_sel4_debug_putchar(' ');
-            for (j = i + 4; j < len; j++) schild_sel4_debug_putchar((char)p[j]);
-            schild_sel4_debug_putchar('\n');
-            return;
-        }
-    }
-}
-
-static void put_dec(u8 v)
-{
-    if (v >= 100) schild_sel4_debug_putchar('0' + v / 100);
-    if (v >= 10) schild_sel4_debug_putchar('0' + (v / 10) % 10);
-    schild_sel4_debug_putchar('0' + v % 10);
-}
-
-/* Build a DNS A query for "example.com" (29 bytes). */
-static void build_dns_query(volatile u8 *p)
-{
-    int i = 0;
-    p[i++] = 0x12; p[i++] = 0x34;   /* ID */
-    p[i++] = 0x01; p[i++] = 0x00;   /* flags: RD */
-    p[i++] = 0x00; p[i++] = 0x01;   /* QDCOUNT = 1 */
-    p[i++] = 0x00; p[i++] = 0x00;   /* ANCOUNT */
-    p[i++] = 0x00; p[i++] = 0x00;   /* NSCOUNT */
-    p[i++] = 0x00; p[i++] = 0x00;   /* ARCOUNT */
-    p[i++] = 7;
-    p[i++] = 'e'; p[i++] = 'x'; p[i++] = 'a'; p[i++] = 'm'; p[i++] = 'p'; p[i++] = 'l'; p[i++] = 'e';
-    p[i++] = 3;
-    p[i++] = 'c'; p[i++] = 'o'; p[i++] = 'm';
-    p[i++] = 0;                      /* name terminator */
-    p[i++] = 0x00; p[i++] = 0x01;    /* QTYPE = A */
-    p[i++] = 0x00; p[i++] = 0x01;    /* QCLASS = IN */
-}
-
-/* Build an Ethernet + IPv4 + UDP + DNS query to the SLIRP DNS server. */
-static void build_dns_frame(volatile u8 *pkt, const u8 *dst_mac, const u8 *src_ip)
-{
-    static const u8 dns_ip[4] = { 10, 0, 2, 3 };
-    volatile u8 *udp = pkt + 14 + 20;
-    volatile u8 *dns = udp + 8;
-    int i;
-
-    for (i = 0; i < 6; i++) pkt[i] = dst_mac[i];      /* dst = gateway */
-    for (i = 0; i < 6; i++) pkt[6 + i] = net_mac[i];  /* src = our MAC */
-    pkt[12] = 0x08; pkt[13] = 0x00;                    /* EtherType = IPv4 */
-
-    build_dns_query(dns);
-    build_udp(udp, 53000, 53, src_ip, dns_ip, dns, 29);
-    build_ipv4(pkt + 14, 20 + 8 + 29, 17, src_ip, dns_ip);
-}
-
-/* Verify a DNS reply and extract the resolved IPv4 address (last 4 bytes). */
-static int parse_dns_reply(const volatile u8 *rxpkt, u8 *ip)
-{
-    const volatile u8 *dns;
-    int udp_len, plen, i;
-
-    if (rxpkt[12] != 0x08 || rxpkt[13] != 0x00) return 0;   /* EtherType = IPv4 */
-    if (rxpkt[23] != 0x11) return 0;                         /* proto = UDP */
-    if (rxpkt[34] != 0x00 || rxpkt[35] != 0x35) return 0;    /* UDP sport = 53 */
-    dns = rxpkt + 42;                                        /* after Eth+IP+UDP */
-    if (dns[0] != 0x12 || dns[1] != 0x34) return 0;          /* ID */
-    if ((dns[2] & 0x80) == 0) return 0;                       /* QR = response */
-    if ((dns[6] << 8 | dns[7]) == 0) return 0;               /* ANCOUNT > 0 */
-    udp_len = ((u16)rxpkt[38] << 8) | rxpkt[39];
-    plen = udp_len - 8;
-    if (plen < 4) return 0;
-    for (i = 0; i < 4; i++) ip[i] = dns[plen - 4 + i];
-    return 1;
-}
-
 /* =============================================================================
  * virtio-net virtqueue driver: honest split-ring management.
  *
@@ -802,7 +439,7 @@ static int parse_dns_reply(const volatile u8 *rxpkt, u8 *ip)
 #define TX_BUF_STRIDE  0x1000
 #define NET_BUF_LEN    1510
 
-/* File-scope device/ring state (populated by net_init). */
+/* File-scope device/ring state (populated by virtio_net_init). */
 static volatile u32 *net_regs;
 static volatile u8  *net_dma;
 static u64           net_dma_pa;
@@ -815,6 +452,7 @@ static volatile struct vring_used  *net_tx_used;
 static u16 net_rx_last_used;   /* used->idx entries consumed so far */
 static u16 net_tx_last_used;   /* used->idx entries consumed so far (TX) */
 static u16 net_tx_next;        /* rotating TX descriptor id */
+static int net_rx_cur;         /* descriptor of the current RX frame (-1 = none) */
 
 static inline void net_barrier(void)
 {
@@ -844,6 +482,12 @@ static u32 irq_poll(void)
     return 1;
 }
 
+/* Number of IRQs delivered through the seL4 notification so far. */
+u32 virtio_net_irq_count(void)
+{
+    return net_irq_count;
+}
+
 /* Post descriptor `d` to the RX avail ring (device may write into it). */
 static void rx_post(u16 d)
 {
@@ -867,19 +511,6 @@ static int rx_poll(void)
     return (int)d;
 }
 
-/* Spin up to `timeout` iterations for one received frame. */
-static int rx_wait(u32 timeout)
-{
-    u32 spins;
-    for (spins = 0; spins < timeout; spins++) {
-        int d;
-        (void)irq_poll();
-        d = rx_poll();
-        if (d >= 0) return d;
-    }
-    return -1;
-}
-
 /* Pointer to the Ethernet frame of a received descriptor (past the 10-byte
  * virtio_net_hdr). */
 static const volatile u8 *rx_frame(int d)
@@ -887,25 +518,40 @@ static const volatile u8 *rx_frame(int d)
     return (const volatile u8 *)(net_dma + RX_BUF_BASE + (u64)d * RX_BUF_STRIDE + 10);
 }
 
-/* Give a consumed RX buffer back to the device. */
-static void rx_recycle(u16 d)
+/* Block until a frame arrives; return a pointer to the Ethernet frame (past
+ * the 10-byte virtio_net_hdr). */
+const volatile u8 *virtio_net_rx(void)
 {
-    rx_post(d);
+    int d;
+    for (;;) {
+        (void)irq_poll();
+        d = rx_poll();
+        if (d >= 0) {
+            net_rx_cur = d;
+            return rx_frame(d);
+        }
+    }
+}
+
+/* Recycle the current frame's buffer back to the device. */
+void virtio_net_rx_done(void)
+{
+    rx_post((u16)net_rx_cur);
     rx_kick();
+    net_rx_cur = -1;
 }
 
 /* Buffer for the next rotating TX descriptor. */
-static volatile u8 *tx_buffer(void)
+volatile u8 *virtio_net_tx_buffer(void)
 {
-    return (volatile u8 *)(net_dma + TX_BUF_BASE + (u64)net_tx_next * TX_BUF_STRIDE);
+    return net_dma + TX_BUF_BASE + (u64)net_tx_next * TX_BUF_STRIDE;
 }
 
 /* Submit the current TX buffer (len bytes incl. virtio_net_hdr) and wait for
- * the device to consume it.  Returns 1 on success, 0 on timeout. */
-static int tx_send(u32 len)
+ * the device to consume it. */
+void virtio_net_tx_send(u32 len)
 {
     u16 d = net_tx_next;
-    u32 spins;
 
     net_tx_desc[d].addr  = net_dma_pa + TX_BUF_BASE + (u64)d * TX_BUF_STRIDE;
     net_tx_desc[d].len   = len;
@@ -916,18 +562,15 @@ static int tx_send(u32 len)
     net_barrier();
     mmio32w(net_regs, VMMIO_QUEUE_NOTIFY, 1);
 
-    for (spins = 0; spins < 1000000; spins++) {
+    while (net_tx_used->idx <= net_tx_last_used)
         (void)irq_poll();
-        if (net_tx_used->idx > net_tx_last_used) break;
-    }
-    if (net_tx_used->idx <= net_tx_last_used) return 0;
     net_tx_last_used = (u16)(net_tx_last_used + 1);
     net_tx_next = (u16)((d + 1) % VQ_NUM);
-    return 1;
 }
 
-/* Reset + feature negotiation + queue setup + RX pool.  Returns 1 on success. */
-static int net_init(void)
+/* Reset + feature negotiation + queue setup + RX pool + IRQ path.  Returns 1
+ * on success. */
+int virtio_net_init(void)
 {
     u64 dma_pa;
     volatile u8 *dma;
@@ -1036,235 +679,3 @@ static int net_init(void)
     return 1;
 }
 
-/* Run the minimal TCP/IP stack end-to-end over the virtio-net device:
- * ARP -> ICMP echo -> DHCP -> TCP client + HTTP GET -> TCP server (hostfwd)
- * -> DNS A query.  Returns (same contract as before):
- *   7 = DNS ok, 6 = TCP server ok (no DNS), 5 = HTTP ok (no server),
- *   4 = DHCP ok (no TCP), 3 = ping ok (no DHCP), 2 = ARP ok (no ICMP),
- *   1 = TX ok, 0 = error. */
-u64 schild_virtio_net_test(void)
-{
-    u8 gw_mac[6];
-    u8 offered_ip[4];
-    int d;
-    u32 spins;
-
-    if (!net_init()) return 0;
-
-    /* ARP: resolve the SLIRP gateway (10.0.2.2). */
-    {
-        volatile u8 *pkt = tx_buffer();
-        int i;
-        for (i = 0; i < 10; i++) pkt[i] = 0x00;   /* virtio_net_hdr */
-        build_arp_request(pkt + 10);
-        for (i = 52; i < 70; i++) pkt[i] = 0x00;   /* pad to 60 bytes */
-        if (!tx_send(70)) return 0;
-    }
-    d = rx_wait(5000000);
-    if (d < 0) return 1;
-    if (!parse_arp_reply(rx_frame(d), gw_mac)) { rx_recycle((u16)d); return 1; }
-    rx_recycle((u16)d);
-
-    /* ICMP echo (ping). */
-    {
-        volatile u8 *pkt = tx_buffer();
-        int i;
-        for (i = 0; i < 10; i++) pkt[i] = 0x00;
-        build_icmp_frame(pkt + 10, gw_mac);
-        for (i = 60; i < 70; i++) pkt[i] = 0x00;   /* pad to 60 bytes */
-        if (!tx_send(70)) return 2;
-    }
-    d = rx_wait(5000000);
-    if (d < 0) return 2;
-    if (!verify_icmp_reply(rx_frame(d))) { rx_recycle((u16)d); return 2; }
-    rx_recycle((u16)d);
-
-    /* DHCP DISCOVER (UDP broadcast). */
-    {
-        volatile u8 *pkt = tx_buffer();
-        int i;
-        for (i = 0; i < 10; i++) pkt[i] = 0x00;
-        build_dhcp_frame(pkt + 10);
-        if (!tx_send(10 + 342)) return 3;
-    }
-    d = rx_wait(5000000);
-    if (d < 0) return 3;
-    if (!parse_dhcp_offer(rx_frame(d), offered_ip)) { rx_recycle((u16)d); return 3; }
-    rx_recycle((u16)d);
-
-    /* TCP client: SYN -> SYN-ACK -> ACK + HTTP/1.0 GET. */
-    {
-        static const u8 host_ip[4] = { 10, 0, 2, 2 };
-        static const u8 http_get[18] = "GET / HTTP/1.0\r\n\r\n";
-        const u32 isn = 0x12345678u;
-        u32 server_isn = 0;
-
-        /* SYN. */
-        {
-            volatile u8 *pkt = tx_buffer();
-            int i;
-            for (i = 0; i < 10; i++) pkt[i] = 0x00;
-            build_tcp_frame(pkt + 10, gw_mac, offered_ip, host_ip,
-                            12345, 8080, isn, 0, 0x02, 0, 0);
-            if (!tx_send(10 + 14 + 20 + 20)) return 4;
-        }
-        d = rx_wait(5000000);
-        if (d < 0) return 4;
-        {
-            const volatile u8 *f = rx_frame(d);
-            const volatile u8 *tpayload;
-            u32 seq, ack; u8 fl; int pl;
-            if (!parse_tcp(f, &seq, &ack, &fl, &tpayload, &pl) ||
-                (fl & 0x12) != 0x12 || ack != isn + 1) {
-                rx_recycle((u16)d);
-                return 4;
-            }
-            server_isn = seq;
-        }
-        rx_recycle((u16)d);
-
-        /* ACK + HTTP GET.  The server replies with a pure ACK first, then the
-         * HTTP response. */
-        {
-            volatile u8 *pkt = tx_buffer();
-            int i;
-            for (i = 0; i < 10; i++) pkt[i] = 0x00;
-            build_tcp_frame(pkt + 10, gw_mac, offered_ip, host_ip,
-                            12345, 8080, isn + 1, server_isn + 1, 0x18, http_get, 18);
-            if (!tx_send(10 + 14 + 20 + 20 + 18)) return 4;
-        }
-        {
-            int tries, ok = 0;
-            for (tries = 0; tries < 4 && !ok; tries++) {
-                d = rx_wait(5000000);
-                if (d < 0) break;
-                {
-                    const volatile u8 *f = rx_frame(d);
-                    const volatile u8 *tpayload;
-                    u32 seq2, ack2; u8 fl2; int pl2;
-                    if (parse_tcp(f, &seq2, &ack2, &fl2, &tpayload, &pl2) &&
-                        (fl2 & 0x10) && pl2 >= 5 &&
-                        tpayload[0] == 'H' && tpayload[1] == 'T' &&
-                        tpayload[2] == 'T' && tpayload[3] == 'P' &&
-                        tpayload[4] == '/') {
-                        ok = 1;
-                        print_http_body(tpayload, pl2);
-                    }
-                }
-                rx_recycle((u16)d);
-            }
-            if (!ok) return 4;
-        }
-    }
-
-    /* TCP server: passive open on port 8081 (the host connects via hostfwd). */
-    {
-        static const u8 host_ip[4] = { 10, 0, 2, 2 };
-        const u32 sisn = 0x87654321u;
-        u32 client_isn = 0;
-        u16 client_port = 0;
-
-        /* Wait for an incoming SYN, ignoring the HTTP server's retransmits. */
-        {
-            int found = 0;
-            for (spins = 0; spins < 2000000000 && !found; spins++) {
-                (void)irq_poll();
-                d = rx_poll();
-                if (d < 0) continue;
-                {
-                    const volatile u8 *f = rx_frame(d);
-                    const volatile u8 *tpayload;
-                    u32 seq, ack; u8 fl; int pl;
-                    if (parse_tcp(f, &seq, &ack, &fl, &tpayload, &pl) &&
-                        (fl & 0x02) && !(fl & 0x10) &&
-                        (((u16)f[36] << 8) | f[37]) == 8081) {
-                        client_isn = seq;
-                        client_port = ((u16)f[34] << 8) | f[35];
-                        found = 1;
-                    }
-                }
-                rx_recycle((u16)d);
-            }
-            if (!found) return 5;
-        }
-
-        /* SYN-ACK. */
-        {
-            volatile u8 *pkt = tx_buffer();
-            int i;
-            for (i = 0; i < 10; i++) pkt[i] = 0x00;
-            build_tcp_frame(pkt + 10, gw_mac, offered_ip, host_ip,
-                            8081, client_port, sisn, client_isn + 1, 0x12, 0, 0);
-            if (!tx_send(10 + 14 + 20 + 20)) return 5;
-        }
-
-        /* Wait for the client ACK. */
-        {
-            int tries, ok = 0;
-            for (tries = 0; tries < 4 && !ok; tries++) {
-                d = rx_wait(5000000);
-                if (d < 0) break;
-                {
-                    const volatile u8 *f = rx_frame(d);
-                    const volatile u8 *tpayload;
-                    u32 seq2, ack2; u8 fl2; int pl2;
-                    if (parse_tcp(f, &seq2, &ack2, &fl2, &tpayload, &pl2) &&
-                        (fl2 & 0x10) && !(fl2 & 0x02) && ack2 == sisn + 1 &&
-                        (((u16)f[36] << 8) | f[37]) == 8081) {
-                        ok = 1;
-                    }
-                }
-                rx_recycle((u16)d);
-            }
-            if (!ok) return 5;
-        }
-    }
-
-    /* DNS client: resolve "example.com" via SLIRP DNS (10.0.2.3). */
-    {
-        volatile u8 *pkt = tx_buffer();
-        int i;
-        for (i = 0; i < 10; i++) pkt[i] = 0x00;
-        build_dns_frame(pkt + 10, gw_mac, offered_ip);
-        if (!tx_send(10 + 14 + 20 + 8 + 29)) return 6;
-    }
-    {
-        int found = 0;
-        for (spins = 0; spins < 2000000000 && !found; spins++) {
-            (void)irq_poll();
-            d = rx_poll();
-            if (d < 0) continue;
-            {
-                const volatile u8 *f = rx_frame(d);
-                u8 ip[4];
-                if (parse_dns_reply(f, ip)) {
-                    schild_sel4_debug_putchar('[');
-                    schild_sel4_debug_putchar('d');
-                    schild_sel4_debug_putchar('n');
-                    schild_sel4_debug_putchar('s');
-                    schild_sel4_debug_putchar(']');
-                    schild_sel4_debug_putchar(' ');
-                    put_dec(ip[0]); schild_sel4_debug_putchar('.');
-                    put_dec(ip[1]); schild_sel4_debug_putchar('.');
-                    put_dec(ip[2]); schild_sel4_debug_putchar('.');
-                    put_dec(ip[3]);
-                    schild_sel4_debug_putchar('\n');
-                    found = 1;
-                }
-            }
-            rx_recycle((u16)d);
-        }
-        if (!found) return 6;
-    }
-
-    schild_sel4_debug_putchar('[');
-    schild_sel4_debug_putchar('i');
-    schild_sel4_debug_putchar('r');
-    schild_sel4_debug_putchar('q');
-    schild_sel4_debug_putchar(']');
-    schild_sel4_debug_putchar(' ');
-    put_dec((u8)net_irq_count);
-    schild_sel4_debug_putchar('\n');
-
-    return 7;
-}
