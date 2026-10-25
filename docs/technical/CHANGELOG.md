@@ -6,6 +6,18 @@
 > *pending* or *target* have not yet been validated. Formal-verification
 > coverage is stated per-module, never as an aggregate percentage.
 
+## v1.0.0-pre (2026-10-24) — AArch64: virtio-net driver/test split (reusable API)
+
+**Validated: the monolithic `sel4_mmio.c` was split into a reusable virtio-net driver (`virtio_net.h` API: `init` / `tx_buffer` / `tx_send` / `rx` / `rx_done`) and a separate protocol test (`net_test.c`); the full stack still passes (`virtio-net DNS: OK`, `[irq] 138–176` across runs).**
+
+- `virtio_net.h` exposes the driver API; `sel4_mmio.c` keeps the platform layer
+  (syscall shims, object retype, MMIO map) plus the driver implementation; the
+  protocol builders/parsers and `schild_virtio_net_test` moved to `net_test.c`.
+- `rx_wait`/`rx_poll`/`rx_frame`/`rx_recycle` collapsed into blocking
+  `virtio_net_rx` / `virtio_net_rx_done` (frame-based, no descriptor ids);
+  `tx_send` became blocking `virtio_net_tx_send` (void).
+
+
 ## v1.0.0-pre (2026-10-24) — AArch64: virtio-net IRQ waiter thread (blocking seL4_Wait)
 
 **Validated: the IRQ notification is now consumed by a dedicated waiter TCB that blocks with `seL4_Wait`, Acks the IRQ, and signals the main thread; the main thread blocks instead of polling (`virtio-net DNS: OK`, `[irq] 102–220` across runs).**

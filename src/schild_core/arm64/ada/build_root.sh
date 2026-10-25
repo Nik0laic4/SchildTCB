@@ -40,13 +40,17 @@ rm -rf obj && mkdir -p obj
 # 2. Assemble the entry point.
 "$GCC" -c -fno-pie -fno-pic -o obj/root_start.o root_start.S
 
-# 3. Compile the seL4 shims (DebugPutChar syscall + GNAT runtime stubs + MMIO map).
+# 3. Compile the seL4 shims (DebugPutChar syscall + GNAT runtime stubs),
+#    the platform/MMIO layer + virtio-net driver, and the protocol test.
 "$GCC" -c -ffreestanding -nostdlib -nostdinc -fno-builtin \
     -fno-pie -fno-pic -fno-stack-protector -O2 \
     -o obj/sel4_stubs.o sel4_stubs.c
 "$GCC" -c -ffreestanding -nostdlib -nostdinc -fno-builtin \
     -fno-pie -fno-pic -fno-stack-protector -O2 \
     -o obj/sel4_mmio.o sel4_mmio.c
+"$GCC" -c -ffreestanding -nostdlib -nostdinc -fno-builtin \
+    -fno-pie -fno-pic -fno-stack-protector -O2 \
+    -o obj/net_test.o net_test.c
 
 # 4. Link: root_start.o first (it owns _start), then the rest of the closure.
 mapfile -t OBJS < <(find obj -name '*.o' ! -name 'root_start.o' | sort)
