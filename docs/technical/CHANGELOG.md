@@ -6,6 +6,13 @@
 > *pending* or *target* have not yet been validated. Formal-verification
 > coverage is stated per-module, never as an aggregate percentage.
 
+## v1.0.0-pre (2026-10-25) — AArch64: CI workflow + GENET/QEMU feasibility finding
+
+**Validated: a GitHub Actions workflow (`.github/workflows/arm64-net.yml`) automates the ARM64 build (Ada root task + C driver/protocol + child ELF + ELF validation) and a full end-to-end QEMU run (`run_net_test.py --backend socket`).  Feasibility finding: seL4's `bcm2711` (Pi 4) platform builds cleanly, but QEMU's `raspi4b` does NOT emulate the GENET Ethernet controller, so the GENET driver is hardware-blocked (no validation target without a real Pi 4).**
+
+- `.github/workflows/arm64-net.yml`: `build-arm64` (fast gate: cross-compile + ELF validation + Python syntax check) and `e2e-arm64` (checkout + build seL4 for qemu-arm-virt, then run the deterministic socket-backend test under QEMU).
+- Verified locally: seL4 `bcm2711` builds (kernel + elfloader + sel4test); QEMU `raspi4b` has no GENET device (checked `hw/arm/bcm2838_peripherals.c`); the elfloader links at `0x10000000` while QEMU raspi4b loads the kernel at `0x80000`.
+
 ## v1.0.0-pre (2026-10-25) — AArch64: deterministic `-netdev socket` network backend
 
 **Validated: a host-side Python peer (`net_peer.py`) replaces SLIRP for the E2E test — it answers ARP/ICMP/DHCP/TCP(HTTP)/DNS and initiates the TCP-server handshake with fixed addresses (`[dns] 1.2.3.4`, `[irq] 70`, `virtio-net: OK (own VSpace + ELF child)`), fully reproducible and offline; `run_net_test.py --backend socket` selects it, SLIRP stays the default.**
