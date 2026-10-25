@@ -158,7 +158,10 @@ internet beyond DNS).  Validated with `-object filter-dump` + Python HTTP/TCP
 servers/clients on the host: ARP → ICMP → `BOOTP/DHCP` → TCP client +
 `HTTP/1.0 200 OK` → `hostfwd` `[S]`/`[S.]`/`[.]` → DNS `A? example.com`.
 
-Next step: driver refactoring (interrupts / descriptor ring).
+The descriptor ring has been refactored into honest split-ring management (an
+RX buffer pool + rotating TX descriptors, recycled through the used ring; the
+used ring's per-entry descriptor id selects the buffer).  Interrupts (seL4
+Notifications) remain a separate follow-up.
 
 ## Requirements
 
