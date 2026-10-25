@@ -162,8 +162,8 @@ The descriptor ring has been refactored into honest split-ring management (an
 RX buffer pool + rotating TX descriptors, recycled through the used ring; the
 used ring's per-entry descriptor id selects the buffer).  The virtio IRQ is now
 routed through a seL4 Notification (badged, `IRQControl_Get` +
-`IRQHandler_SetNotification`) and polled non-blockingly + Acked; the used-ring
-drain remains as a safety net.
+`IRQHandler_SetNotification`); a dedicated waiter TCB blocks on it (`seL4_Wait`),
+Acks, and signals the main thread, which drains the used ring.
 
 ## Requirements
 
