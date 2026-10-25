@@ -31,7 +31,7 @@ for tool in "$GNATMAKE" "$GCC" "$LD" "$READELF" "$OBJDUMP"; do
     fi
 done
 
-rm -rf obj && mkdir -p obj
+rm -rf obj obj_child && mkdir -p obj obj_child
 
 # 1. Compile the Ada closure (root task + Sel4_Syscall + needed runtime units).
 "$GNATMAKE" -c --RTS="$RTS" -gnat2022 -gnatwa -O0 -g \
@@ -52,7 +52,23 @@ rm -rf obj && mkdir -p obj
     -fno-pie -fno-pic -fno-stack-protector -O2 \
     -o obj/net_test.o net_test.c
 
-# 4. Link: root_start.o first (it owns _start), then the rest of the closure.
+# 4. Build the child process ELF (separate VSpace demo), then embed it as a
+#    raw blob so the root task can load it into the child's own VSpace at boot.
+"$GCC" -c -ffreestanding -nostdlib -nostdinc -fno-builtin \
+    -fno-pie -fno-pic -fno-stack-protector -O2 \
+    -o obj_child/child_main.o child_main.c
+"$GCC" -c -fno-pie -fno-pic -o obj_child/child_start.o child_start.S
+"$LD" -T child_linker.ld -o obj_child/child.elf obj_child/child_start.o obj_child/child_main.o
+
+echo "[root] child.elf: $(wc -c < obj_child/child.elf) bytes"
+LC_ALL=C "$READELF" -h obj_child/child.elf | grep -E 'Type:|Machine:|Entry point'
+
+# Embed obj_child/child.elf into the root ELF (.incbin with explicit symbols).
+printf '.section .rodata\n.balign 8\n.globl child_elf_start\n.globl child_elf_end\nchild_elf_start:\n.incbin "%s/obj_child/child.elf"\nchild_elf_end:\n' \
+    "$(pwd)" > obj/child_elf.S
+"$GCC" -c -fno-pie -fno-pic -o obj/child_elf.o obj/child_elf.S
+
+# 5. Link: root_start.o first (it owns _start), then the rest of the closure.
 mapfile -t OBJS < <(find obj -name '*.o' ! -name 'root_start.o' | sort)
 "$LD" -T root_linker.ld -o root_task.elf obj/root_start.o "${OBJS[@]}"
 

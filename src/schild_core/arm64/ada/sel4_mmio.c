@@ -925,3 +925,279 @@ u64 schild_net_child_test(void)
     return child_test_result;
 }
 
+/* =============================================================================
+ * ELF process spawn (increment: separate VSpace + child ELF).
+ *
+ * The root task creates a *separate* VSpace for a child process, loads a
+ * self-contained child ELF into it (code RX / data RW+NX, both cacheable) and
+ * runs it with its own CSpace.  The child proves it runs in its own address
+ * space by printing over the debug console and signalling a badged result
+ * notification; the root observes badge ELF_CHILD_BADGE.
+ *
+ * AArch64 user translation has 4 levels (48-bit VA): the VSpaceObject is the
+ * root (512 slots), then three PageTableObjects (L2/L1/L0) before a 4 KiB
+ * small page.  A fresh VSpace needs an ASID from an ASID pool before any page
+ * can be mapped; the pool is created from a 4 KiB untyped via
+ * ARMASIDControlMakePool, and the VSpace is bound via ARMASIDPoolAssign.
+ * ============================================================================= */
+
+/* ---- seL4 AArch64 object types (non-MCS, from libsel4 objecttype.h) ---- */
+#define OBJ_UNTYPED       0
+#define OBJ_TCB           1
+#define OBJ_NOTIFICATION  3
+#define OBJ_CAPTABLE      4
+#define OBJ_VSPACE        6
+#define OBJ_SMALL_PAGE    7
+#define OBJ_LARGE_PAGE    8
+#define OBJ_PAGE_TABLE    9
+
+/* ---- seL4 AArch64 invocation labels (non-MCS) ---- */
+#define LBL_PAGE_TABLE_MAP  38
+#define LBL_PAGE_MAP        40
+#define LBL_PAGE_UNMAP      41
+#define LBL_ASID_MAKE_POOL  47
+#define LBL_ASID_ASSIGN     48
+
+/* ---- fixed root-CNode capabilities ---- */
+#define CAP_ROOT_CNODE   2
+#define CAP_ROOT_VSPACE  3
+#define CAP_ASID_CONTROL 5
+
+/* ---- capability rights / VM attributes for ARMPageMap ---- */
+/* seL4_CapRights: bit0=Write, bit1=Read (seL4_CanRead = 1<<1 = 2). */
+#define RIGHTS_READ            2
+#define RIGHTS_RW              3
+#define ATTR_CACHEABLE         0x01   /* seL4_ARM_PageCacheable */
+#define ATTR_EXECUTE_NEVER     0x04   /* seL4_ARM_ExecuteNever  */
+
+/* Child ELF is linked at 0x400000 (separate VSpace, so no root conflict). */
+#define CHILD_ELF_VA   0x400000
+/* Free VA in the root VSpace used as a scratch slot while filling frames. */
+#define COPY_VA        0xA00000
+#define ELF_CHILD_BADGE 42
+
+/* Embedded child ELF image (obj_child/child.elf, emitted by build_root.sh). */
+extern const u8 child_elf_start[];
+extern const u8 child_elf_end[];
+
+/* ---- ELF64 structures (freestanding; no <elf.h>) ---- */
+struct elf64_ehdr {
+    unsigned char e_ident[16];
+    u16 e_type, e_machine;
+    u32 e_version;
+    u64 e_entry, e_phoff, e_shoff;
+    u32 e_flags;
+    u16 e_ehsize, e_phentsize, e_phnum, e_shentsize, e_shnum, e_shstrndx;
+};
+
+struct elf64_phdr {
+    u32 p_type, p_flags;
+    u64 p_offset, p_vaddr, p_paddr, p_filesz, p_memsz, p_align;
+};
+
+/* Map a page table into `vspace` at `vaddr` (ARMPageTableMap).  The kernel
+ * installs it at the level the page-table walk stops at. */
+static u64 map_page_table(u64 pt_cap, u64 vspace, u64 vaddr)
+{
+    u64 info = (LBL_PAGE_TABLE_MAP << 12) | (1ULL << 7) | 2ULL;
+    set_cap(0, vspace);
+    return info_label(sel4_call(pt_cap, info, vaddr, 0 /* attr ignored */, 0, 0));
+}
+
+/* Map a frame into `vspace` at `vaddr` with `rights` and `attr`. */
+static u64 map_frame(u64 page_cap, u64 vspace, u64 vaddr, u64 rights, u64 attr)
+{
+    u64 info = (LBL_PAGE_MAP << 12) | (1ULL << 7) | 3ULL;
+    set_cap(0, vspace);
+    return info_label(sel4_call(page_cap, info, vaddr, rights, attr, 0));
+}
+
+/* Unmap a frame from whatever VSpace it is mapped in (ARMPageUnmap). */
+static u64 unmap_frame(u64 page_cap)
+{
+    u64 info = (LBL_PAGE_UNMAP << 12) | 0ULL;
+    return info_label(sel4_call(page_cap, info, 0, 0, 0, 0));
+}
+
+/* Create a fresh VSpace: retype a VSpaceObject, carve a 4 KiB untyped, create
+ * an ASID pool from it (ARMASIDControlMakePool) and assign the VSpace an ASID
+ * (ARMASIDPoolAssign).  Returns the VSpace CPtr (a root-CNode slot) or 0. */
+static u64 vspace_new(void)
+{
+    u64 vspace_slot       = next_slot++;
+    u64 asid_pool_slot    = next_slot++;
+    u64 pool_untyped_slot = next_slot++;
+    u64 ram;
+    u64 info;
+    u64 err;
+
+    ram = find_ram_untyped(12 /* seL4_VSpaceBits */);
+    if (ram == (u64)-1) return 0;
+    mark_untyped_used(ram);
+    if (retype_object(ram, CAP_ROOT_CNODE, vspace_slot, OBJ_VSPACE, 12) != 0) return 0;
+
+    ram = find_ram_untyped(12 /* seL4_ASIDPoolBits */);
+    if (ram == (u64)-1) return 0;
+    mark_untyped_used(ram);
+    if (retype_object(ram, CAP_ROOT_CNODE, pool_untyped_slot, OBJ_UNTYPED, 12) != 0) return 0;
+
+    /* ARMASIDControlMakePool: EC[0]=untyped, EC[1]=root CNode. */
+    info = (LBL_ASID_MAKE_POOL << 12) | (2ULL << 7) | 2ULL;
+    set_cap(0, pool_untyped_slot);
+    set_cap(1, CAP_ROOT_CNODE);
+    err = info_label(sel4_call(CAP_ASID_CONTROL, info, asid_pool_slot,
+                               ROOT_CNODE_DEPTH, 0, 0));
+    if (err != 0) return 0;
+
+    /* ARMASIDPoolAssign: EC[0]=vspace. */
+    info = (LBL_ASID_ASSIGN << 12) | (1ULL << 7) | 0ULL;
+    set_cap(0, vspace_slot);
+    err = info_label(sel4_call(asid_pool_slot, info, 0, 0, 0, 0));
+    if (err != 0) return 0;
+
+    return vspace_slot;
+}
+
+/* Load one PT_LOAD segment into the child VSpace: retype a 4 KiB frame per
+ * page, fill it via a temporary root-VSpace mapping (COPY_VA), then map it at
+ * its final VA with the right permissions (PF_X -> RX, else RW+NX). */
+static u64 elf_load_segment(u64 vspace, u64 seg_untyped, const u8 *img,
+                            const struct elf64_phdr *ph)
+{
+    u64 vstart = ph->p_vaddr & ~0xfffULL;
+    u64 vend   = (ph->p_vaddr + ph->p_memsz + 0xfffULL) & ~0xfffULL;
+    u64 rights = (ph->p_flags & 1 /* PF_X */) ? RIGHTS_READ : RIGHTS_RW;
+    u64 attr   = (ph->p_flags & 1 /* PF_X */) ? ATTR_CACHEABLE
+                                              : (ATTR_CACHEABLE | ATTR_EXECUTE_NEVER);
+    u64 va;
+
+    for (va = vstart; va < vend; va += 0x1000) {
+        u64 frame_slot = next_slot++;
+        u64 off_in_seg = va - ph->p_vaddr;
+        u64 copy_len = 0;
+        u64 i;
+
+        if (retype_object(seg_untyped, CAP_ROOT_CNODE, frame_slot,
+                          OBJ_SMALL_PAGE, 12) != 0)
+            return 0;
+
+        if (map_frame(frame_slot, CAP_ROOT_VSPACE, COPY_VA, RIGHTS_RW, ATTR_CACHEABLE) != 0)
+            return 0;
+
+        if (off_in_seg < ph->p_filesz) {
+            copy_len = ph->p_filesz - off_in_seg;
+            if (copy_len > 0x1000) copy_len = 0x1000;
+        }
+        for (i = 0; i < copy_len; i++)
+            ((volatile u8 *)COPY_VA)[i] = img[ph->p_offset + off_in_seg + i];
+        for (; i < 0x1000; i++)
+            ((volatile u8 *)COPY_VA)[i] = 0;
+
+        if (unmap_frame(frame_slot) != 0) return 0;
+        if (map_frame(frame_slot, vspace, va, rights, attr) != 0) return 0;
+    }
+    return 1;
+}
+
+/* Full ELF-child test: create a VSpace, load the embedded child ELF, spawn a
+ * TCB with its own CSpace + VSpace, and wait for the child's signal.  Returns
+ * the child's badge (ELF_CHILD_BADGE) on success, 0 on failure. */
+u64 schild_elf_child_test(void)
+{
+    const struct elf64_ehdr *eh = (const struct elf64_ehdr *)child_elf_start;
+    u64 vspace_slot, cnode_slot, ntfn_slot, tcb_slot;
+    u64 pt_untyped, seg_untyped;
+    u64 l2_slot, l1_slot, l0_slot, root_l0_slot;
+    u64 ram;
+    u64 entry;
+    int i;
+
+    /* The net child (same ELF, shared data) switched ipc_buf to its own
+     * CHILD_IPC_BUF_VA; restore the root's IPC buffer before any root syscall. */
+    ipc_buf = bi_word(rt_bootinfo, BI_IPCBUF);
+
+    /* Validate the embedded ELF image. */
+    if (eh->e_ident[0] != 0x7f || eh->e_ident[1] != 'E' ||
+        eh->e_ident[2] != 'L' || eh->e_ident[3] != 'F' ||
+        eh->e_ident[4] != 2 /* ELFCLASS64 */ ||
+        eh->e_ident[5] != 1 /* ELFDATA2LSB */ ||
+        eh->e_type != 2 /* ET_EXEC */ || eh->e_machine != 183 /* EM_AARCH64 */)
+        return 0;
+
+    /* 1. Child VSpace (root page table + ASID). */
+    vspace_slot = vspace_new();
+    if (vspace_slot == 0) return 0;
+
+    /* 2. Page tables: three for the child's code region (L2/L1/L0) plus one L0
+     *    leaf in the ROOT VSpace for the copy scratch.  All four are 4 KiB and
+     *    retyped back-to-back from a single untyped. */
+    pt_untyped = find_ram_untyped(14 /* 4 x 4 KiB */);
+    if (pt_untyped == (u64)-1) return 0;
+    mark_untyped_used(pt_untyped);
+
+    l2_slot      = next_slot++;
+    l1_slot      = next_slot++;
+    l0_slot      = next_slot++;
+    root_l0_slot = next_slot++;
+
+    if (retype_object(pt_untyped, CAP_ROOT_CNODE, l2_slot, OBJ_PAGE_TABLE, 12) != 0) return 0;
+    if (retype_object(pt_untyped, CAP_ROOT_CNODE, l1_slot, OBJ_PAGE_TABLE, 12) != 0) return 0;
+    if (retype_object(pt_untyped, CAP_ROOT_CNODE, l0_slot, OBJ_PAGE_TABLE, 12) != 0) return 0;
+    if (retype_object(pt_untyped, CAP_ROOT_CNODE, root_l0_slot, OBJ_PAGE_TABLE, 12) != 0) return 0;
+
+    /* Child VSpace: root -> L2 -> L1 -> L0 leaf for the 2 MiB code region. */
+    if (map_page_table(l2_slot, vspace_slot, CHILD_ELF_VA) != 0) return 0;
+    if (map_page_table(l1_slot, vspace_slot, CHILD_ELF_VA) != 0) return 0;
+    if (map_page_table(l0_slot, vspace_slot, CHILD_ELF_VA) != 0) return 0;
+
+    /* Root VSpace: an L0 leaf at COPY_VA (its L2/L1 already exist from boot). */
+    if (map_page_table(root_l0_slot, CAP_ROOT_VSPACE, COPY_VA) != 0) return 0;
+
+    /* 3. Load the child ELF's PT_LOAD segments into the child VSpace. */
+    seg_untyped = find_ram_untyped(15 /* >= 32 KiB: 5 pages for the tiny child */);
+    if (seg_untyped == (u64)-1) return 0;
+    mark_untyped_used(seg_untyped);
+
+    entry = eh->e_entry;
+    for (i = 0; i < eh->e_phnum; i++) {
+        const struct elf64_phdr *ph = (const struct elf64_phdr *)
+            (child_elf_start + eh->e_phoff + (u64)i * eh->e_phentsize);
+        if (ph->p_type != 1 /* PT_LOAD */) continue;
+        if (!elf_load_segment(vspace_slot, seg_untyped, child_elf_start, ph)) return 0;
+    }
+
+    /* 4. Child CSpace: 16-slot CNode with a badged result notification at 0. */
+    cnode_slot = next_slot++;
+    ntfn_slot  = next_slot++;
+    tcb_slot   = next_slot++;
+
+    ram = find_ram_untyped(9 /* radix 4 CNode = 2^(4+5) = 512 B */);
+    if (ram == (u64)-1) return 0;
+    mark_untyped_used(ram);
+    if (retype_cnode(ram, cnode_slot, 4 /* radix: 16 slots */) != 0) return 0;
+
+    ram = find_ram_untyped(5);
+    if (ram == (u64)-1) return 0;
+    mark_untyped_used(ram);
+    if (retype_notification(ram, ntfn_slot) != 0) return 0;
+
+    if (sel4_cnode_mint(cnode_slot, 0, 4,
+                        CAP_ROOT_CNODE, ntfn_slot, ROOT_CNODE_DEPTH,
+                        3 /* ReadWrite */, ELF_CHILD_BADGE) != 0) return 0;
+
+    /* 5. Child TCB: own CSpace + own VSpace, entry = ELF entry point. */
+    ram = find_ram_untyped(11);
+    if (ram == (u64)-1) return 0;
+    mark_untyped_used(ram);
+    if (retype_tcb(ram, tcb_slot) != 0) return 0;
+
+    if (sel4_tcb_configure(tcb_slot, 0 /* fault_ep */, cnode_slot, 0,
+                           vspace_slot, 0, 0 /* buffer */, 0 /* bufferFrame */) != 0)
+        return 0;
+    if (sel4_tcb_write_registers(tcb_slot, entry, 0 /* sp set by child entry */) != 0)
+        return 0;
+
+    /* 6. Wait for the child's signal and return its badge. */
+    return sel4_wait(ntfn_slot);
+}
+
