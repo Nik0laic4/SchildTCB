@@ -66,6 +66,7 @@ jobs:
 
       - name: Checkout seL4 (sel4test-manifest)
         run: |
+          export TERM=${TERM:-xterm}
           git config --global user.email "ci@schildtcb.invalid"
           git config --global user.name "SchildTCB CI"
           mkdir sel4proj && cd sel4proj
@@ -74,6 +75,7 @@ jobs:
 
       - name: Build seL4 (qemu-arm-virt, aarch64, non-MCS)
         run: |
+          export TERM=${TERM:-xterm}
           cd sel4proj
           mkdir -p build && cd build
           ../griddle --PLATFORM=qemu-arm-virt --SIMULATION=ON --KernelSel4Arch=aarch64
