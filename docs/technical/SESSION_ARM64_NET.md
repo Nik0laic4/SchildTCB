@@ -98,23 +98,19 @@ virtio-net: OK (own VSpace + ELF child)
 Инструменты: `aarch64-linux-gnu-gcc-14`/`gnatmake-14`/`ld`/`strip`, `qemu-system-aarch64`, `ninja`/`cmake`, `dtc`. Проект seL4 — `/home/null/sel4proj` (уже собран, `griddle` для `qemu-arm-virt`, aarch64, non-MCS).
 
 ```bash
-# 1. Собрать ELF root-задачи (Ada + C)
-cd src/schild_core/arm64/ada && ./build_root.sh
-
-# 2. Внедрить как rootserver и пересобрать elfloader
-aarch64-linux-gnu-strip -o /home/null/sel4proj/build/elfloader/rootserver root_task.elf
-cd /home/null/sel4proj/build && ninja
-
-# 3. Прогнать полный тест (харнесс: host HTTP 8080 + hostfwd TCP 8081 + DNS)
-python3 /tmp/run_net_test.py
+# Один скрипт делает всё: сборка -> inject -> ninja -> QEMU -> проверка маркера.
+cd src/schild_core/arm64/ada && python3 run_net_test.py          # полный цикл
+python3 run_net_test.py --skip-build                             # только запуск (уже собрано)
+python3 run_net_test.py --sel4-build-dir /path/to/sel4proj/build # свой путь к seL4
 ```
 
-Харнесс `/tmp/run_net_test.py` (не в репозитории — воссоздать):
+Харнесс `run_net_test.py` (в репозитории, рядом с `build_root.sh`):
 - HTTP-сервер на `127.0.0.1:8080` (отдаёт `SchildTCB-body` одним сегментом).
 - TCP-клиент на `127.0.0.1:8081` (hostfwd) с задержкой ~5 c.
-- QEMU: `-M virt,gic-version=2 -cpu cortex-a53 -m 2G -netdev user,id=n0,hostfwd=tcp::8081-:8081 -device virtio-net-device,netdev=n0,mac=52:54:00:12:34:56 -kernel images/sel4test-driver-image-arm-qemu-arm-virt`, serial → файл.
+- QEMU: `-M virt,gic-version=2 -cpu cortex-a53 -m 2G -netdev user,id=n0,hostfwd=tcp::8081-:8081 -device virtio-net-device,netdev=n0,mac=52:54:00:12:34:56 -kernel images/sel4test-driver-image-arm-qemu-arm-virt`, serial → `/tmp/serial.log`.
+- Полинг маркера успеха `virtio-net: OK` → ранний выход (~5 c) + exit 0/1.
 
-Ожидаемый маркер успеха: `virtio-net DNS: OK (child)`.
+Ожидаемый маркер успеха: `virtio-net: OK (own VSpace + ELF child)`.
 
 ### Среда
 
