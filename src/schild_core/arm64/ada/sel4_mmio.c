@@ -26,6 +26,8 @@
 extern u64 rt_bootinfo;      /* saved by root_start.S */
 static u64 ipc_buf;          /* BootInfo.ipcBuffer */
 static u64 next_slot;        /* next free CNode slot for retype targets */
+static u64 dev_page_cap;     /* device MMIO large-page cap (root CNode slot) */
+static u64 dma_page_cap;     /* DMA large-page cap (root CNode slot) */
 
 /* ---- IPC buffer helpers ---- */
 static inline void set_mr(int n, u64 v)  { ((volatile u64 *)ipc_buf)[1 + n]   = v; }
@@ -314,6 +316,7 @@ u64 schild_map_mmio(u64 phys, u64 vaddr)
             u64 target = next_slot++;
             if (retype_large_page(slot, target) != 0) return 0;
             if (map_page(target, vaddr) != 0) return 0;
+            dev_page_cap = target;
             return vaddr + (phys - paddr);
         }
     }
@@ -430,6 +433,7 @@ static u64 alloc_dma_2m(u64 vaddr)
         mark_untyped_used(slot);
         if (retype_large_page(slot, target) != 0) return 0;
         if (map_page(target, vaddr) != 0) return 0;
+        dma_page_cap = target;
         return paddr;
     }
 }
@@ -1198,6 +1202,211 @@ u64 schild_elf_child_test(void)
         return 0;
 
     /* 6. Wait for the child's signal and return its badge. */
+    return sel4_wait(ntfn_slot);
+}
+
+/* =============================================================================
+ * Net child as a real process (separate VSpace + ELF).
+ *
+ * The root brings the device up (MMIO/DMA/queues/DRIVER_OK) in its OWN VSpace,
+ * then hands the device + DMA frame to a child process that runs in a separate
+ * VSpace.  The child ELF is built from the same driver + protocol sources, so
+ * the child re-attaches to the already-initialised device from a fixed layout
+ * and runs the protocol stack end-to-end.
+ *
+ * Handoff layout (fixed; mirrored by the root and the child entry):
+ *   device MMIO  0x200000 (large page, uncached)   -> registers at 0x203e00
+ *   DMA frame    0x600000 (large page, uncached)
+ *   child IPC    0x900000 (4 KiB, cacheable)
+ *   child CSpace: 0=self CNode, 1=RAM untyped, 2=IRQ handler, 3=VSpace,
+ *                 4=result ntfn (badge 42), 5..8=IRQ retype targets.
+ * ============================================================================= */
+
+/* Child-side entry: run in the child's own VSpace + CSpace.  The root already
+ * brought the device up and mapped device + DMA + IPC into this VSpace; we only
+ * re-attach the driver state, set up the IRQ path, run the protocol and signal
+ * the result. */
+void schild_net_elf_child_main(void)
+{
+    struct irq_ctx ctx;
+    u64 result = 0;
+
+    ipc_buf = CHILD_IPC_BUF_VA;
+
+    net_regs = (volatile u32 *)0x203e00;
+    net_dma  = (volatile u8  *)0x600000;
+
+    net_rx_desc  = (volatile struct vring_desc *)(net_dma + 0);
+    net_rx_avail = (volatile struct vring_avail *)(net_dma + vring_avail_off(VQ_NUM));
+    net_rx_used  = (volatile struct vring_used *)(net_dma + vring_used_off(VQ_NUM));
+    net_tx_desc  = (volatile struct vring_desc *)(net_dma + TX_QUEUE_BASE);
+    net_tx_avail = (volatile struct vring_avail *)(net_dma + TX_QUEUE_BASE + vring_avail_off(VQ_NUM));
+    net_tx_used  = (volatile struct vring_used *)(net_dma + TX_QUEUE_BASE + vring_used_off(VQ_NUM));
+
+    /* The DMA physical base was written into RX descriptor 0 by the root. */
+    net_dma_pa = net_rx_desc[0].addr - RX_BUF_BASE;
+
+    net_rx_last_used = 0;
+    net_tx_last_used = 0;
+    net_tx_next      = 0;
+    net_rx_cur       = -1;
+
+    ctx.cnode       = 0;
+    ctx.cnode_depth = NET_CHILD_CNODE_RADIX;
+    ctx.vspace      = 3;
+    ctx.ram         = 1;
+    ctx.irq_handler = 2;
+    ctx.slot_base   = 5;
+
+    if (virtio_net_init_irq(&ctx))
+        result = schild_virtio_net_run_test();
+
+    (void)result;
+    sel4_signal(4);   /* result notification */
+    for (;;) { }
+}
+
+/* Root-side: bring the device up in the root VSpace, then hand device + DMA to
+ * a child process in its own VSpace, load the child ELF, grant the CSpace caps
+ * and wait for the child's result.  Returns the child's badge (42) on success,
+ * 0 on failure. */
+u64 schild_net_elf_child_test(void)
+{
+    const struct elf64_ehdr *eh = (const struct elf64_ehdr *)child_elf_start;
+    u64 vspace_slot, cnode_slot, ntfn_slot, tcb_slot;
+    u64 irq_handler_slot;
+    u64 pt_untyped, seg_untyped;
+    u64 l2_slot, l1_slot, l0_code_slot, l0_ipc_slot, root_l0_slot;
+    u64 ipc_frame_slot;
+    u64 ram;
+    u64 entry;
+    int i;
+
+    ipc_buf = bi_word(rt_bootinfo, BI_IPCBUF);
+
+    if (eh->e_ident[0] != 0x7f || eh->e_ident[1] != 'E' ||
+        eh->e_ident[2] != 'L' || eh->e_ident[3] != 'F' ||
+        eh->e_ident[4] != 2 /* ELFCLASS64 */ ||
+        eh->e_ident[5] != 1 /* ELFDATA2LSB */ ||
+        eh->e_type != 2 /* ET_EXEC */ || eh->e_machine != 183 /* EM_AARCH64 */)
+        return 0;
+
+    /* 1. Bring the device up in the ROOT VSpace (MMIO + DMA + queues). */
+    if (!virtio_net_init_device()) return 0;
+
+    /* 2. Child VSpace (root page table + ASID). */
+    vspace_slot = vspace_new();
+    if (vspace_slot == 0) return 0;
+
+    /* 3. Page tables: L2 + L1 (shared across the low region) + two L0 leaves
+     *    (code @0x400000, IPC @0x900000) in the child VSpace, plus an L0 at
+     *    COPY_VA in the root VSpace for the segment-copy scratch. */
+    pt_untyped = find_ram_untyped(15 /* 5 x 4 KiB */);
+    if (pt_untyped == (u64)-1) return 0;
+    mark_untyped_used(pt_untyped);
+
+    l2_slot      = next_slot++;
+    l1_slot      = next_slot++;
+    l0_code_slot = next_slot++;
+    l0_ipc_slot  = next_slot++;
+    root_l0_slot = next_slot++;
+
+    if (retype_object(pt_untyped, CAP_ROOT_CNODE, l2_slot, OBJ_PAGE_TABLE, 12) != 0) return 0;
+    if (retype_object(pt_untyped, CAP_ROOT_CNODE, l1_slot, OBJ_PAGE_TABLE, 12) != 0) return 0;
+    if (retype_object(pt_untyped, CAP_ROOT_CNODE, l0_code_slot, OBJ_PAGE_TABLE, 12) != 0) return 0;
+    if (retype_object(pt_untyped, CAP_ROOT_CNODE, l0_ipc_slot, OBJ_PAGE_TABLE, 12) != 0) return 0;
+    if (retype_object(pt_untyped, CAP_ROOT_CNODE, root_l0_slot, OBJ_PAGE_TABLE, 12) != 0) return 0;
+
+    /* Child VSpace: L2 + L1, then the two L0 leaves. */
+    if (map_page_table(l2_slot, vspace_slot, CHILD_ELF_VA) != 0) return 0;
+    if (map_page_table(l1_slot, vspace_slot, CHILD_ELF_VA) != 0) return 0;
+    if (map_page_table(l0_code_slot, vspace_slot, CHILD_ELF_VA) != 0) return 0;
+    if (map_page_table(l0_ipc_slot, vspace_slot, CHILD_IPC_BUF_VA) != 0) return 0;
+
+    /* Root VSpace: L0 at COPY_VA for the segment-copy scratch. */
+    if (map_page_table(root_l0_slot, CAP_ROOT_VSPACE, COPY_VA) != 0) return 0;
+
+    /* 4. Hand the device + DMA frame to the child VSpace (unmap from the root
+     *    VSpace, map into the child VSpace at the same VAs). */
+    if (unmap_frame(dev_page_cap) != 0) return 0;
+    if (map_frame(dev_page_cap, vspace_slot, 0x200000, RIGHTS_RW, 0 /* device, uncached */) != 0) return 0;
+    if (unmap_frame(dma_page_cap) != 0) return 0;
+    if (map_frame(dma_page_cap, vspace_slot, 0x600000, RIGHTS_RW, 0 /* DMA, uncached */) != 0) return 0;
+
+    /* 5. Load the child ELF segments (driver + protocol code). */
+    seg_untyped = find_ram_untyped(17 /* >= 128 KiB */);
+    if (seg_untyped == (u64)-1) return 0;
+    mark_untyped_used(seg_untyped);
+
+    entry = eh->e_entry;
+    for (i = 0; i < eh->e_phnum; i++) {
+        const struct elf64_phdr *ph = (const struct elf64_phdr *)
+            (child_elf_start + eh->e_phoff + (u64)i * eh->e_phentsize);
+        if (ph->p_type != 1 /* PT_LOAD */) continue;
+        if (!elf_load_segment(vspace_slot, seg_untyped, child_elf_start, ph)) return 0;
+    }
+
+    /* 6. Child IPC buffer: a 4 KiB frame at CHILD_IPC_BUF_VA. */
+    ram = find_ram_untyped(12);
+    if (ram == (u64)-1) return 0;
+    mark_untyped_used(ram);
+    ipc_frame_slot = next_slot++;
+    if (retype_object(ram, CAP_ROOT_CNODE, ipc_frame_slot, OBJ_SMALL_PAGE, 12) != 0) return 0;
+    if (map_frame(ipc_frame_slot, vspace_slot, CHILD_IPC_BUF_VA, RIGHTS_RW, ATTR_CACHEABLE) != 0) return 0;
+
+    /* 7. Child CSpace: 16-slot CNode. */
+    cnode_slot = next_slot++;
+    ntfn_slot  = next_slot++;
+    tcb_slot   = next_slot++;
+
+    ram = find_ram_untyped(9 /* radix 4 CNode = 512 B */);
+    if (ram == (u64)-1) return 0;
+    mark_untyped_used(ram);
+    if (retype_cnode(ram, cnode_slot, NET_CHILD_CNODE_RADIX) != 0) return 0;
+
+    /* Slot 0 = self CNode. */
+    if (sel4_cnode_mint(cnode_slot, 0, NET_CHILD_CNODE_RADIX,
+                        CAP_ROOT_CNODE, cnode_slot, ROOT_CNODE_DEPTH, 3, 0) != 0) return 0;
+
+    /* Slot 1 = RAM untyped (for the child's IRQ objects). */
+    ram = find_ram_untyped(12);
+    if (ram == (u64)-1) return 0;
+    mark_untyped_used(ram);
+    if (sel4_cnode_mint(cnode_slot, 1, NET_CHILD_CNODE_RADIX,
+                        CAP_ROOT_CNODE, ram, ROOT_CNODE_DEPTH, 3, 0) != 0) return 0;
+
+    /* Slot 2 = IRQ handler. */
+    irq_handler_slot = next_slot++;
+    if (sel4_irq_control_get(4 /* seL4_CapIRQControl */, VIRTIO_MMIO_IRQ,
+                             irq_handler_slot, ROOT_CNODE_DEPTH) != 0) return 0;
+    if (sel4_cnode_mint(cnode_slot, 2, NET_CHILD_CNODE_RADIX,
+                        CAP_ROOT_CNODE, irq_handler_slot, ROOT_CNODE_DEPTH, 3, 0) != 0) return 0;
+
+    /* Slot 3 = the child's own VSpace. */
+    if (sel4_cnode_mint(cnode_slot, 3, NET_CHILD_CNODE_RADIX,
+                        CAP_ROOT_CNODE, vspace_slot, ROOT_CNODE_DEPTH, 3, 0) != 0) return 0;
+
+    /* Slot 4 = result notification (badged 42). */
+    ram = find_ram_untyped(5);
+    if (ram == (u64)-1) return 0;
+    mark_untyped_used(ram);
+    if (retype_notification(ram, ntfn_slot) != 0) return 0;
+    if (sel4_cnode_mint(cnode_slot, 4, NET_CHILD_CNODE_RADIX,
+                        CAP_ROOT_CNODE, ntfn_slot, ROOT_CNODE_DEPTH, 3, CHILD_BADGE) != 0) return 0;
+
+    /* 8. Child TCB: own CSpace + own VSpace + IPC buffer, entry = ELF entry. */
+    ram = find_ram_untyped(11);
+    if (ram == (u64)-1) return 0;
+    mark_untyped_used(ram);
+    if (retype_tcb(ram, tcb_slot) != 0) return 0;
+
+    if (sel4_tcb_configure(tcb_slot, 0 /* fault_ep */, cnode_slot, 0,
+                           vspace_slot, 0, CHILD_IPC_BUF_VA, ipc_frame_slot) != 0)
+        return 0;
+    if (sel4_tcb_write_registers(tcb_slot, entry, 0 /* sp set by child entry */) != 0)
+        return 0;
+
+    /* 9. Wait for the child's result and return its badge. */
     return sel4_wait(ntfn_slot);
 }
 

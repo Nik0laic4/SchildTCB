@@ -1,17 +1,19 @@
 /* Copyright (C) 2026 Alexander Irganov
  * SPDX-License-Identifier: GPL-2.0-only
  *
- * Schild TCB -- child-process entry point (separate VSpace demo).
+ * Schild TCB -- child-process entry point (separate VSpace).
  *
  * The child runs in its own VSpace and CSpace.  It sets up its stack (in its
- * own .bss, mapped read-write by the ELF loader) and calls child_main().
+ * own .bss, mapped read-write by the ELF loader) and calls the driver entry
+ * schild_net_elf_child_main(), which re-attaches to the device the root
+ * initialized and runs the protocol stack.
  */
 .section .text
 .globl _child_start
 _child_start:
     adrp x0, child_stack_top
     add  sp, x0, :lo12:child_stack_top
-    bl   child_main
+    bl   schild_net_elf_child_main
 1:  wfe
     b    1b
 
