@@ -6,6 +6,15 @@
 > *pending* or *target* have not yet been validated. Formal-verification
 > coverage is stated per-module, never as an aggregate percentage.
 
+## v1.0.0-pre (2026-10-24) — AArch64: virtio-net driver in an isolated child domain
+
+**Validated: the driver IRQ path + protocol stack run in a child TCB with its own CSpace (16-slot CNode: self CNode + RAM untyped + IRQ handler + VSpace + result notification), sharing the device MMIO/DMA/queues initialized by the root; the child reports its result via a cross-domain notification (`virtio-net DNS: OK (child)`, `[irq] 31–49`).**
+
+- `sel4_mmio.c`: split `virtio_net_init` into `virtio_net_init_device` (MMIO/DMA/queues/DRIVER_OK) + parameterized `virtio_net_init_irq(struct irq_ctx *)` (IRQ notification + waiter TCB in a given CSpace context).  Added `schild_spawn_net_child` (grants self CNode, RAM untyped, IRQ handler, VSpace, result notification) and `schild_net_child_main` (child entry: IRQ init + test + signal).
+- `net_test.c`: split `schild_virtio_net_test` into `schild_virtio_net_run_test` (protocol only) + a wrapper.
+- Child CSpace isolation: the child can only invoke caps in its 16-slot CNode (shared VSpace for now).  The child uses its own IPC buffer (within its 2 MiB stack page).
+
+
 ## v1.0.0-pre (2026-10-24) — AArch64: child-domain isolation demo (own CSpace + cross-domain signal)
 
 **Validated: the root task spawns a child TCB with its OWN CSpace (a fresh 8-slot CNode containing only a badged result notification) and a shared VSpace; the child signals its slot 0 and the root observes badge 42 (`child round-trip: OK`, `[child] 42`).**

@@ -378,12 +378,10 @@ static int parse_dns_reply(const volatile u8 *rxpkt, u8 *ip)
  *   7 = DNS ok, 6 = TCP server ok (no DNS), 5 = HTTP ok (no server),
  *   4 = DHCP ok (no TCP), 3 = ping ok (no DHCP), 2 = ARP ok (no ICMP),
  *   1 = TX ok, 0 = error. */
-u64 schild_virtio_net_test(void)
+u64 schild_virtio_net_run_test(void)
 {
     u8 gw_mac[6];
     u8 offered_ip[4];
-
-    if (!virtio_net_init()) return 0;
 
     /* ARP: resolve the SLIRP gateway (10.0.2.2). */
     {
@@ -584,6 +582,13 @@ u64 schild_virtio_net_test(void)
     schild_sel4_debug_putchar('\n');
 
     return 7;
+}
+
+/* Full net test (root task): init + run. */
+u64 schild_virtio_net_test(void)
+{
+    if (!virtio_net_init()) return 0;
+    return schild_virtio_net_run_test();
 }
 
 extern int schild_spawn_child(void);

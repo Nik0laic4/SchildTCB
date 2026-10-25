@@ -258,6 +258,35 @@ static u64 retype_cnode(u64 untyped_cap, u64 target_slot, u32 radix)
     return info_label(sel4_call(untyped_cap, info, 4 /* CapTableObject */, radix, 0, 0));
 }
 
+/* Retype `num` objects of `type`/`size_bits` from `untyped`, placing the cap(s)
+ * at `target_slot` of `cnode`. */
+static u64 retype_object(u64 untyped, u64 cnode, u64 target_slot, u64 type, u64 size_bits)
+{
+    u64 info = (1ULL << 12) | (1ULL << 7) | 6ULL;  /* UntypedRetype: label=1, extraCaps=1, len=6 */
+    set_cap(0, cnode);
+    set_mr(4, target_slot);
+    set_mr(5, 1);
+    return info_label(sel4_call(untyped, info, type, size_bits, 0, 0));
+}
+
+/* Map a page into `vspace` at `vaddr`. */
+static u64 map_page_ctx(u64 page_cap, u64 vaddr, u64 vspace)
+{
+    u64 info = (40ULL << 12) | (1ULL << 7) | 3ULL; /* ARMPageMap: label=40, extraCaps=1, len=3 */
+    set_cap(0, vspace);
+    return info_label(sel4_call(page_cap, info, vaddr, 3, 0, 0));
+}
+
+/* CSpace context for the IRQ path (populated per domain). */
+struct irq_ctx {
+    u64 cnode;        /* CNode cap (retype/mint + waiter cspace_root) */
+    u64 cnode_depth;  /* depth to address a slot in cnode */
+    u64 vspace;       /* VSpace cap (waiter vspace_root) */
+    u64 ram;          /* RAM untyped cap */
+    u64 irq_handler;  /* IRQ handler cap */
+    u64 slot_base;    /* first retype target slot in cnode */
+};
+
 /* Map the physical device region at `phys` into the VSpace at `vaddr`.
  * Returns `vaddr` on success, 0 on failure. */
 u64 schild_map_mmio(u64 phys, u64 vaddr)
@@ -581,9 +610,9 @@ void virtio_net_tx_send(u32 len)
     net_tx_next = (u16)((d + 1) % VQ_NUM);
 }
 
-/* Reset + feature negotiation + queue setup + RX pool + IRQ path.  Returns 1
- * on success. */
-int virtio_net_init(void)
+/* Bring up the device: reset, features, DMA frame, queues, RX pool, DRIVER_OK.
+ * Sets net_regs/net_dma/net_dma_pa + ring state.  Returns 1 on success. */
+int virtio_net_init_device(void)
 {
     u64 dma_pa;
     volatile u8 *dma;
@@ -592,77 +621,31 @@ int virtio_net_init(void)
     net_regs = get_dev_regs();
     if (net_regs == 0 || net_regs[0] != 0x74726976u) return 0;
 
-    /* Reset + ACKNOWLEDGE + DRIVER + FEATURES_OK. */
     mmio32w(net_regs, VMMIO_STATUS, 0);
     mmio32w(net_regs, VMMIO_STATUS, VIRTIO_STATUS_ACKNOWLEDGE);
     mmio32w(net_regs, VMMIO_STATUS, VIRTIO_STATUS_ACKNOWLEDGE | VIRTIO_STATUS_DRIVER);
-    mmio32w(net_regs, 0x024, 0);                 /* DriverFeaturesSel = page 0 */
-    mmio32w(net_regs, VMMIO_DRIVER_FEATURES, 1u << 5);  /* accept VIRTIO_NET_F_MAC */
+    mmio32w(net_regs, 0x024, 0);
+    mmio32w(net_regs, VMMIO_DRIVER_FEATURES, 1u << 5);
     mmio32w(net_regs, VMMIO_STATUS,
             VIRTIO_STATUS_ACKNOWLEDGE | VIRTIO_STATUS_DRIVER | VIRTIO_STATUS_FEATURES_OK);
-    mmio32w(net_regs, 0x028, 4096);   /* GuestPageSize (legacy) */
+    mmio32w(net_regs, 0x028, 4096);
 
-    /* Allocate a 2 MiB DMA frame. */
     dma_pa = alloc_dma_2m(0x600000ULL);
     if (dma_pa == 0) return 0;
     dma = (volatile u8 *)0x600000ULL;
     net_dma = dma;
     net_dma_pa = dma_pa;
 
-    /* Set up the virtio IRQ -> seL4 Notification path. */
-    {
-        u64 ntfn_slot = next_slot++;
-        u64 badged_slot = next_slot++;
-        u64 irq_handler_slot = next_slot++;
-        u64 ram = find_ram_untyped(5);
-        if (ram == (u64)-1) return 0;
-        mark_untyped_used(ram);
-        if (retype_notification(ram, ntfn_slot) != 0) return 0;
-        if (sel4_cnode_mint(2 /* root CNode */, badged_slot, ROOT_CNODE_DEPTH,
-                            2 /* root CNode */, ntfn_slot, ROOT_CNODE_DEPTH,
-                            3 /* ReadWrite */, VIRTIO_MMIO_IRQ) != 0) return 0;
-        if (sel4_irq_control_get(4 /* seL4_CapIRQControl */, VIRTIO_MMIO_IRQ, irq_handler_slot, ROOT_CNODE_DEPTH) != 0) return 0;
-        if (sel4_irq_handler_set_ntfn(irq_handler_slot, badged_slot) != 0) return 0;
-        net_irq_ntfn = badged_slot;
-        net_irq_handler = irq_handler_slot;
-    }
-
-    /* Second notification: the waiter signals it to wake the main thread. */
-    {
-        u64 main_ntfn_slot = next_slot++;
-        u64 ram = find_ram_untyped(5);
-        if (ram == (u64)-1) return 0;
-        mark_untyped_used(ram);
-        if (retype_notification(ram, main_ntfn_slot) != 0) return 0;
-        net_main_ntfn = main_ntfn_slot;
-    }
-
-    /* Waiter thread: blocks on the IRQ notification and forwards IRQs. */
-    {
-        u64 tcb_slot = next_slot++;
-        u64 ram = find_ram_untyped(11);
-        if (ram == (u64)-1) return 0;
-        mark_untyped_used(ram);
-        if (retype_tcb(ram, tcb_slot) != 0) return 0;
-        if (sel4_tcb_configure(tcb_slot, 0 /* fault_ep */, 2 /* cspace_root */, 0,
-                              3 /* vspace_root */, 0, 0 /* buffer */, 0 /* bufferFrame */) != 0) return 0;
-        if (sel4_tcb_write_registers(tcb_slot, (u64)irq_waiter,
-                                     (u64)net_dma + WAITER_STACK_OFF + WAITER_STACK_SIZE) != 0) return 0;
-    }
-
-    /* RX queue (index 0) at DMA offset 0. */
     setup_queue(net_regs, 0, dma_pa, VQ_NUM);
     net_rx_desc  = (volatile struct vring_desc *)(dma + 0);
     net_rx_avail = (volatile struct vring_avail *)(dma + vring_avail_off(VQ_NUM));
     net_rx_used  = (volatile struct vring_used *)(dma + vring_used_off(VQ_NUM));
 
-    /* TX queue (index 1) at DMA offset TX_QUEUE_BASE. */
     setup_queue(net_regs, 1, dma_pa + TX_QUEUE_BASE, VQ_NUM);
     net_tx_desc  = (volatile struct vring_desc *)(dma + TX_QUEUE_BASE);
     net_tx_avail = (volatile struct vring_avail *)(dma + TX_QUEUE_BASE + vring_avail_off(VQ_NUM));
     net_tx_used  = (volatile struct vring_used *)(dma + TX_QUEUE_BASE + vring_used_off(VQ_NUM));
 
-    /* Fresh ring headers (the DMA frame is not pre-zeroed). */
     net_rx_avail->flags = 0;
     net_rx_avail->idx   = 0;
     net_rx_used->flags  = 0;
@@ -672,11 +655,10 @@ int virtio_net_init(void)
     net_tx_used->flags  = 0;
     net_tx_used->idx    = 0;
 
-    /* RX pool: one WRITE descriptor per buffer, all posted up front. */
     for (i = 0; i < VQ_NUM; i++) {
         net_rx_desc[i].addr  = dma_pa + RX_BUF_BASE + (u64)i * RX_BUF_STRIDE;
         net_rx_desc[i].len   = NET_BUF_LEN;
-        net_rx_desc[i].flags = 2;   /* WRITE */
+        net_rx_desc[i].flags = 2;
         net_rx_desc[i].next  = 0;
         rx_post((u16)i);
     }
@@ -686,10 +668,67 @@ int virtio_net_init(void)
     net_tx_last_used = 0;
     net_tx_next      = 0;
 
-    /* DRIVER_OK. */
     mmio32w(net_regs, VMMIO_STATUS,
             VIRTIO_STATUS_ACKNOWLEDGE | VIRTIO_STATUS_DRIVER |
             VIRTIO_STATUS_FEATURES_OK | VIRTIO_STATUS_DRIVER_OK);
+
+    return 1;
+}
+
+/* Set up the IRQ path (notification + waiter TCB) in the given CSpace context.
+ * Retypes notification x2 + TCB from `c->ram`.  Returns 1 on success. */
+static int virtio_net_init_irq(const struct irq_ctx *c)
+{
+    u64 ntfn_slot      = c->slot_base;
+    u64 badged_slot    = c->slot_base + 1;
+    u64 main_ntfn_slot = c->slot_base + 2;
+    u64 tcb_slot       = c->slot_base + 3;
+
+    if (retype_object(c->ram, c->cnode, ntfn_slot, 3 /* NotificationObject */, 5) != 0) return 0;
+    if (sel4_cnode_mint(c->cnode, badged_slot, c->cnode_depth,
+                        c->cnode, ntfn_slot, c->cnode_depth,
+                        3 /* ReadWrite */, VIRTIO_MMIO_IRQ) != 0) return 0;
+    if (sel4_irq_handler_set_ntfn(c->irq_handler, badged_slot) != 0) return 0;
+    net_irq_ntfn = badged_slot;
+    net_irq_handler = c->irq_handler;
+
+    if (retype_object(c->ram, c->cnode, main_ntfn_slot, 3, 5) != 0) return 0;
+    net_main_ntfn = main_ntfn_slot;
+
+    if (retype_object(c->ram, c->cnode, tcb_slot, 1 /* TCBObject */, 11) != 0) return 0;
+    if (sel4_tcb_configure(tcb_slot, 0 /* fault_ep */, c->cnode, 0,
+                           c->vspace, 0, 0 /* buffer */, 0 /* bufferFrame */) != 0) return 0;
+    if (sel4_tcb_write_registers(tcb_slot, (u64)irq_waiter,
+                                 (u64)net_dma + WAITER_STACK_OFF + WAITER_STACK_SIZE) != 0) return 0;
+
+    return 1;
+}
+
+/* Full init (device + IRQ) in the root task's CSpace. */
+int virtio_net_init(void)
+{
+    u64 ram;
+    u64 irq_handler_slot;
+    struct irq_ctx ctx;
+
+    if (!virtio_net_init_device()) return 0;
+
+    ram = find_ram_untyped(12);   /* >= 4 KiB: notification x2 + TCB */
+    if (ram == (u64)-1) return 0;
+    mark_untyped_used(ram);
+
+    irq_handler_slot = next_slot++;
+    if (sel4_irq_control_get(4 /* seL4_CapIRQControl */, VIRTIO_MMIO_IRQ,
+                             irq_handler_slot, ROOT_CNODE_DEPTH) != 0) return 0;
+
+    ctx.cnode = 2;
+    ctx.cnode_depth = ROOT_CNODE_DEPTH;
+    ctx.vspace = 3;
+    ctx.ram = ram;
+    ctx.irq_handler = irq_handler_slot;
+    ctx.slot_base = next_slot;
+    if (!virtio_net_init_irq(&ctx)) return 0;
+    next_slot = ctx.slot_base + 4;
 
     return 1;
 }
@@ -771,5 +810,118 @@ int schild_spawn_child(void)
 u64 schild_child_wait(void)
 {
     return sel4_wait(child_result_ntfn);
+}
+
+/* =============================================================================
+ * Net child: a child TCB with its own CSpace runs the driver IRQ path + the
+ * protocol test, sharing the device (MMIO/DMA/queues) already initialized by
+ * the root via virtio_net_init_device().
+ *
+ * Child CSpace (16 slots, radix 4):
+ *   0 = self CNode cap, 1 = RAM untyped, 2 = IRQ handler, 3 = VSpace,
+ *   4 = result notification (badge 42), 5..8 = IRQ-path retype targets.
+ * ============================================================================= */
+
+#define NET_CHILD_CNODE_RADIX 4   /* 16 slots */
+#define CHILD_IPC_BUF_VA     0x900000  /* child IPC buffer (within stack page) */
+
+extern u64 schild_virtio_net_run_test(void);
+
+static u64 child_test_result;
+
+static void __attribute__((noreturn)) schild_net_child_main(void)
+{
+    struct irq_ctx ctx;
+    u64 result = 0;
+
+    /* The child's syscalls use its own IPC buffer (not the root's). */
+    ipc_buf = CHILD_IPC_BUF_VA;
+
+    ctx.cnode = 0;       /* self CNode */
+    ctx.cnode_depth = NET_CHILD_CNODE_RADIX;
+    ctx.vspace = 3;      /* VSpace */
+    ctx.ram = 1;         /* RAM untyped */
+    ctx.irq_handler = 2; /* IRQ handler */
+    ctx.slot_base = 5;   /* IRQ ntfn(5), badged(6), main ntfn(7), TCB(8) */
+
+    if (virtio_net_init_irq(&ctx))
+        result = schild_virtio_net_run_test();
+
+    child_test_result = result;
+    sel4_signal(4);   /* result notification */
+    for (;;) { }
+}
+
+int schild_spawn_net_child(void)
+{
+    u64 cnode_slot = next_slot++;
+    u64 irq_handler_slot = next_slot++;
+    u64 ntfn_slot = next_slot++;
+    u64 stack_slot = next_slot++;
+    u64 tcb_slot = next_slot++;
+    u64 ram;
+
+    /* Child CNode (16 slots). */
+    ram = find_ram_untyped(8);
+    if (ram == (u64)-1) return 0;
+    mark_untyped_used(ram);
+    if (retype_cnode(ram, cnode_slot, NET_CHILD_CNODE_RADIX) != 0) return 0;
+
+    /* Mint the child CNode into its own slot 0 (self CNode cap). */
+    if (sel4_cnode_mint(cnode_slot, 0, NET_CHILD_CNODE_RADIX,
+                        2, cnode_slot, ROOT_CNODE_DEPTH, 3, 0) != 0) return 0;
+
+    /* RAM untyped -> child slot 1 (for the child's IRQ objects). */
+    ram = find_ram_untyped(12);
+    if (ram == (u64)-1) return 0;
+    mark_untyped_used(ram);
+    if (sel4_cnode_mint(cnode_slot, 1, NET_CHILD_CNODE_RADIX,
+                        2, ram, ROOT_CNODE_DEPTH, 3, 0) != 0) return 0;
+
+    /* IRQ handler -> child slot 2. */
+    if (sel4_irq_control_get(4, VIRTIO_MMIO_IRQ, irq_handler_slot, ROOT_CNODE_DEPTH) != 0) return 0;
+    if (sel4_cnode_mint(cnode_slot, 2, NET_CHILD_CNODE_RADIX,
+                        2, irq_handler_slot, ROOT_CNODE_DEPTH, 3, 0) != 0) return 0;
+
+    /* VSpace -> child slot 3. */
+    if (sel4_cnode_mint(cnode_slot, 3, NET_CHILD_CNODE_RADIX,
+                        2, 3, ROOT_CNODE_DEPTH, 3, 0) != 0) return 0;
+
+    /* Result notification -> child slot 4 (badge 42). */
+    ram = find_ram_untyped(5);
+    if (ram == (u64)-1) return 0;
+    mark_untyped_used(ram);
+    if (retype_notification(ram, ntfn_slot) != 0) return 0;
+    if (sel4_cnode_mint(cnode_slot, 4, NET_CHILD_CNODE_RADIX,
+                        2, ntfn_slot, ROOT_CNODE_DEPTH, 3, CHILD_BADGE) != 0) return 0;
+    child_result_ntfn = ntfn_slot;
+
+    /* Child stack: a 2 MiB large page at CHILD_STACK_VA (block mapping). */
+    ram = find_ram_untyped(21);
+    if (ram == (u64)-1) return 0;
+    mark_untyped_used(ram);
+    if (retype_large_page(ram, stack_slot) != 0) return 0;
+    if (map_page(stack_slot, CHILD_STACK_VA) != 0) return 0;
+
+    /* Child TCB. */
+    ram = find_ram_untyped(11);
+    if (ram == (u64)-1) return 0;
+    mark_untyped_used(ram);
+    if (retype_tcb(ram, tcb_slot) != 0) return 0;
+    if (sel4_tcb_configure(tcb_slot, 0, cnode_slot, 0, 3, 0,
+                           CHILD_IPC_BUF_VA /* buffer */, stack_slot /* bufferFrame */) != 0) return 0;
+    if (sel4_tcb_write_registers(tcb_slot, (u64)schild_net_child_main,
+                                 CHILD_STACK_VA + CHILD_STACK_SIZE) != 0) return 0;
+
+    return 1;
+}
+
+/* Root side: init the device, spawn the net child, wait for its result. */
+u64 schild_net_child_test(void)
+{
+    if (!virtio_net_init_device()) return 0;
+    if (!schild_spawn_net_child()) return 0;
+    (void)schild_child_wait();
+    return child_test_result;
 }
 
