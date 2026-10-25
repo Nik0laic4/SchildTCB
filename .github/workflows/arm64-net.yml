@@ -1,0 +1,81 @@
+name: ARM64 virtio-net
+
+on:
+  push:
+    branches: [arm64, master]
+    paths:
+      - 'src/schild_core/arm64/**'
+      - 'docs/technical/**'
+  pull_request:
+    branches: [arm64, master]
+    paths:
+      - 'src/schild_core/arm64/**'
+  workflow_dispatch:
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # Fast gate: compile the Ada root task + C driver/protocol + the child ELF,
+  # and run the build-time ELF validation.  No seL4 project / QEMU required.
+  # ---------------------------------------------------------------------------
+  build-arm64:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install AArch64 cross toolchain (GCC + GNAT 14)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gcc-14-aarch64-linux-gnu gnat-14-aarch64-linux-gnu
+
+      - name: Build root task + child ELF + validate
+        run: |
+          cd src/schild_core/arm64/ada
+          ./build_root.sh
+
+      - name: Python syntax check (harness + peer)
+        run: |
+          cd src/schild_core/arm64/ada
+          python3 -m py_compile run_net_test.py net_peer.py
+
+  # ---------------------------------------------------------------------------
+  # Full end-to-end gate: checkout + build the seL4 project (qemu-arm-virt),
+  # then run the deterministic socket-backend network test under QEMU.
+  # Runs on push to arm64 and manually (Actions -> Run workflow).
+  # ---------------------------------------------------------------------------
+  e2e-arm64:
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Checkout SchildTCB
+        uses: actions/checkout@v4
+
+      - name: Install toolchain + QEMU + seL4 build deps
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            gcc-14-aarch64-linux-gnu gnat-14-aarch64-linux-gnu \
+            qemu-system-arm ninja-build cmake device-tree-compiler \
+            python3 python3-pip repo
+          pip3 install libarchive-c lxml jsonschema protobuf pyyaml jinja2
+
+      - name: Checkout seL4 (sel4test-manifest)
+        run: |
+          mkdir sel4proj && cd sel4proj
+          repo init -u https://github.com/seL4/sel4test-manifest.git --depth=1
+          repo sync -j8
+
+      - name: Build seL4 (qemu-arm-virt, aarch64, non-MCS)
+        run: |
+          cd sel4proj
+          mkdir -p build && cd build
+          ../griddle --PLATFORM=qemu-arm-virt --SIMULATION=ON --KernelSel4Arch=aarch64
+          ninja
+
+      - name: Run deterministic virtio-net E2E test (socket backend)
+        run: |
+          cd src/schild_core/arm64/ada
+          python3 run_net_test.py \
+            --backend socket \
+            --sel4-build-dir "$GITHUB_WORKSPACE/sel4proj/build"
