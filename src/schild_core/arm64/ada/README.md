@@ -23,9 +23,8 @@ provide the seL4 root task written in Ada.
 | `sel4_mmio.c` | seL4 platform layer (MMIO map, object retype, syscall shims) + virtio-net driver (split-ring RX pool / rotating TX, IRQ waiter thread). |
 | `virtio_net.h` | virtio-net driver public API (`init` / `tx` / `rx`). |
 | `net_test.c` | Minimal TCP/IP stack test (ARP→ICMP→DHCP→TCP/HTTP→TCP server→DNS) driven over `virtio_net_*`. |
-| `build_root.sh` | Build the seL4 root task + the child ELF + validate both. |
-| `child_main.c` | Child process body (own-VSpace demo): DebugPutChar + signal slot 0. |
-| `child_start.S` | Child-process entry point (sets up its .bss stack). |
+| `build_root.sh` | Build the seL4 root task + the child ELF (driver + protocol) + validate both. |
+| `child_start.S` | Child-process entry point (sets up its .bss stack, calls `schild_net_elf_child_main`). |
 | `child_linker.ld` | Child-process layout (RX/RW segments @ 0x400000). |
 | `virtio_mmio.ads` / `.adb` | virtio-mmio transport driver (probe + MAC read). |
 | `virtio_probe.adb` | Bare-metal virtio-net probe (validated in QEMU). |
@@ -170,33 +169,38 @@ routed through a seL4 Notification (badged, `IRQControl_Get` +
 `IRQHandler_SetNotification`); a dedicated waiter TCB blocks on it (`seL4_Wait`),
 Acks, and signals the main thread, which drains the used ring.
 
-## Artifact 5 — child process in its own VSpace + ELF loader (validated)
+## Artifact 5 — virtio-net driver + protocol in a child process (own VSpace, validated)
 
 ```bash
 ./build_root.sh            # builds root_task.elf + obj_child/child.elf
 ```
 
-The root task creates a **separate VSpace** for a child process and loads a
-self-contained child ELF into it.  Validated output (after the net test):
+The root task brings the virtio-net device up, then hands the device MMIO + DMA
+frame to a child process that runs in its **own VSpace**.  The child ELF is built
+from the same driver + protocol sources (with `--gc-sections`), so the child
+re-attaches to the already-initialised device and runs the full protocol stack
+end-to-end.  Validated output:
 
 ```
-virtio-net DNS: OK (child)
-[elf] child process running in its own VSpace
-elf child: OK (separate VSpace + ELF)
+virtio-net MAC = 52:54:00:12:34:56
+[body] SchildTCB-body
+[dns] 8.6.112.0
+[irq] N
+virtio-net: OK (own VSpace + ELF child)
 ```
 
-`sel4_mmio.c` performs the full object-management sequence: retype a
-`seL4_ARM_VSpaceObject` (root page table), carve a 4 KiB untyped and create an
-ASID pool from it (`ARMASIDControlMakePool`), bind the VSpace to an ASID
-(`ARMASIDPoolAssign`), map three page tables (L2/L1/L0) into the child VSpace,
-then load each `PT_LOAD` segment as 4 KiB frames (filled via a root-VSpace
-scratch mapping and mapped RX for code / RW+NX for data).  The child TCB is
-configured with its own CSpace (16-slot CNode + badged result notification) and
-the new VSpace, and is started at the ELF entry point.  The child prints a
-marker and signals badge 42; the root observes it.
+`sel4_mmio.c` performs: device init in the root VSpace → child VSpace
+(`VSpaceObject` + ASID pool + ASID) → page tables (L2/L1 + L0 leaves for the
+code and IPC regions) → unmap/remap the device + DMA large pages into the child
+VSpace → load the child ELF (`PT_LOAD` segments as 4 KiB frames, RX / RW+NX) →
+a dedicated IPC-buffer frame at 0x900000 → a 16-slot child CNode (self, RAM
+untyped, IRQ handler, VSpace, result notification) → a child TCB with its own
+CSpace + VSpace + IPC buffer.  The child derives the DMA physical base from RX
+descriptor 0, re-attaches the ring state, runs the IRQ path + protocol, and
+signals badge 42.
 
-This is the first true process in the ARM64 port: the child's VSpace contains
-only its own code/data/stack, so it cannot address the root's memory.
+The child's VSpace contains only its own code/data/stack + the device/DMA it was
+granted, so it cannot address the root's memory.
 
 ## Requirements
 
