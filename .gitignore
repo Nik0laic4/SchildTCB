@@ -7,6 +7,10 @@
 *.stdout
 *.log
 obj/
+obj_host/
+*.gcov
+*.gcno
+*.gcda
 build/
 build-test/
 __pycache__/

@@ -38,6 +38,11 @@ jobs:
           cd src/schild_core/arm64/ada
           python3 -m py_compile run_net_test.py net_peer.py
 
+      - name: Host-side protocol unit test + coverage
+        run: |
+          cd src/schild_core/arm64/ada
+          ./build_proto_test.sh
+
   # ---------------------------------------------------------------------------
   # Full end-to-end gate: checkout + build the seL4 project (qemu-arm-virt),
   # then run the deterministic socket-backend network test under QEMU.
