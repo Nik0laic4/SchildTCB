@@ -47,6 +47,10 @@ jobs:
     if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     timeout-minutes: 45
+    env:
+      # `repo` calls `tput` for colored output; GitHub Actions does not set
+      # $TERM, which makes `tput` fail with exit code 2.
+      TERM: xterm
     steps:
       - name: Checkout SchildTCB
         uses: actions/checkout@v4
@@ -62,6 +66,8 @@ jobs:
 
       - name: Checkout seL4 (sel4test-manifest)
         run: |
+          git config --global user.email "ci@schildtcb.invalid"
+          git config --global user.name "SchildTCB CI"
           mkdir sel4proj && cd sel4proj
           repo init -u https://github.com/seL4/sel4test-manifest.git --depth=1
           repo sync -j8
