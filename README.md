@@ -52,6 +52,7 @@ Known upstream limitations (none in this codebase):
 The **`arm64`** branch targets the **Raspberry Pi 4B** (BCM2711) — an seL4 **formally verified AArch64** platform (4× Cortex-A72, SMP, UART debug):
 
 - Full QEMU cycle works: ELF loader → seL4 kernel → root task → UART output.
+- **virtio-net in QEMU** — validated end-to-end: ARP → ICMP → DHCP → TCP/HTTP → TCP server → DNS, with a split-ring descriptor ring, IRQ routed through seL4 Notifications (blocking `seL4_Wait` on a waiter thread), and the driver + protocol stack running in an **isolated child domain** with its own CSpace.
 - Toolchain: QEMU aarch64, `gcc/g++-aarch64-linux-gnu`, `gnat-aarch64`, `repo`, `protoc`, `dtc`.
 - Raspberry Pi has **no SMMU**, so DMA isolation stays out of scope on that platform.
 

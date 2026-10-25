@@ -212,4 +212,38 @@ QEMU **20/20**; bare-metal `[NVFS]` без регрессий.
 - IOMMU/VT-d — до фикса upstream (sporadic SC race).
 - SchildFS write-path — ✅ валидирован (QEMU + NVMe: Create→Write→Read-verify).
 - x86_64 MCS формально верифицирован слабее ARM MCS — отразить в assurance-кейсе.
-- **ARM64 (AArch64) — новый вектор:** seL4 собирается под `qemu-arm-virt` (QEMU, 2026-10-24). Цель — Raspberry Pi 4B (BCM2711, верифицированная AARCH64): полное формальное доказательство + SMP; SMMU отсутствует (DMA-изоляция вне скоупа).
+- **ARM64 (AArch64):** сетевой полигон под `qemu-arm-virt` валидирован (см. §6); цель — Pi 4B (BCM2711) + полное доказательство + SMP; SMMU отсутствует (DMA-изоляция вне скоупа).
+
+---
+
+## 6. ARM64 (AArch64) — сетевое направление (2026-10-24)
+
+Ветка `arm64` (HEAD `5ac4ad1`) — virtio-net в QEMU `qemu-arm-virt` как
+валидационный полигон перед целевой платформой **Raspberry Pi 4B** (BCM2711,
+верифицированная AArch64). Сеть здесь — средство валидации seL4+AArch64, а не
+продакшн-стек; на Pi 4 сетевая карта — **GENET**, а не virtio-net.
+
+### 6.1 Валидировано (QEMU `-M virt`, SLIRP + hostfwd)
+
+| Компонент | Статус | Проверка |
+|---|---|---|
+| seL4 AArch64: elfloader → ядро → root task | ✅ | `build_root.sh` + QEMU, `Hello ... (AArch64 root task)` |
+| virtio-net: MMIO map + MAC под seL4 | ✅ | `virtio-net MAC = 52:54:00:12:34:56` |
+| Протокол: ARP→ICMP→DHCP→TCP/HTTP→TCP-сервер→DNS | ✅ | `virtio-net DNS: OK (child)` |
+| Кольцо дескрипторов (split-ring RX-пул + ротация TX) | ✅ | полный прогон, `[irq] N` |
+| IRQ через seL4 Notifications + waiter-тред (`seL4_Wait`) | ✅ | `[irq] 31–49` |
+| Разделение драйвер (`virtio_net.h`) / тест (`net_test.c`) | ✅ | `build_root.sh` |
+| Изоляция: драйвер IRQ-пути + протокол в child-домене (свой CSpace) | ✅ | `virtio-net DNS: OK (child)` |
+
+### 6.2 Осталось (по приоритету)
+
+1. **Полная process-изоляция** — отдельный VSpace + загрузка ELF ребёнка
+   (сейчас VSpace общий; изоляция только на уровне капабилити).
+2. **Минимальный TCP ACK** полученных данных — уберёт ретрансмитный шум.
+3. **Повторяемая валидация** — скрипт + `-netdev socket`/tap вместо ручного
+   SLIRP-харнесса (SLIRP нестабилен по IRQ).
+4. **Процесс:** запушить `arm64`, синхронизировать `master`, зафиксировать
+   `libarchive-c` в окружении сборки.
+5. **Целевое железо:** драйвер **GENET** (Pi 4) вместо virtio-net.
+
+Детали и gotchas — `docs/technical/SESSION_ARM64_NET.md`.
