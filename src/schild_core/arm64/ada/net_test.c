@@ -5,8 +5,8 @@
  *
  * This is a protocol test harness (ARP -> ICMP -> DHCP -> TCP client/HTTP ->
  * TCP server -> DNS) driven through the virtio_net_* driver API.  It is NOT a
- * general-purpose TCP/IP stack: frames are built/parsed inline and received
- * TCP data is not ACKed.
+ * general-purpose TCP/IP stack: frames are built/parsed inline, but received
+ * TCP data is ACKed so the peer stops retransmitting.
  */
 #include "virtio_net.h"
 
@@ -479,6 +479,22 @@ u64 schild_virtio_net_run_test(void)
                     tpayload[4] == '/') {
                     ok = 1;
                     print_http_body(tpayload, pl2);
+                    /* Minimal TCP ACK: acknowledge the received data
+                     * (ack = seq2 + pl2) so the peer stops retransmitting. */
+                    {
+                        volatile u8 *pkt = virtio_net_tx_buffer();
+                        int i;
+                        for (i = 0; i < 10; i++) pkt[i] = 0x00;
+                        build_tcp_frame(pkt + 10, gw_mac, offered_ip, host_ip,
+                                        12345, 8080, isn + 1, seq2 + pl2, 0x10, 0, 0);
+                        virtio_net_tx_send(10 + 14 + 20 + 20);
+                        schild_sel4_debug_putchar('[');
+                        schild_sel4_debug_putchar('a');
+                        schild_sel4_debug_putchar('c');
+                        schild_sel4_debug_putchar('k');
+                        schild_sel4_debug_putchar(']');
+                        schild_sel4_debug_putchar('\n');
+                    }
                 }
                 virtio_net_rx_done();
                 if (ok) break;
