@@ -84,6 +84,129 @@ static u64 map_page(u64 page_cap, u64 vaddr)
     return info_label(sel4_call(page_cap, info, vaddr, 3, 0, 0));
 }
 
+/* =============================================================================
+ * virtio IRQ -> seL4 Notification routing.
+ *
+ * The virtio-net device is on virtio-mmio slot 31 (0x0a00_3e00), whose GIC
+ * interrupt is SPI 47 = GIC IRQ 32 + 47 = 79 (qemu-arm-virt, NUM_PPI=32).
+ * We bind that IRQ to a seL4 notification (badged with 79).  The root task is
+ * single-threaded, so we poll the notification non-blockingly (seL4_NBRecv)
+ * instead of busy-reading the used ring; on delivery we read the virtio ISR
+ * status register (0x060) and Ack the IRQ.
+ * ============================================================================= */
+
+#define VIRTIO_MMIO_IRQ 79
+/* Depth for CNode ops / IRQControl_Get on the root CNode.  The root CNode is
+ * created with radix = CONFIG_ROOT_CNODE_SIZE_BITS (13) and guard size =
+ * wordBits - 13 (51), so the full slot is resolved at depth = wordBits. */
+#define ROOT_CNODE_DEPTH 64
+
+/* File-scope caps for the IRQ notification path (populated by net_init). */
+static u64 net_irq_ntfn;      /* badged notification cap (CPtr) */
+static u64 net_irq_handler;   /* IRQ handler cap (CPtr) */
+static u32 net_irq_count;     /* IRQs delivered through the notification */
+
+/* seL4_NBRecv (seL4_SysNBRecv = -8): non-blocking receive on a notification.
+ * Returns the notification badge in x0: 0 = empty, non-zero = signaled. */
+static inline u64 sel4_nbrecv(u64 src)
+{
+    register u64 x0 asm("x0") = src;
+    register u64 x1 asm("x1");
+    register u64 x2 asm("x2");
+    register u64 x3 asm("x3");
+    register u64 x4 asm("x4");
+    register u64 x5 asm("x5");
+    register u64 x7 asm("x7") = -8;   /* seL4_SysNBRecv */
+    __asm__ volatile("svc #0"
+                     : "+r"(x0), "=r"(x1), "=r"(x2), "=r"(x3), "=r"(x4), "=r"(x5)
+                     : "r"(x7)
+                     : "memory");
+    return x0;
+}
+
+/* IRQControl_Get: label IRQIssueIRQHandler=26, extraCaps=1 (root CNode), len=3. */
+static u64 sel4_irq_control_get(u64 irq_control, u64 irq, u64 index, u64 depth)
+{
+    u64 info = (26ULL << 12) | (1ULL << 7) | 3ULL;
+    set_cap(0, 2);   /* EC[0] = root CNode */
+    return info_label(sel4_call(irq_control, info, irq, index, depth, 0));
+}
+
+/* IRQHandler_SetNotification: label IRQSetIRQHandler=28, extraCaps=1, len=0. */
+static u64 sel4_irq_handler_set_ntfn(u64 irq_handler, u64 ntfn)
+{
+    u64 info = (28ULL << 12) | (1ULL << 7) | 0ULL;
+    set_cap(0, ntfn);
+    return info_label(sel4_call(irq_handler, info, 0, 0, 0, 0));
+}
+
+/* IRQHandler_Ack: label IRQAckIRQ=27, extraCaps=0, len=0. */
+static u64 sel4_irq_handler_ack(u64 irq_handler)
+{
+    u64 info = (27ULL << 12) | 0ULL;
+    return info_label(sel4_call(irq_handler, info, 0, 0, 0, 0));
+}
+
+/* CNode_Mint: label CNodeMint=21, extraCaps=1 (src_root), len=6.  Mints a
+ * badged notification cap at dest_index from src_index. */
+static u64 sel4_cnode_mint(u64 dest_index, u64 src_index, u64 rights, u64 badge)
+{
+    u64 info = (21ULL << 12) | (1ULL << 7) | 6ULL;
+    set_cap(0, 2);            /* EC[0] = root CNode (src_root) */
+    set_mr(4, rights);
+    set_mr(5, badge);
+    return info_label(sel4_call(2 /* root CNode */, info, dest_index, ROOT_CNODE_DEPTH, src_index, ROOT_CNODE_DEPTH));
+}
+
+/* Track RAM untyped slots already carved, so the notification and the DMA
+ * frame do not compete for the same untyped. */
+static u64 used_ram_untyped[8];
+static int used_ram_untyped_count;
+
+static void mark_untyped_used(u64 slot)
+{
+    if (used_ram_untyped_count < 8)
+        used_ram_untyped[used_ram_untyped_count++] = slot;
+}
+
+static int untyped_is_used(u64 slot)
+{
+    int i;
+    for (i = 0; i < used_ram_untyped_count; i++)
+        if (used_ram_untyped[i] == slot) return 1;
+    return 0;
+}
+
+/* Find a RAM (non-device) untyped with at least 2^min_bits bytes, not already
+ * used.  Returns the slot, or (u64)-1. */
+static u64 find_ram_untyped(u32 min_bits)
+{
+    u64 bi = rt_bootinfo;
+    u64 start = bi_word(bi, BI_UNTYPED_START);
+    u64 end = bi_word(bi, BI_UNTYPED_END);
+    u64 slot;
+
+    for (slot = start; slot < end; slot++) {
+        u64 desc = bi + BI_UNTYPED_LIST + (slot - start) * 16;
+        u64 sizebits = ((volatile unsigned char *)(desc + 8))[0];
+        u64 isdev = ((volatile unsigned char *)(desc + 9))[0];
+        if (!isdev && sizebits >= min_bits && !untyped_is_used(slot))
+            return slot;
+    }
+    return (u64)-1;
+}
+
+/* Retype a notification object (32 bytes, seL4_NotificationBits=5 non-MCS)
+ * from a fresh RAM untyped. */
+static u64 retype_notification(u64 untyped_cap, u64 target_slot)
+{
+    u64 info = (1ULL << 12) | (1ULL << 7) | 6ULL;  /* UntypedRetype: label=1, extraCaps=1, len=6 */
+    set_cap(0, 2);
+    set_mr(4, target_slot);
+    set_mr(5, 1);
+    return info_label(sel4_call(untyped_cap, info, 3 /* NotificationObject */, 5, 0, 0));
+}
+
 /* Map the physical device region at `phys` into the VSpace at `vaddr`.
  * Returns `vaddr` on success, 0 on failure. */
 u64 schild_map_mmio(u64 phys, u64 vaddr)
@@ -170,6 +293,7 @@ u64 schild_virtio_mac(void)
 #define VMMIO_QUEUE_READY       0x044
 #define VMMIO_QUEUE_NOTIFY      0x050
 #define VMMIO_STATUS            0x070
+#define VMMIO_ISR               0x060
 #define VMMIO_QUEUE_DESC_LOW    0x080
 #define VMMIO_QUEUE_DESC_HIGH   0x084
 #define VMMIO_QUEUE_DRIVER_LOW  0x090
@@ -216,23 +340,18 @@ static u64 alloc_dma_2m(u64 vaddr)
 {
     u64 bi = rt_bootinfo;
     u64 start = bi_word(bi, BI_UNTYPED_START);
-    u64 end   = bi_word(bi, BI_UNTYPED_END);
-    u64 slot;
+    u64 slot = find_ram_untyped(21);
 
-    for (slot = start; slot < end; slot++) {
-        u64 desc     = bi + BI_UNTYPED_LIST + (slot - start) * 16;
-        u64 paddr    = ((volatile u64 *)(desc + 0))[0];
-        u64 sizebits = ((volatile unsigned char *)(desc + 8))[0];
-        u64 isdev    = ((volatile unsigned char *)(desc + 9))[0];
-
-        if (!isdev && sizebits >= 21) {
-            u64 target = next_slot++;
-            if (retype_large_page(slot, target) != 0) return 0;
-            if (map_page(target, vaddr) != 0) return 0;
-            return paddr;
-        }
+    if (slot == (u64)-1) return 0;
+    {
+        u64 desc = bi + BI_UNTYPED_LIST + (slot - start) * 16;
+        u64 paddr = ((volatile u64 *)(desc + 0))[0];
+        u64 target = next_slot++;
+        mark_untyped_used(slot);
+        if (retype_large_page(slot, target) != 0) return 0;
+        if (map_page(target, vaddr) != 0) return 0;
+        return paddr;
     }
-    return 0;
 }
 
 /* Ring offsets within a legacy queue (used ring is page-aligned, QueueAlign=4K). */
@@ -661,6 +780,19 @@ static inline void net_barrier(void)
     __asm__ volatile("dmb sy" ::: "memory");
 }
 
+/* Poll the virtio IRQ notification once.  Returns the ISR status if an IRQ was
+ * delivered (and clears the device ISR + Acks), else 0. */
+static u32 irq_poll(void)
+{
+    if (sel4_nbrecv(net_irq_ntfn) == 0) return 0;
+    net_irq_count++;
+    {
+        u32 isr = mmio32(net_regs, VMMIO_ISR);
+        sel4_irq_handler_ack(net_irq_handler);
+        return isr;
+    }
+}
+
 /* Post descriptor `d` to the RX avail ring (device may write into it). */
 static void rx_post(u16 d)
 {
@@ -689,7 +821,9 @@ static int rx_wait(u32 timeout)
 {
     u32 spins;
     for (spins = 0; spins < timeout; spins++) {
-        int d = rx_poll();
+        int d;
+        (void)irq_poll();
+        d = rx_poll();
         if (d >= 0) return d;
     }
     return -1;
@@ -732,6 +866,7 @@ static int tx_send(u32 len)
     mmio32w(net_regs, VMMIO_QUEUE_NOTIFY, 1);
 
     for (spins = 0; spins < 1000000; spins++) {
+        (void)irq_poll();
         if (net_tx_used->idx > net_tx_last_used) break;
     }
     if (net_tx_used->idx <= net_tx_last_used) return 0;
@@ -766,6 +901,22 @@ static int net_init(void)
     dma = (volatile u8 *)0x600000ULL;
     net_dma = dma;
     net_dma_pa = dma_pa;
+
+    /* Set up the virtio IRQ -> seL4 Notification path. */
+    {
+        u64 ntfn_slot = next_slot++;
+        u64 badged_slot = next_slot++;
+        u64 irq_handler_slot = next_slot++;
+        u64 ram = find_ram_untyped(5);
+        if (ram == (u64)-1) return 0;
+        mark_untyped_used(ram);
+        if (retype_notification(ram, ntfn_slot) != 0) return 0;
+        if (sel4_cnode_mint(badged_slot, ntfn_slot, 3 /* ReadWrite */, VIRTIO_MMIO_IRQ) != 0) return 0;
+        if (sel4_irq_control_get(4 /* seL4_CapIRQControl */, VIRTIO_MMIO_IRQ, irq_handler_slot, ROOT_CNODE_DEPTH) != 0) return 0;
+        if (sel4_irq_handler_set_ntfn(irq_handler_slot, badged_slot) != 0) return 0;
+        net_irq_ntfn = badged_slot;
+        net_irq_handler = irq_handler_slot;
+    }
 
     /* RX queue (index 0) at DMA offset 0. */
     setup_queue(net_regs, 0, dma_pa, VQ_NUM);
@@ -943,6 +1094,7 @@ u64 schild_virtio_net_test(void)
         {
             int found = 0;
             for (spins = 0; spins < 2000000000 && !found; spins++) {
+                (void)irq_poll();
                 d = rx_poll();
                 if (d < 0) continue;
                 {
@@ -1005,6 +1157,7 @@ u64 schild_virtio_net_test(void)
     {
         int found = 0;
         for (spins = 0; spins < 2000000000 && !found; spins++) {
+            (void)irq_poll();
             d = rx_poll();
             if (d < 0) continue;
             {
@@ -1029,6 +1182,15 @@ u64 schild_virtio_net_test(void)
         }
         if (!found) return 6;
     }
+
+    schild_sel4_debug_putchar('[');
+    schild_sel4_debug_putchar('i');
+    schild_sel4_debug_putchar('r');
+    schild_sel4_debug_putchar('q');
+    schild_sel4_debug_putchar(']');
+    schild_sel4_debug_putchar(' ');
+    put_dec((u8)net_irq_count);
+    schild_sel4_debug_putchar('\n');
 
     return 7;
 }
