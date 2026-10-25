@@ -99,10 +99,15 @@ virtio-net: OK (own VSpace + ELF child)
 
 ```bash
 # Один скрипт делает всё: сборка -> inject -> ninja -> QEMU -> проверка маркера.
-cd src/schild_core/arm64/ada && python3 run_net_test.py          # полный цикл
+cd src/schild_core/arm64/ada && python3 run_net_test.py          # полный цикл (SLIRP)
+python3 run_net_test.py --backend socket                         # детерминированный пир (офлайн)
 python3 run_net_test.py --skip-build                             # только запуск (уже собрано)
 python3 run_net_test.py --sel4-build-dir /path/to/sel4proj/build # свой путь к seL4
 ```
+
+Два backend: `slirp` (по умолчанию, host-сервисы HTTP/TCP) и `socket`
+(детерминированный пир `net_peer.py`, отвечает на ARP/ICMP/DHCP/TCP/DNS
+фиксированными адресами — `[dns] 1.2.3.4`, `[irq] 70`).
 
 Харнесс `run_net_test.py` (в репозитории, рядом с `build_root.sh`):
 - HTTP-сервер на `127.0.0.1:8080` (отдаёт `SchildTCB-body` одним сегментом).
@@ -127,9 +132,7 @@ python3 run_net_test.py --sel4-build-dir /path/to/sel4proj/build # свой пу
 
 ## 7. Осталось (по приоритету)
 
-1. **Повторяемая валидация** — скрипт + `-netdev socket`/tap вместо ручного
-   SLIRP-харнесса.
-2. **Процесс:** запушить `arm64` (1 коммит `61b4f12` впереди origin), решить
-   судьбу `master`, зафиксировать `libarchive-c`.
-3. **Целевое железо:** драйвер **GENET** (Pi 4) вместо virtio-net.
+1. **Процесс:** запушить `arm64`, решить судьбу `master`, зафиксировать
+   `libarchive-c`.
+2. **Целевое железо:** драйвер **GENET** (Pi 4) вместо virtio-net.
 

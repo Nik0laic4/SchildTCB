@@ -24,7 +24,8 @@ provide the seL4 root task written in Ada.
 | `virtio_net.h` | virtio-net driver public API (`init` / `tx` / `rx`). |
 | `net_test.c` | Minimal TCP/IP stack test (ARP→ICMP→DHCP→TCP/HTTP→TCP server→DNS) driven over `virtio_net_*`. |
 | `build_root.sh` | Build the seL4 root task + the child ELF (driver + protocol) + validate both. |
-| `run_net_test.py` | E2E validation harness (build → inject → QEMU → pass/fail marker). |
+| `run_net_test.py` | E2E validation harness (build → inject → QEMU → pass/fail marker; `--backend slirp|socket`). |
+| `net_peer.py` | Deterministic host network peer for `-netdev socket` (ARP/ICMP/DHCP/TCP/DNS). |
 | `child_start.S` | Child-process entry point (sets up its .bss stack, calls `schild_net_elf_child_main`). |
 | `child_linker.ld` | Child-process layout (RX/RW segments @ 0x400000). |
 | `virtio_mmio.ads` / `.adb` | virtio-mmio transport driver (probe + MAC read). |
