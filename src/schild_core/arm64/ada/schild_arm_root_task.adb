@@ -28,6 +28,12 @@ is
      with Import, Convention => C, External_Name => "schild_net_child_test",
           Global => null;
 
+   --  ELF-child test: a child process in its OWN VSpace (separate root page
+   --  table + ASID), loaded from an embedded child ELF, signalling a result.
+   function Elf_Child_Test return Unsigned_64
+     with Import, Convention => C, External_Name => "schild_elf_child_test",
+          Global => null;
+
    Counter : Word := 0;
    Mac     : Unsigned_64;
    Hex     : constant String := "0123456789abcdef";
@@ -89,6 +95,19 @@ begin
          Debug_Put_Line ("virtio-net TX: OK, RX: none (child)");
       else
          Debug_Put_Line ("virtio-net child: failed");
+      end if;
+   end;
+
+   --  ELF-child test: the root creates a separate VSpace, loads an embedded
+   --  child ELF into it and runs the child with its own CSpace; the child
+   --  prints and signals its badged result notification (badge 42).
+   declare
+      B : constant Unsigned_64 := Elf_Child_Test;
+   begin
+      if B = 42 then
+         Debug_Put_Line ("elf child: OK (separate VSpace + ELF)");
+      else
+         Debug_Put_Line ("elf child: failed");
       end if;
    end;
 
