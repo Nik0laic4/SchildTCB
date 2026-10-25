@@ -22,14 +22,10 @@ is
      with Import, Convention => C, External_Name => "schild_virtio_mac",
           Global => null;
 
-   --  Set up a TX virtqueue, submit a frame, and check it is consumed.
-   function Virtio_Net_Test return Unsigned_64
-     with Import, Convention => C, External_Name => "schild_virtio_net_test",
-          Global => null;
-
-   --  Child-domain round-trip (isolation demo).
-   function Child_Test return Unsigned_64
-     with Import, Convention => C, External_Name => "schild_child_test",
+   --  Net child test: root initializes the device, an isolated child runs the
+   --  driver IRQ path + protocol stack and reports the result back.
+   function Net_Child_Test return Unsigned_64
+     with Import, Convention => C, External_Name => "schild_net_child_test",
           Global => null;
 
    Counter : Word := 0;
@@ -71,37 +67,28 @@ begin
       Debug_Put_Line ("virtio-net: mapping failed");
    end if;
 
-   --  Net test: ARP + ICMP echo + DHCP (UDP) + TCP handshake.
+   --  Net child test: root initializes the device, an isolated child runs the
+   --  driver IRQ path + protocol stack, and reports the result back over a
+   --  cross-domain notification.
    declare
-      R : Unsigned_64 := Virtio_Net_Test;
+      R : Unsigned_64 := Net_Child_Test;
    begin
       if R = 7 then
-         Debug_Put_Line ("virtio-net DNS: OK");
+         Debug_Put_Line ("virtio-net DNS: OK (child)");
       elsif R = 6 then
-         Debug_Put_Line ("virtio-net TCP server: OK");
+         Debug_Put_Line ("virtio-net TCP server: OK (child)");
       elsif R = 5 then
-         Debug_Put_Line ("virtio-net HTTP: OK");
+         Debug_Put_Line ("virtio-net HTTP: OK (child)");
       elsif R = 4 then
-         Debug_Put_Line ("virtio-net DHCP: OK, TCP: none");
+         Debug_Put_Line ("virtio-net DHCP: OK, TCP: none (child)");
       elsif R = 3 then
-         Debug_Put_Line ("virtio-net ping: OK, DHCP: none");
+         Debug_Put_Line ("virtio-net ping: OK, DHCP: none (child)");
       elsif R = 2 then
-         Debug_Put_Line ("virtio-net TX+RX (ARP): OK, ICMP: none");
+         Debug_Put_Line ("virtio-net TX+RX (ARP): OK, ICMP: none (child)");
       elsif R = 1 then
-         Debug_Put_Line ("virtio-net TX: OK, RX: none");
+         Debug_Put_Line ("virtio-net TX: OK, RX: none (child)");
       else
-         Debug_Put_Line ("virtio-net: failed");
-      end if;
-   end;
-
-   --  Child-domain round-trip: spawn an isolated child, wait for its signal.
-   declare
-      C : Unsigned_64 := Child_Test;
-   begin
-      if C = 42 then
-         Debug_Put_Line ("child round-trip: OK");
-      else
-         Debug_Put_Line ("child round-trip: failed");
+         Debug_Put_Line ("virtio-net child: failed");
       end if;
    end;
 
