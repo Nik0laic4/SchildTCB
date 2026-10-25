@@ -3,7 +3,7 @@
 A formally verified **Trusted Computing Base (TCB)** and isolated-peripheral environment, built in **Ada/SPARK 2022** on top of the **seL4 microkernel**.
 
 [![License: GPL-2.0-only](https://img.shields.io/badge/License-GPL--2.0--only-blue.svg)](LICENSE)
-[![SPARK Level 4](https://img.shields.io/badge/SPARK-Level_4-not--proved:0-green)](docs/technical/ASSURANCE.md)
+[![SPARK Level 4](https://img.shields.io/badge/SPARK-108%2F185_proved-blue)](docs/technical/ASSURANCE.md)
 
 ---
 
@@ -16,7 +16,7 @@ Schild TCB is a research prototype of a microkernel-based trusted computing base
 
 ## Highlights
 
-- **Formal verification** — 185 kernel modules verified at **SPARK Level 4** (`gnatprove --level=4 --mode=all`), result **`not-proved: 0`**. 7 root-task daemons (MLS policy, config daemon, audit logger, A/B boot manager, HM model, launch model, root task) are also proven.
+- **Formal verification** — 108 of 185 kernel modules proved at **SPARK Level 4** (`gnatprove --level=4 --mode=all`), with **0 unproved VCs**; the remaining 77 are outside proof scope (`SPARK_Mode => Off` drivers/platform code, or no provable body). 7 root-task daemons (MLS policy, config daemon, audit logger, A/B boot manager, HM model, launch model, root task) are also proved.
 - **Isolated periphery** — network (e1000e → I219-V) and storage (NVMe + SchildFS) run in the isolated Ring-3 **NetServer**; a fault there cannot reach the proven core.
 - **MLS Bell-LaPadula** — 5 security levels in the seL4 layer (Public..Top_Secret), 4 in the bare-metal kernel.
 - **Crash containment** — faulting a driver is caught and contained without rebooting the platform.
@@ -91,7 +91,7 @@ SKIP_BUILD=1 SEL4_PRIMARY=0 bash scripts/run_tests.sh
 - [`docs/technical/ARCHITECTURE.md`](docs/technical/ARCHITECTURE.md) — technical data sheet.
 - [`docs/technical/ROADMAP.md`](docs/technical/ROADMAP.md) — canonical "what's next".
 - [`docs/technical/CHANGELOG.md`](docs/technical/CHANGELOG.md) — verified results only.
-- [`docs/SCHILD_TCB_AUDIT_REPORT.md`](docs/SCHILD_TCB_AUDIT_REPORT.md) — independent technical review.
+- [`docs/SCHILD_TCB_AUDIT_REPORT.md`](docs/SCHILD_TCB_AUDIT_REPORT.md) — internal technical review (author's self-assessment).
 
 ## License
 

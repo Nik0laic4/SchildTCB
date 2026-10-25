@@ -3,7 +3,7 @@
 Формально верифицированная **доверенная вычислительная база (TCB)** и среда изолированной периферии на **Ada/SPARK 2022** поверх микроядра **seL4**.
 
 [![License: GPL-2.0-only](https://img.shields.io/badge/License-GPL--2.0--only-blue.svg)](LICENSE)
-[![SPARK Level 4](https://img.shields.io/badge/SPARK-Level_4-not--proved:0-green)](docs/technical/ASSURANCE.md)
+[![SPARK Level 4](https://img.shields.io/badge/SPARK-108%2F185_proved-blue)](docs/technical/ASSURANCE.md)
 
 ---
 
@@ -16,7 +16,7 @@ Schild TCB — исследовательский прототип довере�
 
 ## Ключевые характеристики
 
-- **Формальная верификация** — 185 модулей ядра верифицированы на **4-м уровне строгости SPARK** (`gnatprove --level=4 --mode=all`), результат **`not-proved: 0`**. Ещё 7 демонов root-задачи (политика MLS, конфигурационный демон, журнал аудита, A/B-загрузчик, HM-модель, launch-модель, root-задача) доказаны.
+- **Формальная верификация** — 108 из 185 модулей ядра доказаны на **4-м уровне строгости SPARK** (`gnatprove --level=4 --mode=all`), **0 непроверенных VC**; остальные 77 — вне proof-скоупа (`SPARK_Mode => Off` для драйверов/платформы либо без доказуемого тела). Ещё 7 демонов root-задачи (политика MLS, конфигурационный демон, журнал аудита, A/B-загрузчик, HM-модель, launch-модель, root-задача) доказаны.
 - **Изолированная периферия** — сеть (e1000e → I219-V) и хранилище (NVMe + SchildFS) работают в изолированном Ring-3 **NetServer**; сбой там не достигает доказанного ядра.
 - **MLS Bell-LaPadula** — 5 уровней в слое seL4 (Public..Top_Secret), 4 в bare-metal ядре.
 - **Сдерживание сбоев** — сбой драйвера перехватывается и изолируется без перезагрузки платформы.
@@ -91,7 +91,7 @@ SKIP_BUILD=1 SEL4_PRIMARY=0 bash scripts/run_tests.sh
 - [`docs/technical/ARCHITECTURE.md`](docs/technical/ARCHITECTURE.md) — технический data-sheet.
 - [`docs/technical/ROADMAP.md`](docs/technical/ROADMAP.md) — каноничное «что дальше».
 - [`docs/technical/CHANGELOG.md`](docs/technical/CHANGELOG.md) — только проверенные результаты.
-- [`docs/SCHILD_TCB_AUDIT_REPORT.md`](docs/SCHILD_TCB_AUDIT_REPORT.md) — независимый технический обзор.
+- [`docs/SCHILD_TCB_AUDIT_REPORT.md`](docs/SCHILD_TCB_AUDIT_REPORT.md) — внутренний технический обзор (самооценка автора).
 
 ## Лицензия
 
