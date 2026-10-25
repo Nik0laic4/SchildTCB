@@ -6,6 +6,12 @@
 > *pending* or *target* have not yet been validated. Formal-verification
 > coverage is stated per-module, never as an aggregate percentage.
 
+## v1.0.0-pre (2026-10-25) — AArch64: minimal TCP ACK of received data
+
+**Validated: the HTTP client now ACKs the received HTTP/1.0 response (ack = seq + len), so the SLIRP peer stops retransmitting (`[ack]` marker printed; the full stack still passes `virtio-net: OK (own VSpace + ELF child)`).**
+
+- `net_test.c`: after receiving the HTTP response body, send a minimal pure-ACK segment (flags `ACK`, `ack = seq2 + pl2`) on the client's sequence; the file header no longer claims "received TCP data is not ACKed".
+
 ## v1.0.0-pre (2026-10-25) — AArch64: virtio-net driver + protocol in an ELF child process (own VSpace)
 
 **Validated: the virtio-net driver + full protocol stack (ARP→ICMP→DHCP→TCP/HTTP→TCP server→DNS) now run in a child process with its OWN VSpace; the root brings the device up, hands the device MMIO + DMA frame to the child's VSpace (unmap + remap), and the child re-attaches from a fixed layout and drives the device (`virtio-net: OK (own VSpace + ELF child)`, with `[body] SchildTCB-body`, `[dns] ...`, `[irq] N`).**
