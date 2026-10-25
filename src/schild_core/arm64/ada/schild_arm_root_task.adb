@@ -27,6 +27,11 @@ is
      with Import, Convention => C, External_Name => "schild_virtio_net_test",
           Global => null;
 
+   --  Child-domain round-trip (isolation demo).
+   function Child_Test return Unsigned_64
+     with Import, Convention => C, External_Name => "schild_child_test",
+          Global => null;
+
    Counter : Word := 0;
    Mac     : Unsigned_64;
    Hex     : constant String := "0123456789abcdef";
@@ -86,6 +91,17 @@ begin
          Debug_Put_Line ("virtio-net TX: OK, RX: none");
       else
          Debug_Put_Line ("virtio-net: failed");
+      end if;
+   end;
+
+   --  Child-domain round-trip: spawn an isolated child, wait for its signal.
+   declare
+      C : Unsigned_64 := Child_Test;
+   begin
+      if C = 42 then
+         Debug_Put_Line ("child round-trip: OK");
+      else
+         Debug_Put_Line ("child round-trip: failed");
       end if;
    end;
 

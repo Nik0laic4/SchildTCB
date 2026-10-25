@@ -6,6 +6,22 @@
 > *pending* or *target* have not yet been validated. Formal-verification
 > coverage is stated per-module, never as an aggregate percentage.
 
+## v1.0.0-pre (2026-10-24) — AArch64: child-domain isolation demo (own CSpace + cross-domain signal)
+
+**Validated: the root task spawns a child TCB with its OWN CSpace (a fresh 8-slot CNode containing only a badged result notification) and a shared VSpace; the child signals its slot 0 and the root observes badge 42 (`child round-trip: OK`, `[child] 42`).**
+
+- `sel4_mmio.c`: `schild_spawn_child` retypes a CNode (`seL4_CapTableObject`),
+  a result notification, a 2 MiB stack page and a TCB; mints the notification
+  into the child CNode slot 0 (badge 42), configures the child TCB with its own
+  CSpace (shared VSpace), and starts it via `TCB_WriteRegisters`.
+  `schild_child_wait` blocks on the result notification.
+- `net_test.c` + `schild_arm_root_task.adb`: `schild_child_test` spawns + waits
+  and reports the badge over UART.
+- Gotchas fixed: a CNode's `UntypedRetype` size_bits is the radix (not
+  radix+SlotBits); a 4 KiB small-page mapping needs an intermediate page table,
+  so the child stack uses a 2 MiB block mapping instead.
+
+
 ## v1.0.0-pre (2026-10-24) — AArch64: virtio-net driver/test split (reusable API)
 
 **Validated: the monolithic `sel4_mmio.c` was split into a reusable virtio-net driver (`virtio_net.h` API: `init` / `tx_buffer` / `tx_send` / `rx` / `rx_done`) and a separate protocol test (`net_test.c`); the full stack still passes (`virtio-net DNS: OK`, `[irq] 138–176` across runs).**
