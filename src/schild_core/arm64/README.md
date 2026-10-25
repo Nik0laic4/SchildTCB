@@ -32,4 +32,5 @@ ninja
 - **Ada root-задача** — ✅ валидирована: полный цикл elfloader → ядро → Ada root task работает в QEMU (см. `ada/README.md`).
 - **virtio-net в QEMU** — ✅ валидированы TX + RX + ICMP echo + DHCP + TCP/HTTP + TCP-сервер + DNS под seL4 (см. `ada/README.md`).
 - Рефакторинг драйвера ✅: кольцо дескрипторов (split-ring: RX-пул + ротация TX, рециклинг через used ring) и маршрутизация virtio-IRQ через seL4 Notifications (`IRQControl_Get` → Notification → блокирующий `seL4_Wait` в waiter-треде + Ack).
+- Изоляция (increment 1) ✅: child-домен со своим CSpace (8-слотовый CNode, только badged result-notification) + кросс-доменный signal; перенос драйвера в компонент — следующий инкремент.
 - Драйвер Ethernet **GENET** (Pi 4) — вместо e1000e.

@@ -128,14 +128,16 @@ static u64 sel4_irq_handler_ack(u64 irq_handler)
 }
 
 /* CNode_Mint: label CNodeMint=21, extraCaps=1 (src_root), len=6.  Mints a
- * badged notification cap at dest_index from src_index. */
-static u64 sel4_cnode_mint(u64 dest_index, u64 src_index, u64 rights, u64 badge)
+ * badged cap from src_index (in src_cnode) into dest_index (in dest_cnode). */
+static u64 sel4_cnode_mint(u64 dest_cnode, u64 dest_index, u64 dest_depth,
+                           u64 src_cnode, u64 src_index, u64 src_depth,
+                           u64 rights, u64 badge)
 {
     u64 info = (21ULL << 12) | (1ULL << 7) | 6ULL;
-    set_cap(0, 2);            /* EC[0] = root CNode (src_root) */
+    set_cap(0, src_cnode);    /* EC[0] = src_root CNode */
     set_mr(4, rights);
     set_mr(5, badge);
-    return info_label(sel4_call(2 /* root CNode */, info, dest_index, ROOT_CNODE_DEPTH, src_index, ROOT_CNODE_DEPTH));
+    return info_label(sel4_call(dest_cnode, info, dest_index, dest_depth, src_index, src_depth));
 }
 
 /* Track RAM untyped slots already carved, so the notification and the DMA
@@ -243,6 +245,17 @@ static u64 retype_tcb(u64 untyped_cap, u64 target_slot)
     set_mr(4, target_slot);
     set_mr(5, 1);
     return info_label(sel4_call(untyped_cap, info, 1 /* TCBObject */, 11 /* TCBBits */, 0, 0));
+}
+
+/* Retype a CNode object (seL4_CapTableObject=4) with `radix` slot bits.  The
+ * size_bits argument is the radix; getObjectSize computes seL4_SlotBits+radix. */
+static u64 retype_cnode(u64 untyped_cap, u64 target_slot, u32 radix)
+{
+    u64 info = (1ULL << 12) | (1ULL << 7) | 6ULL;
+    set_cap(0, 2);
+    set_mr(4, target_slot);
+    set_mr(5, 1);
+    return info_label(sel4_call(untyped_cap, info, 4 /* CapTableObject */, radix, 0, 0));
 }
 
 /* Map the physical device region at `phys` into the VSpace at `vaddr`.
@@ -605,7 +618,9 @@ int virtio_net_init(void)
         if (ram == (u64)-1) return 0;
         mark_untyped_used(ram);
         if (retype_notification(ram, ntfn_slot) != 0) return 0;
-        if (sel4_cnode_mint(badged_slot, ntfn_slot, 3 /* ReadWrite */, VIRTIO_MMIO_IRQ) != 0) return 0;
+        if (sel4_cnode_mint(2 /* root CNode */, badged_slot, ROOT_CNODE_DEPTH,
+                            2 /* root CNode */, ntfn_slot, ROOT_CNODE_DEPTH,
+                            3 /* ReadWrite */, VIRTIO_MMIO_IRQ) != 0) return 0;
         if (sel4_irq_control_get(4 /* seL4_CapIRQControl */, VIRTIO_MMIO_IRQ, irq_handler_slot, ROOT_CNODE_DEPTH) != 0) return 0;
         if (sel4_irq_handler_set_ntfn(irq_handler_slot, badged_slot) != 0) return 0;
         net_irq_ntfn = badged_slot;
@@ -677,5 +692,84 @@ int virtio_net_init(void)
             VIRTIO_STATUS_FEATURES_OK | VIRTIO_STATUS_DRIVER_OK);
 
     return 1;
+}
+
+/* =============================================================================
+ * Child-domain spawn (isolation demo, increment 1).
+ *
+ * Creates a child TCB with its OWN CSpace (a fresh 8-slot CNode) that contains
+ * only a badged result notification, sharing the root VSpace.  The child runs
+ * `schild_child_main`, signals its slot 0, and halts; the root waits on its
+ * copy of the result notification and observes the badge.
+ * ============================================================================= */
+
+#define CHILD_CNODE_RADIX 3     /* 2^3 = 8 slots */
+#define CHILD_BADGE       42
+#define CHILD_STACK_VA    0x800000   /* free 2 MiB-aligned VA (past the DMA frame) */
+#define CHILD_STACK_SIZE  0x4000     /* 16 KiB stack (within the 2 MiB page) */
+
+static u64 child_result_ntfn;   /* root's cap to the child's result notification */
+
+static void __attribute__((noreturn)) schild_child_main(void)
+{
+    /* Child CSpace slot 0 = badged result notification. */
+    sel4_signal(0);
+    for (;;) { }
+}
+
+/* Spawn the child.  Returns 1 on success. */
+int schild_spawn_child(void)
+{
+    u64 cnode_slot = next_slot++;
+    u64 ntfn_slot  = next_slot++;
+    u64 tcb_slot   = next_slot++;
+    u64 stack_slot = next_slot++;
+    u64 ram;
+
+    /* Child CNode (8 slots). */
+    ram = find_ram_untyped(8);
+    if (ram == (u64)-1) return 0;
+    mark_untyped_used(ram);
+    if (retype_cnode(ram, cnode_slot, CHILD_CNODE_RADIX) != 0) return 0;
+
+    /* Result notification. */
+    ram = find_ram_untyped(5);
+    if (ram == (u64)-1) return 0;
+    mark_untyped_used(ram);
+    if (retype_notification(ram, ntfn_slot) != 0) return 0;
+
+    /* Mint the result notification into the child's slot 0, badged. */
+    if (sel4_cnode_mint(cnode_slot, 0, CHILD_CNODE_RADIX,
+                        2 /* root CNode */, ntfn_slot, ROOT_CNODE_DEPTH,
+                        3 /* ReadWrite */, CHILD_BADGE) != 0) return 0;
+
+    /* Child stack: a 2 MiB large page at CHILD_STACK_VA (block mapping, so no
+     * intermediate page table is required -- unlike a 4 KiB small page). */
+    ram = find_ram_untyped(21);
+    if (ram == (u64)-1) return 0;
+    mark_untyped_used(ram);
+    if (retype_large_page(ram, stack_slot) != 0) return 0;
+    if (map_page(stack_slot, CHILD_STACK_VA) != 0) return 0;
+
+    /* Child TCB. */
+    ram = find_ram_untyped(11);
+    if (ram == (u64)-1) return 0;
+    mark_untyped_used(ram);
+    if (retype_tcb(ram, tcb_slot) != 0) return 0;
+
+    /* Configure: own CSpace (child CNode), shared VSpace, no IPC buffer. */
+    if (sel4_tcb_configure(tcb_slot, 0 /* fault_ep */, cnode_slot, 0,
+                           3 /* vspace_root */, 0, 0 /* buffer */, 0 /* bufferFrame */) != 0) return 0;
+    if (sel4_tcb_write_registers(tcb_slot, (u64)schild_child_main,
+                                 CHILD_STACK_VA + CHILD_STACK_SIZE) != 0) return 0;
+
+    child_result_ntfn = ntfn_slot;
+    return 1;
+}
+
+/* Wait for the child's result signal; return the badge. */
+u64 schild_child_wait(void)
+{
+    return sel4_wait(child_result_ntfn);
 }
 

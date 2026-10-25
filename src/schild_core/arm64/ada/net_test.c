@@ -585,3 +585,28 @@ u64 schild_virtio_net_test(void)
 
     return 7;
 }
+
+extern int schild_spawn_child(void);
+extern u64 schild_child_wait(void);
+
+/* Child-domain round-trip: spawn a child with its own CSpace, wait for it to
+ * signal its badged result notification, and return the badge (42 on success,
+ * 0 on spawn failure). */
+u64 schild_child_test(void)
+{
+    if (!schild_spawn_child()) return 0;
+    {
+        u64 badge = schild_child_wait();
+        schild_sel4_debug_putchar('[');
+        schild_sel4_debug_putchar('c');
+        schild_sel4_debug_putchar('h');
+        schild_sel4_debug_putchar('i');
+        schild_sel4_debug_putchar('l');
+        schild_sel4_debug_putchar('d');
+        schild_sel4_debug_putchar(']');
+        schild_sel4_debug_putchar(' ');
+        put_dec((u8)badge);
+        schild_sel4_debug_putchar('\n');
+        return badge;
+    }
+}
