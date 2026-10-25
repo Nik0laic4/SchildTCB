@@ -6,6 +6,13 @@
 > *pending* or *target* have not yet been validated. Formal-verification
 > coverage is stated per-module, never as an aggregate percentage.
 
+## v1.0.0-pre (2026-10-25) — AArch64: reproducible validation harness
+
+**Validated: `run_net_test.py` (committed) builds the root task + child ELF, injects the root task into the elfloader, rebuilds the image, runs QEMU with the host HTTP/TCP services, polls the serial log for the success marker and exits 0/1 (`[harness] PASS: virtio-net E2E in an ELF child (own VSpace)`, ~5 s once the marker appears).**
+
+- `run_net_test.py`: self-contained harness (build → strip → ninja → QEMU → poll the success/fail marker), with `--skip-build`, `--sel4-build-dir`, `--timeout`.
+- The SLIRP backend remains; a deterministic `-netdev socket`/tap backend is the follow-on (SLIRP is IRQ-noisy).
+
 ## v1.0.0-pre (2026-10-25) — AArch64: minimal TCP ACK of received data
 
 **Validated: the HTTP client now ACKs the received HTTP/1.0 response (ack = seq + len), so the SLIRP peer stops retransmitting (`[ack]` marker printed; the full stack still passes `virtio-net: OK (own VSpace + ELF child)`).**
