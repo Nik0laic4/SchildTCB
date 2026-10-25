@@ -22,16 +22,11 @@ is
      with Import, Convention => C, External_Name => "schild_virtio_mac",
           Global => null;
 
-   --  Net child test: root initializes the device, an isolated child runs the
-   --  driver IRQ path + protocol stack and reports the result back.
-   function Net_Child_Test return Unsigned_64
-     with Import, Convention => C, External_Name => "schild_net_child_test",
-          Global => null;
-
-   --  ELF-child test: a child process in its OWN VSpace (separate root page
-   --  table + ASID), loaded from an embedded child ELF, signalling a result.
-   function Elf_Child_Test return Unsigned_64
-     with Import, Convention => C, External_Name => "schild_elf_child_test",
+   --  Net child as a real process: the root initializes the device, then an
+   --  isolated child in its OWN VSpace (separate page table + ASID, loaded
+   --  from an embedded child ELF) runs the driver IRQ path + protocol stack.
+   function Net_Elf_Child_Test return Unsigned_64
+     with Import, Convention => C, External_Name => "schild_net_elf_child_test",
           Global => null;
 
    Counter : Word := 0;
@@ -73,41 +68,16 @@ begin
       Debug_Put_Line ("virtio-net: mapping failed");
    end if;
 
-   --  Net child test: root initializes the device, an isolated child runs the
-   --  driver IRQ path + protocol stack, and reports the result back over a
-   --  cross-domain notification.
+   --  Net child as a real process: the root initializes the device, hands it to
+   --  a child in its own VSpace (loaded from an embedded ELF) which runs the
+   --  driver IRQ path + protocol stack and signals badge 42 back.
    declare
-      R : Unsigned_64 := Net_Child_Test;
-   begin
-      if R = 7 then
-         Debug_Put_Line ("virtio-net DNS: OK (child)");
-      elsif R = 6 then
-         Debug_Put_Line ("virtio-net TCP server: OK (child)");
-      elsif R = 5 then
-         Debug_Put_Line ("virtio-net HTTP: OK (child)");
-      elsif R = 4 then
-         Debug_Put_Line ("virtio-net DHCP: OK, TCP: none (child)");
-      elsif R = 3 then
-         Debug_Put_Line ("virtio-net ping: OK, DHCP: none (child)");
-      elsif R = 2 then
-         Debug_Put_Line ("virtio-net TX+RX (ARP): OK, ICMP: none (child)");
-      elsif R = 1 then
-         Debug_Put_Line ("virtio-net TX: OK, RX: none (child)");
-      else
-         Debug_Put_Line ("virtio-net child: failed");
-      end if;
-   end;
-
-   --  ELF-child test: the root creates a separate VSpace, loads an embedded
-   --  child ELF into it and runs the child with its own CSpace; the child
-   --  prints and signals its badged result notification (badge 42).
-   declare
-      B : constant Unsigned_64 := Elf_Child_Test;
+      B : constant Unsigned_64 := Net_Elf_Child_Test;
    begin
       if B = 42 then
-         Debug_Put_Line ("elf child: OK (separate VSpace + ELF)");
+         Debug_Put_Line ("virtio-net: OK (own VSpace + ELF child)");
       else
-         Debug_Put_Line ("elf child: failed");
+         Debug_Put_Line ("virtio-net elf child: failed");
       end if;
    end;
 

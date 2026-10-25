@@ -52,13 +52,26 @@ rm -rf obj obj_child && mkdir -p obj obj_child
     -fno-pie -fno-pic -fno-stack-protector -O2 \
     -o obj/net_test.o net_test.c
 
-# 4. Build the child process ELF (separate VSpace demo), then embed it as a
-#    raw blob so the root task can load it into the child's own VSpace at boot.
+# 4. Build the child process ELF: the net driver + protocol, compiled from the
+#    same sources into a separate image and embedded as a raw blob so the root
+#    task can load it into the child's own VSpace at boot.  --gc-sections drops
+#    the root-only platform code (BootInfo/MMIO-map/child-spawn/VSpace loader),
+#    leaving only the driver + protocol + syscall shims the child needs.
 "$GCC" -c -ffreestanding -nostdlib -nostdinc -fno-builtin \
     -fno-pie -fno-pic -fno-stack-protector -O2 \
-    -o obj_child/child_main.o child_main.c
+    -ffunction-sections -fdata-sections \
+    -o obj_child/sel4_mmio.o sel4_mmio.c
+"$GCC" -c -ffreestanding -nostdlib -nostdinc -fno-builtin \
+    -fno-pie -fno-pic -fno-stack-protector -O2 \
+    -ffunction-sections -fdata-sections \
+    -o obj_child/net_test.o net_test.c
+"$GCC" -c -ffreestanding -nostdlib -nostdinc -fno-builtin \
+    -fno-pie -fno-pic -fno-stack-protector -O2 \
+    -ffunction-sections -fdata-sections \
+    -o obj_child/sel4_stubs.o sel4_stubs.c
 "$GCC" -c -fno-pie -fno-pic -o obj_child/child_start.o child_start.S
-"$LD" -T child_linker.ld -o obj_child/child.elf obj_child/child_start.o obj_child/child_main.o
+"$LD" --gc-sections -T child_linker.ld -o obj_child/child.elf \
+    obj_child/child_start.o obj_child/sel4_mmio.o obj_child/net_test.o obj_child/sel4_stubs.o
 
 echo "[root] child.elf: $(wc -c < obj_child/child.elf) bytes"
 LC_ALL=C "$READELF" -h obj_child/child.elf | grep -E 'Type:|Machine:|Entry point'
