@@ -218,7 +218,7 @@ QEMU **20/20**; bare-metal `[NVFS]` без регрессий.
 
 ## 6. ARM64 (AArch64) — сетевое направление (2026-10-24)
 
-Ветка `arm64` (HEAD `61b4f12`) — virtio-net в QEMU `qemu-arm-virt` как
+Ветка `arm64` (HEAD `6c61f04`) — virtio-net в QEMU `qemu-arm-virt` как
 валидационный полигон перед целевой платформой **Raspberry Pi 4B** (BCM2711,
 верифицированная AArch64). Сеть здесь — средство валидации seL4+AArch64, а не
 продакшн-стек; на Pi 4 сетевая карта — **GENET**, а не virtio-net.
