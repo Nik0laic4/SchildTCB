@@ -1,9 +1,11 @@
 # Schild TCB
 
-Формально верифицированная **доверенная вычислительная база (TCB)** и среда изолированной периферии на **Ada/SPARK 2022** поверх микроядра **seL4**.
+**Доверенная вычислительная база (TCB)** — исследовательский прототип: формально верифицированное ядро (**seL4** + **Ada/SPARK 2022**) со средой изолированной периферии.
 
-[![License: GPL-2.0-only](https://img.shields.io/badge/License-GPL--2.0--only-blue.svg)](LICENSE)
+[![CI](https://github.com/Nik0laic4/SchildTCB/actions/workflows/ci.yml/badge.svg)](https://github.com/Nik0laic4/SchildTCB/actions/workflows/ci.yml)
+[![ARM64 virtio-net](https://github.com/Nik0laic4/SchildTCB/actions/workflows/arm64-net.yml/badge.svg)](https://github.com/Nik0laic4/SchildTCB/actions/workflows/arm64-net.yml)
 [![SPARK Level 4](https://img.shields.io/badge/SPARK-108%2F185_proved-blue)](docs/technical/ASSURANCE.md)
+[![License: GPL-2.0-only](https://img.shields.io/badge/License-GPL--2.0--only-blue.svg)](LICENSE)
 
 ---
 
@@ -83,6 +85,10 @@ SKIP_BUILD=1 SEL4_PRIMARY=0 bash scripts/run_tests.sh
 
 - **Push / PR в `master`** → автоматически выполняются `build` (bare-metal ядро + ISO) и `verify` (7 демонов root-задачи, SPARK Level 4).
 - **Вручную** (`Actions` → `CI` → *Run workflow*) → задача `prove-full` выполняет полное доказательство 185 модулей на SPARK Level 4 (`scripts/prove_kernel.sh`) и загружает `obj/proof/report.txt` как артефакт.
+
+## Участие
+
+Вклад и обратная связь приветствуются — см. [`CONTRIBUTING.md`](CONTRIBUTING.md) и [`CODE_OF_CONDUCT.md`](CODE_OF_CONDUCT.md). Об уязвимостях сообщайте приватно — см. [`SECURITY.md`](SECURITY.md).
 
 ## Документация
 

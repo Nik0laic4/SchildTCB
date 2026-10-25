@@ -3,7 +3,7 @@ message: "If you use this software, please cite it as below."
 authors:
   - family-names: Irganov
     given-names: Alexander
-title: "Schild TCB — a formally verified Trusted Computing Base on seL4 (Ada/SPARK)"
+title: "Schild TCB — a Trusted Computing Base (TCB) research prototype on seL4 (Ada/SPARK)"
 version: 1.0.0-pre
 date-released: 2026-10-24
 license: GPL-2.0-only

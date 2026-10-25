@@ -1,9 +1,11 @@
 # Schild TCB
 
-A formally verified **Trusted Computing Base (TCB)** and isolated-peripheral environment, built in **Ada/SPARK 2022** on top of the **seL4 microkernel**.
+A **Trusted Computing Base (TCB)** research prototype: a formally verified core (**seL4** microkernel + **Ada/SPARK 2022**) with an isolated-peripheral environment.
 
-[![License: GPL-2.0-only](https://img.shields.io/badge/License-GPL--2.0--only-blue.svg)](LICENSE)
+[![CI](https://github.com/Nik0laic4/SchildTCB/actions/workflows/ci.yml/badge.svg)](https://github.com/Nik0laic4/SchildTCB/actions/workflows/ci.yml)
+[![ARM64 virtio-net](https://github.com/Nik0laic4/SchildTCB/actions/workflows/arm64-net.yml/badge.svg)](https://github.com/Nik0laic4/SchildTCB/actions/workflows/arm64-net.yml)
 [![SPARK Level 4](https://img.shields.io/badge/SPARK-108%2F185_proved-blue)](docs/technical/ASSURANCE.md)
+[![License: GPL-2.0-only](https://img.shields.io/badge/License-GPL--2.0--only-blue.svg)](LICENSE)
 
 ---
 
@@ -83,6 +85,10 @@ SKIP_BUILD=1 SEL4_PRIMARY=0 bash scripts/run_tests.sh
 
 - **Push / PR to `master`** → `build` (bare-metal kernel + ISO) and `verify` (7 root-task daemons, SPARK Level 4) run automatically.
 - **Manual** (`Actions` → `CI` → *Run workflow*) → the `prove-full` job runs the complete 185-module SPARK Level-4 proof (`scripts/prove_kernel.sh`) and uploads `obj/proof/report.txt` as an artifact.
+
+## Contributing
+
+Contributions and feedback are welcome — see [`CONTRIBUTING.md`](CONTRIBUTING.md) and the [`CODE_OF_CONDUCT.md`](CODE_OF_CONDUCT.md). Security issues should be reported privately per [`SECURITY.md`](SECURITY.md).
 
 ## Documentation
 
