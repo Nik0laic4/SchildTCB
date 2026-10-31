@@ -1,6 +1,6 @@
 # Schild TCB — Дорожная карта (ROADMAP)
 
-**Version:** v1.1  |  **Date:** 2026-10-31
+**Version:** v1.2  |  **Date:** 2026-10-31
 **Developer:** Ирганов А.Н.
 **Status:** каноничный единый источник истины о «что дальше».
 
@@ -12,7 +12,7 @@
 
 ---
 
-## 1. Текущее валидированное состояние (2026-10-31, HEAD `0fcb0a0`)
+## 1. Текущее валидированное состояние (2026-10-31, HEAD `596516f`)
 
 | Компонент | Статус | Механическая проверка |
 |---|---|---|
@@ -21,6 +21,7 @@
 | Демоны root-задачи — SPARK L4 | ✅ все VC доказаны | `scripts/verify.sh` (`verify.gpr`, 7 модулей) |
 | Модель угроз | ✅ | `docs/technical/THREAT_MODEL.md` |
 | Контрактный аудит (Tier-A) | ✅ усилены, `not-proved: 0` | `docs/technical/SESSION_CONTRACT_AUDIT.md` |
+| Boot counter (A/B + порог блокировки) | ✅ доказано | `scripts/verify.sh` (`schild_boot_manager` 8 подпрограмм); `BOOT_COUNTER_DESIGN.md` |
 | Bare-metal boot + сеть | ✅ T580 + QEMU | `run_tests.sh` (`SEL4_PRIMARY=0`); HTTP на T580 (IRQ-driven RX) |
 | seL4 ветка — сборка | ✅ | `SEL4_PRIMARY=1 ./build.sh` |
 | seL4 ветка — QEMU | ✅ 20/20 маркеров | `run_tests.sh` (`SEL4_PRIMARY=1`) |
@@ -196,11 +197,14 @@ security-критичных модулей (cap_space, process_manager, signals,
 Детали и остатки — `SESSION_CONTRACT_AUDIT.md`. Полный proof: `not-proved: 0`,
 `~108 proved / ~77 out-of-proof`.
 
-### W9 — Фаза надёжности (boot/update/recovery) — `[следующий]`
+### W9 — Фаза надёжности (boot/update/recovery) — `[в работе]`
 
-1. **Boot counter** — логика A/B + порог блокировки слота B (расширить
-   `schild_boot_manager`; определить энергонезависимое хранилище).
-2. **Health check перед commit** — проверка сети + MLS перед фиксацией слота.
+1. **Boot counter** ✅ ЗАКРЫТ (2026-10-31) — логика A/B + порог блокировки
+   (`Max_Boot_Attempts = 3`), `Slot_Locked`/`Is_Bricked`, brick-состояние;
+   энергонезависимое хранилище зафиксировано (`BOOT_COUNTER_DESIGN.md`:
+   NVMe LBA 2048 + HMAC-тег, x86 CMOS fallback). Доказано `verify.sh`
+   (`not-proved: 0`, `schild_boot_manager` 8 подпрограмм).
+2. **Health check перед commit** — проверка сети + MLS перед фиксацией слота. `[следующий]`
 3. **Watchdog** — хардварный таймер + «kick»-петля (⚠️ железо).
 4. **Tryboot / Rescue slot** — конфиг bootloader (❌ Pi 4).
 
