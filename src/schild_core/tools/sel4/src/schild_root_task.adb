@@ -216,6 +216,22 @@ begin
           end if;
        end;
 
+       -- T8: Counter-block encode/decode round-trip (W9 Load/Save byte layer).
+       declare
+          P : Persistent_State :=
+            (Boot_Count => 5, Failed_Boot_Count => 2, Active_Slot => Slot_B,
+             Slot_A_Attempts => 1, Slot_B_Attempts => 3,
+             Slot_A_Locked => True, Slot_B_Locked => False, Both_Locked => False);
+          B : Sealed_Block := Encode_Block (P);
+          Q : Persistent_State := Decode_Block (B);
+       begin
+          if Verify_Block (B) and then Q = P then
+             Put_Str ("[S7] T8 PASS: counter-block round-trip + verify" & ASCII.CR & ASCII.LF);
+          else
+             Put_Str ("[S7] T8 FAIL" & ASCII.CR & ASCII.LF);
+          end if;
+       end;
+
        Put_Str ("[S7] Boots: "); Put_Dec (BM.Boot_Count);
        Put_Str ("  Audits: "); Put_Dec (CD.Audit_Queue);
        Put_Str (ASCII.CR & ASCII.LF);
