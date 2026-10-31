@@ -18,7 +18,7 @@ Open an issue describing the problem, the expected behavior, and (if possible) s
 ## Development
 
 - Language: Ada/SPARK 2022 (with C and ASM), seL4 microkernel.
-- Formal verification: SPARK Level 4, 0 unproved VCs (108 of 185 kernel modules proved). Keep the proof gate green.
+- Formal verification: SPARK Level 4, 0 unproved VCs (107 of 185 kernel modules proved). Keep the proof gate green.
 - Two branches: `master` (x86_64) and `arm64` (Raspberry Pi 4B).
 
 ## Style
