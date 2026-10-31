@@ -12,7 +12,7 @@
 
 ---
 
-## 1. Текущее валидированное состояние (2026-10-31, HEAD `0716daa`)
+## 1. Текущее валидированное состояние (2026-10-31, HEAD `a027f5c`)
 
 | Компонент | Статус | Механическая проверка |
 |---|---|---|
@@ -23,6 +23,7 @@
 | Контрактный аудит (Tier-A) | ✅ усилены, `not-proved: 0` | `docs/technical/SESSION_CONTRACT_AUDIT.md` |
 | Boot counter (A/B + порог блокировки) | ✅ доказано | `scripts/verify.sh` (`schild_boot_manager` 8 подпрограмм); `BOOT_COUNTER_DESIGN.md` |
 | Health check перед commit (W9.2) | ✅ доказано | `scripts/verify.sh` (`Commit_If_Healthy`, `schild_boot_manager` 10 подпрограмм) |
+| Watchdog (W9.3, логика kick/expire) + Load/Save round-trip | ✅ логика доказана | `scripts/verify.sh` (`schild_watchdog` 5; `To_Persistent`/`From_Persistent`); таймер/NVMe-упаковка deferred |
 | Bare-metal boot + сеть | ✅ T580 + QEMU | `run_tests.sh` (`SEL4_PRIMARY=0`); HTTP на T580 (IRQ-driven RX) |
 | seL4 ветка — сборка | ✅ | `SEL4_PRIMARY=1 ./build.sh` |
 | seL4 ветка — QEMU | ✅ 20/20 маркеров | `run_tests.sh` (`SEL4_PRIMARY=1`) |
@@ -209,8 +210,15 @@ security-критичных модулей (cap_space, process_manager, signals,
    (сеть + MLS), `Health_Ok`, `Commit_If_Healthy` (commit iff healthy, else
    failover); self-test `[S7] T6a/T6b`. Доказано `verify.sh`
    (`schild_boot_manager` 10 подпрограмм, `not-proved: 0`).
-3. **Watchdog** — хардварный таймер + «kick»-петля (⚠️ железо). `[следующий]`
+3. **Watchdog** ✅ логика (2026-10-31) — `schild_watchdog` (kick/expire),
+   self-test `[S7] T7a/T7b`; доказано `verify.sh` (5 подпрограмм). Хардварный
+   таймер (PIT/APIC, BCM2711) — deferred (⚠️ железо).
 4. **Tryboot / Rescue slot** — конфиг bootloader (❌ Pi 4).
+
+**Безжелезные долги закрыты (2026-10-31):** Load/Save round-trip
+(`To_Persistent`/`From_Persistent`) ✅; `schild_boot_runtime` `Refined_State` ✅;
+`Is_Derived_From` (cap_space) ✅. Осталось только железо (таймер, NVMe-упаковка,
+bootloader).
 
 
 ---
