@@ -69,7 +69,11 @@ is
    procedure Deliver_Pending_Signal
      (Context : in out Signal_Context;
       Signal  :    out Signal_Type;
-      Handled :    out Boolean);
+      Handled :    out Boolean)
+   with Post => (if Handled then
+                   Context.Pending_Signals (Signal) = False
+                     and Context'Old.Pending_Signals (Signal)
+                     and not Context'Old.Blocked_Signals (Signal));
 
    --  Register a handler capability for delivered signals.
    procedure Register_Handler
