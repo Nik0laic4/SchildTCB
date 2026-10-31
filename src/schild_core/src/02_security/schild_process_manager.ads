@@ -70,7 +70,6 @@ is
       New_Pid     :    out Process_Id;
       Status      :    out Proc_Status)
    with
-     Pre  => Parent_Pid /= Null_PID,
      Post => (if Status = Success then
                 New_Pid /= Null_PID
                   and (for some I in Table'Range =>
@@ -129,4 +128,7 @@ private
    subtype Slot_Index is Integer range 0 .. Max_Processes;
    function Find_Free_Slot (Table : Process_Table) return Slot_Index;
    function Find_Process (Table : Process_Table; Pid : Process_Id) return Slot_Index;
+   function Has_Active_Process (Table : Process_Table) return Boolean
+   with Post => Has_Active_Process'Result =
+                (for some I in Table'Range => Table (I).State /= Dead);
 end Schild_Process_Manager;

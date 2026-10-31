@@ -38,6 +38,21 @@ is
       return 0;
    end Find_Process;
 
+   ----------------------
+   -- Has_Active_Process --
+   ----------------------
+   function Has_Active_Process (Table : Process_Table) return Boolean is
+   begin
+      for I in Table'Range loop
+         pragma Loop_Invariant
+           (for all J in Table'First .. I - 1 => Table (J).State = Dead);
+         if Table (I).State /= Dead then
+            return True;
+         end if;
+      end loop;
+      return False;
+   end Has_Active_Process;
+
    ------------------------
    -- Init_Process_Table  --
    ------------------------
@@ -85,21 +100,11 @@ is
       --  Enforce the "parent == 0 only for Root Task" restriction.
       if Parent_Pid = Null_PID then
          --  Reject if any live process already exists (root must be first).
-         declare
-            Has_Active : Boolean := False;
-         begin
-            for I in Table'Range loop
-               if Table (I).State /= Dead then
-                  Has_Active := True;
-                  exit;
-               end if;
-            end loop;
-            if Has_Active then
-               Status := Access_Denied;
-               Schild_Log.Put_Line ("Proc: only Root Task can have Parent_Pid=0");
-               return;
-            end if;
-         end;
+         if Has_Active_Process (Table) then
+            Status := Access_Denied;
+            Schild_Log.Put_Line ("Proc: only Root Task can have Parent_Pid=0");
+            return;
+         end if;
       else
          --  Look up the parent; fail with Invalid_PID if missing.
          declare
