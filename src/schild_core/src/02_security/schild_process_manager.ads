@@ -56,8 +56,10 @@ is
    --  Process operations.
    ------------------------------------------------------------
 
-   --  Reset the process table to a clean (all-Unborn) state.
-   procedure Init_Process_Table (Table : out Process_Table);
+   --  Reset the process table to a clean (all-Dead) state.
+   procedure Init_Process_Table (Table : out Process_Table)
+   with Post => (for all I in Table'Range =>
+                   Table (I).State = Dead and Table (I).Pid = Null_PID);
 
    --  Create a process owned by Parent_Pid with the given capabilities.
    procedure Create_Process
@@ -109,7 +111,8 @@ is
    --  True when two processes are at the same MLS level.
    function Check_Mls_Compatibility
      (Proc1_Level : Mls_Level_Type;
-      Proc2_Level : Mls_Level_Type) return Boolean;
+      Proc2_Level : Mls_Level_Type) return Boolean
+   with Post => Check_Mls_Compatibility'Result = (Proc1_Level = Proc2_Level);
 
    --  Deliver all pending signals in the table.
    procedure Deliver_Pending_Signals

@@ -60,6 +60,9 @@ is
    begin
       Table := [others => Process_Context'(others => <>)];
       for I in Table'Range loop
+         pragma Loop_Invariant
+           (for all J in Table'First .. I - 1 =>
+              Table (J).State = Dead and Table (J).Pid = Null_PID);
          Table (I).State := Dead;
          Table (I).Pid   := Null_PID;   --  Dead slots carry the null PID.
       end loop;
