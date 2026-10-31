@@ -12,7 +12,7 @@
 
 ---
 
-## 1. Текущее валидированное состояние (2026-10-31, HEAD `596516f`)
+## 1. Текущее валидированное состояние (2026-10-31, HEAD `0716daa`)
 
 | Компонент | Статус | Механическая проверка |
 |---|---|---|
@@ -22,6 +22,7 @@
 | Модель угроз | ✅ | `docs/technical/THREAT_MODEL.md` |
 | Контрактный аудит (Tier-A) | ✅ усилены, `not-proved: 0` | `docs/technical/SESSION_CONTRACT_AUDIT.md` |
 | Boot counter (A/B + порог блокировки) | ✅ доказано | `scripts/verify.sh` (`schild_boot_manager` 8 подпрограмм); `BOOT_COUNTER_DESIGN.md` |
+| Health check перед commit (W9.2) | ✅ доказано | `scripts/verify.sh` (`Commit_If_Healthy`, `schild_boot_manager` 10 подпрограмм) |
 | Bare-metal boot + сеть | ✅ T580 + QEMU | `run_tests.sh` (`SEL4_PRIMARY=0`); HTTP на T580 (IRQ-driven RX) |
 | seL4 ветка — сборка | ✅ | `SEL4_PRIMARY=1 ./build.sh` |
 | seL4 ветка — QEMU | ✅ 20/20 маркеров | `run_tests.sh` (`SEL4_PRIMARY=1`) |
@@ -204,8 +205,11 @@ security-критичных модулей (cap_space, process_manager, signals,
    энергонезависимое хранилище зафиксировано (`BOOT_COUNTER_DESIGN.md`:
    NVMe LBA 2048 + HMAC-тег, x86 CMOS fallback). Доказано `verify.sh`
    (`not-proved: 0`, `schild_boot_manager` 8 подпрограмм).
-2. **Health check перед commit** — проверка сети + MLS перед фиксацией слота. `[следующий]`
-3. **Watchdog** — хардварный таймер + «kick»-петля (⚠️ железо).
+2. **Health check перед commit** ✅ ЗАКРЫТ (2026-10-31) — `Health_Status`
+   (сеть + MLS), `Health_Ok`, `Commit_If_Healthy` (commit iff healthy, else
+   failover); self-test `[S7] T6a/T6b`. Доказано `verify.sh`
+   (`schild_boot_manager` 10 подпрограмм, `not-proved: 0`).
+3. **Watchdog** — хардварный таймер + «kick»-петля (⚠️ железо). `[следующий]`
 4. **Tryboot / Rescue slot** — конфиг bootloader (❌ Pi 4).
 
 

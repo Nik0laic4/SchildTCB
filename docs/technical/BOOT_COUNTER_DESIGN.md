@@ -3,8 +3,8 @@
 **Version:** v1.0
 **Date:** 2026-10-31
 **Owner:** Ирганов А.Н.
-**Status:** реализовано и доказано (W9.1); энергонезависимое хранилище **зафиксировано**, но
-NVMe/CMOS-обвязка отложена до «с железа» (см. §5).
+**Status:** реализовано и доказано (W9.1 boot counter + W9.2 health-gated commit);
+энергонезависимое хранилище **зафиксировано**, но NVMe/CMOS-обвязка отложена до «с железа» (см. §5).
 
 ---
 
@@ -147,3 +147,28 @@ bash scripts/verify.sh     # гейт: schild_boot_manager 8/8 + root_task 63 ch
 
 Self-test в `schild_root_task.adb`: `[S7] T4` (failover) + `[S7] T5a/T5b`
 (порог блокировки → brick) — маркеры выводятся при `SEL4_PRIMARY=1` QEMU.
+
+---
+
+## 7. Health-gated commit (W9.2)
+
+W9.2 добавляет «проверку здоровья перед коммитом»: слот фиксируется
+(`Record_Successful_Boot`) только если система здорова — сеть поднята **и**
+MLS-политика валидна. Иначе — `Failover` (слот не коммитится).
+
+- `Health_Status` — запись `Network_Up : Boolean; MLS_Valid : Boolean`.
+- `Health_Ok (Status) = Status.Network_Up and Status.MLS_Valid` (доказано).
+- `Commit_If_Healthy (Manager, Status)`: при `Health_Ok` — `Record_Successful_Boot`,
+  иначе — `Failover`. Постконтракт: при здоровье `Boot_Count = Old + 1 and Verified`,
+  иначе `Failed_Boot_Count = Old + 1 and not Verified` (доказано).
+
+Реальные пробы (что именно «сеть поднята», что «MLS валидна») отложены до железа:
+
+- **сеть** — `Schild_E1000e.Read_Status` bit 1 (link up) / `Is_Ready`;
+- **MLS** — валидация политики (`Schild_MLS_Policy` / `Validate_Config`).
+
+В QEMU-демо `schild_root_task.adb` `[S7] T6a/T6b` передают статус явно
+(агрегатом `Health_Status`), поэтому гейт доказуем без железа.
+
+Proof: `verify.sh` — `schild_boot_manager` 10 подпрограмм, `schild_root_task`
+65 checks, `not-proved: 0`.
