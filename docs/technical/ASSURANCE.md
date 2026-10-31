@@ -61,12 +61,18 @@ TCB** and must be isolated (Phase 3).
 
 | Claim | Mechanical check | Result (2026-08-16) |
 |-------|------------------|---------------------|
-| Tier-A modules have no unproved VCs | `bash scripts/prove_kernel.sh` | `not-proved: 0` (107 proved / 78 out of proof, 185 total) |
+| Tier-A modules have no unproved VCs | `bash scripts/prove_kernel.sh` | `not-proved: 0` (~108 proved / ~77 out of proof, 185 total) |
 | Level-4 root-task daemons prove (7) | `bash scripts/verify.sh` | "all verification conditions proved" (`not-proved: 0`) |
 | Kernel builds clean | `SCHILD_PROFILE=public ./build.sh` | 179 objects, 0 errors |
 | Boot chain works | `SKIP_BUILD=1 SEL4_PRIMARY=0 bash scripts/run_tests.sh` | PASS (Long Mode → e1000e → SMP → MLS → :80) |
 | Network stack serves HTTP | QEMU + ThinkPad T580 | end-to-end (ARP → IPv4 → TCP → HTTP) |
 | Fatal fault reboots, does not hang | `runtime_stubs.c` / `interrupt_handlers.c` | i8042 reset on all fatal handlers |
+
+> **Note (approximate count).** The `~108 proved / ~77 out of proof` split is
+> approximate: gnatprove's parallel prover (`-j8`) flips ~2 modules (e.g.
+> `schild_execution_fabric`, `schild_sentinel`) between `PROVED` and
+> out-of-proof across runs. The gate — `not-proved: 0` — is stable; the
+> classifier (`scripts/classify_gnatprove.py`) is deterministic.
 
 ---
 
