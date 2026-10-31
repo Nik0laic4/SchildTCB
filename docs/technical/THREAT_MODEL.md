@@ -45,7 +45,7 @@ remaining gaps are closed** (§10 contract strengthening).
 | **A2 — Isolated periphery** | NetServer: e1000e / NVMe / TCP-IP stack (ARP, IPv4, TCP, HTTP) | availability via *containment* — its compromise must not propagate | B |
 | **A3 — TCB runtime** | seL4 kernel + Ada root task + trusted seams (syscall shim, C runtime, `boot.S`) | integrity of the whole system | ring 0 + root |
 | **A4 — Audit log** | `Schild_Audit_Logger` ring buffer with severity filter | integrity + non-repudiation | A |
-| **A5 — Boot & update path** | A/B images, `Schild_Boot_Manager`, boot counter, rescue slot | integrity + availability | (gap — see §8) |
+| **A5 — Boot & update path** | A/B images, `Schild_Boot_Manager`, boot counter, rescue slot | integrity + availability | lockout ✅ (W9.1); integrity gap — no signed boot (§8) |
 | **A6 — Platform & devices** | CPU, MMU, APIC/GIC, NIC, NVMe, DMA engines | availability + integrity | (DMA out of scope) |
 
 Each asset is the *reason* an adversary class exists in §3. The mapping
@@ -148,7 +148,7 @@ This is the core mapping. Each row is a claim that must stay true; the
 | T4 | P2 (+AI) uninitialized read / integer overflow / out-of-bounds in the core | SPARK: no uninit reads, bounded ranges, narrowed index types (Phase-1 fixes) | A | `prove_kernel.sh` → `not-proved: 0` |
 | T5 | P2 hangs the root task (availability) | MCS CPU budgets + fault timeouts | A/B | `seL4_Fault_Timeout` (QEMU MCS test) |
 | T6 | P3 DMA write from a malicious NIC/NVMe | **none today** (no IOMMU) | — | residual risk (§8) |
-| T7 | P4 rollback / malicious slot update | `Schild_Boot_Manager` SHA-256 (corruption detection only) | — | residual risk — no signed boot (§8) |
+| T7 | P4 rollback / malicious slot update | `Schild_Boot_Manager` SHA-256 + boot-counter lockout (bounded retries → slot lock) | — | residual risk — no signed boot (§8) |
 | T8 | P1 (+AI) exploit of the C shims/stack (`net_test.c`, `sel4_mmio.c`, `runtime_stubs.c`) | **no memory safety** — containment is the only backstop | B | `[CONTAINMENT] core alive after fault` |
 | T9 | P4 (+AI) supply-chain (poisoned upstream/toolchain) | none | — | out of scope (§6) |
 
@@ -177,6 +177,9 @@ These are the risks that remain even when every §7 check is green:
 4. **No signed boot / hardware root of trust.** `Schild_Boot_Manager` SHA-256
    detects *corruption*, not *malice*: an attacker who can write the update slot
    (P4) can also write a valid hash. Rollback and malicious-update remain open.
+   The W9.1 boot counter bounds the *availability* damage of a persistently bad
+   slot (N retries → slot lock → brick/recovery), but the counter itself is only
+   as trusted as the image it ships with — same limitation, no HWRoT.
 5. **x86_64 MCS is formally verified weaker than ARM MCS** (upstream status).
 6. **Patched seL4.** The local patches modify a formally verified kernel; the
    upstream proof transfers only partially (§9).
