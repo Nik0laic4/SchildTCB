@@ -107,17 +107,23 @@ is
    function Is_Derived_From
      (Table : Cap_Table; Child, Ancestor : Cap_Index) return Boolean
    is
-      Current : Parent_Id := Table (Child).Parent;
       Target  : constant Cap_Id := Cap_Id (Ancestor);
+      Current : Parent_Id := Table (Child).Parent;
    begin
+      -- Direct parent (basis for the spec post): checked before the loop so
+      -- the postcondition discharges without loop reasoning.
+      if Current = Target then
+         return True;
+      end if;
+      -- Walk ancestors up to Cap_Depth'Last steps; stop at the null cap.
       for I in Cap_Depth loop
-         if Current = Target then
-            return True;
-         end if;
          if Current = Null_Cap_Id then
             return False;
          end if;
          Current := Table (Cap_Index (Current)).Parent;
+         if Current = Target then
+            return True;
+         end if;
       end loop;
       return False;
    end Is_Derived_From;

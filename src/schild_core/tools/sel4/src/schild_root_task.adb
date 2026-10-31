@@ -9,6 +9,7 @@ with Interfaces;          use Interfaces;
 with System;
 with Schild_MLS_Policy;     use Schild_MLS_Policy;
 with Schild_Audit_Logger;  use Schild_Audit_Logger;
+with Schild_Watchdog;
 
 procedure Schild_Root_Task with SPARK_Mode => On is
    -- Read the seL4 BootInfo frame as a VALUE (via a C memcpy shim) instead of
@@ -181,6 +182,37 @@ begin
              Put_Str ("[S7] T6b PASS: healthy (net+MLS) -> commit" & ASCII.CR & ASCII.LF);
           else
              Put_Str ("[S7] T6b FAIL" & ASCII.CR & ASCII.LF);
+          end if;
+       end;
+
+       -- T7: Watchdog kick/expire logic (W9.3).
+       declare
+          WD1 : Schild_Watchdog.Watchdog;
+          WD2 : Schild_Watchdog.Watchdog;
+       begin
+          Schild_Watchdog.Initialize (WD1, 3);
+          Schild_Watchdog.Initialize (WD2, 3);
+
+          -- WD1: three ticks with no kick -> must fire.
+          Schild_Watchdog.Tick (WD1);  -- 3 -> 2
+          Schild_Watchdog.Tick (WD1);  -- 2 -> 1
+          Schild_Watchdog.Tick (WD1);  -- 1 -> 0 -> fired
+          if Schild_Watchdog.Expired (WD1) then
+             Put_Str ("[S7] T7a PASS: watchdog fires after missed kicks" & ASCII.CR & ASCII.LF);
+          else
+             Put_Str ("[S7] T7a FAIL" & ASCII.CR & ASCII.LF);
+          end if;
+
+          -- WD2: kick in time -> must not fire.
+          Schild_Watchdog.Tick (WD2);  -- 3 -> 2
+          Schild_Watchdog.Tick (WD2);  -- 2 -> 1
+          Schild_Watchdog.Kick (WD2);  -- reset to 3
+          Schild_Watchdog.Tick (WD2);  -- 3 -> 2
+          Schild_Watchdog.Tick (WD2);  -- 2 -> 1
+          if not Schild_Watchdog.Expired (WD2) then
+             Put_Str ("[S7] T7b PASS: kick resets countdown (no fire)" & ASCII.CR & ASCII.LF);
+          else
+             Put_Str ("[S7] T7b FAIL" & ASCII.CR & ASCII.LF);
           end if;
        end;
 

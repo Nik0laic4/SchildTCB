@@ -62,6 +62,21 @@ is
    with
      Post => Health_Ok'Result = (Status.Network_Up and Status.MLS_Valid);
 
+   -- Non-volatile projection of the boot manager (W9 Load/Save shim, logic).
+   -- RAM-level counterpart of the NVMe counter block in BOOT_COUNTER_DESIGN.md
+   -- §4; byte-level packing is deferred to the NVMe shim (hardware). The
+   -- round-trip From_Persistent (To_Persistent M) preserves every field below.
+   type Persistent_State is record
+      Boot_Count        : Unsigned_64;
+      Failed_Boot_Count : Unsigned_64;
+      Active_Slot       : Boot_Slot;
+      Slot_A_Attempts   : Unsigned_64;
+      Slot_B_Attempts   : Unsigned_64;
+      Slot_A_Locked     : Boolean;
+      Slot_B_Locked     : Boolean;
+      Both_Locked       : Boolean;
+   end record;
+
    -- Compute SHA-256 hash of a memory region
    -- (Stage 7.2: replace with real SHA-256; Stage 7.1: constant for testing)
    function Compute_Hash
@@ -200,5 +215,30 @@ is
              and not Manager.Slot_A_Locked
              and not Manager.Slot_B_Locked
              and not Manager.Both_Locked;
+
+   -- Project the persisted counter state out of the boot manager.
+   function To_Persistent (Manager : Boot_Manager) return Persistent_State
+   with
+     Post => To_Persistent'Result.Boot_Count = Manager.Boot_Count
+             and To_Persistent'Result.Failed_Boot_Count = Manager.Failed_Boot_Count
+             and To_Persistent'Result.Active_Slot = Manager.Active_Slot
+             and To_Persistent'Result.Slot_A_Attempts = Manager.Slot_A_Attempts
+             and To_Persistent'Result.Slot_B_Attempts = Manager.Slot_B_Attempts
+             and To_Persistent'Result.Slot_A_Locked = Manager.Slot_A_Locked
+             and To_Persistent'Result.Slot_B_Locked = Manager.Slot_B_Locked
+             and To_Persistent'Result.Both_Locked = Manager.Both_Locked;
+
+   -- Rebuild a boot manager from persisted state (hashes/Verified reset).
+   function From_Persistent (State : Persistent_State) return Boot_Manager
+   with
+     Post => From_Persistent'Result.Boot_Count = State.Boot_Count
+             and From_Persistent'Result.Failed_Boot_Count = State.Failed_Boot_Count
+             and From_Persistent'Result.Active_Slot = State.Active_Slot
+             and From_Persistent'Result.Slot_A_Attempts = State.Slot_A_Attempts
+             and From_Persistent'Result.Slot_B_Attempts = State.Slot_B_Attempts
+             and From_Persistent'Result.Slot_A_Locked = State.Slot_A_Locked
+             and From_Persistent'Result.Slot_B_Locked = State.Slot_B_Locked
+             and From_Persistent'Result.Both_Locked = State.Both_Locked
+             and not From_Persistent'Result.Verified;
 
 end Schild_Boot_Manager;

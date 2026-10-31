@@ -15,5 +15,6 @@ project Verify is
                  "schild_boot_manager.adb",
                  "schild_hm_model.adb",
                  "schild_launch_model.adb",
+                 "schild_watchdog.adb",
                  "schild_root_task.adb");
 end Verify;

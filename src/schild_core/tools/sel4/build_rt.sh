@@ -77,7 +77,7 @@ if ! "$TOOL/gcc" -c --RTS="$(pwd)/../../bare_runtime" -gnat2022 -gnatwa -gnato -
     exit 1
 fi
 
-for src in schild_mls_policy schild_audit_logger schild_config_daemon schild_boot_manager schild_hm_model schild_launch_model schild_root_task schild_sel4_syscall schild_sel4_bootinfo schild_net_server; do
+for src in schild_mls_policy schild_audit_logger schild_config_daemon schild_boot_manager schild_hm_model schild_launch_model schild_watchdog schild_root_task schild_sel4_syscall schild_sel4_bootinfo schild_net_server; do
     SF="src/${src}.adb"
     [ -f "$OVERLAY/${src}.adb" ] && SF="$OVERLAY/${src}.adb"
     if ! "$TOOL/gcc" -c --RTS="$(pwd)/../../bare_runtime" -gnat2022 -gnatwa -gnato -gnatVa -g -O0 "${PREFIX_MAP_ADA[@]}" \
@@ -156,6 +156,7 @@ done
     "$OBJ/schild_boot_manager.o" \
     "$OBJ/schild_hm_model.o" \
     "$OBJ/schild_launch_model.o" \
+    "$OBJ/schild_watchdog.o" \
     "$OBJ/schild_root_task.o" \
     "$OBJ/schild_sel4_syscall.o" \
     "$OBJ/schild_sel4_bootinfo.o" \
