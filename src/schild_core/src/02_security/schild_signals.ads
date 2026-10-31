@@ -42,8 +42,9 @@ is
       Status         :    out Signal_Status)
    with
      Pre  => Target_Cap /= Null_Cap,
-     Post => (if Sender_Level < Target_Level then Status = Rejected);
-     --  A lower-level sender may not signal a higher-level target.
+     Post => (if Sender_Level < Target_Level then Status = Rejected
+              else Status = Delivered);
+     --  No write down: a lower-level sender may not signal a higher target.
 
    --  Add a signal to the blocked set.
    procedure Block_Signal
