@@ -134,4 +134,33 @@ is
       Manager.Both_Locked       := False;
    end Initialize;
 
+   function To_Persistent (Manager : Boot_Manager) return Persistent_State is
+   begin
+      return (Boot_Count        => Manager.Boot_Count,
+              Failed_Boot_Count => Manager.Failed_Boot_Count,
+              Active_Slot       => Manager.Active_Slot,
+              Slot_A_Attempts   => Manager.Slot_A_Attempts,
+              Slot_B_Attempts   => Manager.Slot_B_Attempts,
+              Slot_A_Locked     => Manager.Slot_A_Locked,
+              Slot_B_Locked     => Manager.Slot_B_Locked,
+              Both_Locked       => Manager.Both_Locked);
+   end To_Persistent;
+
+   function From_Persistent (State : Persistent_State) return Boot_Manager is
+      M : Boot_Manager;
+   begin
+      M.Boot_Count        := State.Boot_Count;
+      M.Failed_Boot_Count := State.Failed_Boot_Count;
+      M.Active_Slot       := State.Active_Slot;
+      M.Slot_A_Attempts   := State.Slot_A_Attempts;
+      M.Slot_B_Attempts   := State.Slot_B_Attempts;
+      M.Slot_A_Locked     := State.Slot_A_Locked;
+      M.Slot_B_Locked     := State.Slot_B_Locked;
+      M.Both_Locked       := State.Both_Locked;
+      M.Verified          := False;
+      M.Slot_A_Hash       := (others => 0);
+      M.Slot_B_Hash       := (others => 0);
+      return M;
+   end From_Persistent;
+
 end Schild_Boot_Manager;

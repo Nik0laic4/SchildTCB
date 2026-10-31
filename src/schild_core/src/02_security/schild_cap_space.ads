@@ -70,7 +70,8 @@ is
                   and Table (Dest).Parent = Cap_Id (Src)
                   and Table (Dest).Badge = Badge
                   and Table (Dest).Rights = (Table'Old (Src).Rights and New_Right)
-                  and Table (Dest).Rights <= Table'Old (Src).Rights);
+                  and Table (Dest).Rights <= Table'Old (Src).Rights
+                  and Is_Derived_From (Table, Dest, Src));
 
    procedure Cap_Revoke
      (Table    : in out Cap_Table;
@@ -119,6 +120,8 @@ is
    function Is_Valid (Node : Cap_Node) return Boolean is (Node.The_Kind /= Cap_Null);
    function Has_Right (Node : Cap_Node; R : Cap_Rights) return Boolean is
      ((Node.Rights and R) = R);
-   function Is_Derived_From (Table : Cap_Table; Child, Ancestor : Cap_Index) return Boolean;
+   function Is_Derived_From (Table : Cap_Table; Child, Ancestor : Cap_Index) return Boolean
+   with
+     Post => (if Table (Child).Parent = Cap_Id (Ancestor) then Is_Derived_From'Result);
 
 end Schild_Cap_Space;
