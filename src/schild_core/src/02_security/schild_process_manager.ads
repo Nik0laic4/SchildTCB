@@ -83,7 +83,7 @@ is
    with
      Pre  => Pid /= Null_PID,
      Post => (if Status = Mls_Violation then
-                True  -- caller was below target
+                Table = Table'Old  -- no control-up: the target is untouched
               else
                 Status = Success or Status = Invalid_PID);
 
