@@ -1,4 +1,4 @@
-# Session handoff — W9.1/W9.2 boot counter + health check (2026-10-31)
+# Session handoff — W9.1–W9.3 boot counter + health check + watchdog (2026-10-31)
 
 > Документ для чистой новой сессии. Прочитать целиком, затем продолжать с
 > раздела «Осталось».
@@ -6,14 +6,15 @@
 ## 1. Git-состояние
 
 - Работа (код): **`596516f`** (W9.1 boot counter) + **`6966b2a`** (починка
-  private-оверлея) + **`0716daa`** (W9.2 health check); документация — коммитом
-  поверх (итоговый HEAD — см. `git log -1`). Ветки `arm64`/`master`/`origin`
+  private-оверлея) + **`0716daa`** (W9.2 health check) + **`a027f5c`** (W9.3
+  watchdog логика + Load/Save round-trip + долги контрактов); документация —
+  коммитом поверх (итоговый HEAD — см. `git log -1`). Ветки `arm64`/`master`/`origin`
   в синке, рабочее дерево чистое.
 - Репозиторий: `/home/null/Рабочий стол/SchildTCB`.
-- Proof-гейт `verify.sh`: **`not-proved: 0`**, `schild_boot_manager` 10 подпрограмм
-  доказано, `schild_root_task` 65 checks доказано.
+- Proof-гейт `verify.sh`: **`not-proved: 0`**, `schild_boot_manager` 12 подпрограмм
+  доказано, `schild_watchdog` 5 подпрограмм, `schild_root_task` 75 checks.
 
-## 2. Что сделано за сессию (W9.1/W9.2)
+## 2. Что сделано за сессию (W9.1–W9.3 + долги контрактов)
 
 - **Boot counter (A/B + порог блокировки)** — расширен `schild_boot_manager`
   (обе редакции: `tools/sel4/src/` stub + `private/root_task/` полная):
@@ -38,6 +39,16 @@
   недостающий `Config_Authorize_Op` в private config-daemon; синхронизация
   private `schild_net_runtime.c` с публичным scaffold. `SCHILD_PROFILE=private`
   теперь собирается целиком.
+- **Watchdog (W9.3, логика)** — `schild_watchdog` (kick/expire), self-test
+  `[S7] T7a/T7b`; добавлен в `build_rt.sh` (компиляция+линк) и `verify.gpr`.
+  Хардварный таймер — deferred.
+- **Load/Save round-trip** — `To_Persistent`/`From_Persistent`
+  (`Boot_Manager ↔ Persistent_State`) в обеих редакциях; byte-упаковка + NVMe —
+  deferred.
+- **Долги контрактов:** `schild_boot_runtime` `Refined_State`/`Refined_Global`
+  ✅ (отдельные `Status_State`/`Attempts_State`); `Is_Derived_From` ✅ (контракт
+  + связка с `Cap_Mint`). `schild_firewall` — остаётся scaffold (контракты после
+  наполнения).
 
 ## 3. Ключевые факты и gotchas
 
@@ -67,7 +78,7 @@
 
 ```bash
 cd /home/null/Рабочий стол/SchildTCB/src/schild_core
-bash scripts/verify.sh            # гейт: not-proved: 0 (boot_manager 10/10, root_task 65)
+bash scripts/verify.sh            # гейт: not-proved: 0 (boot_manager 12/12, watchdog 5, root_task 75)
 # полная версия (SPARK_Mode Off):
 #   gcc -c --RTS=.../bare_runtime -I../../src -I../../src/03_crypto \
 #       /home/null/Рабочий стол/SchildTCB/private/root_task/schild_boot_manager.adb
@@ -75,19 +86,20 @@ bash scripts/verify.sh            # гейт: not-proved: 0 (boot_manager 10/10,
 
 ## 5. Осталось (по приоритету)
 
-### A. Фаза надёжности — следующий шаг W9.3
+### A. Фаза надёжности — осталось только железо
 
-1. **Watchdog** (W9.3) — хардварный таймер + «kick»-петля в root-задаче (⚠️ железо).
-2. **Load/Save shim** (см. `BOOT_COUNTER_DESIGN.md` §5): сериализация
-   `Boot_Manager ↔ NVMe-блок LBA 2048` + вызов `schild_nvme.Read/Write_Block`
-   в root-задаче (нужно железо/QEMU-NVMe). Также реальные пробы health-check
-   (e1000e link status, MLS validation) вместо явных `Health_Status`-агрегатов.
+1. **Watchdog** — логика ✅; осталось подключить хардварный таймер
+   (PIT/APIC x86, BCM2711 Pi) + «kick»-петлю в root-задаче (⚠️ железо).
+2. **Load/Save shim** — round-trip ✅; осталось: byte-упаковка в 512-байтовый
+   блок + HMAC-тег + `schild_nvme.Read/Write_Block` (нужно железо/QEMU-NVMe);
+   плюс реальные пробы health-check (e1000e link status, MLS validation).
 3. **Tryboot / Rescue slot** (W9.4) — конфиг bootloader (❌ Pi 4).
 
-### B. Долги контрактов (перенесены из прошлой сессии)
+### B. Долги контрактов
 
-1. `schild_boot_runtime` — `Refined_State`-абстракция (gotcha в SESSION_CONTRACT_AUDIT.md).
-2. `Is_Derived_From` — мёртвый код; спека после подключения к cap_space.
-3. `schild_firewall` — scaffold (Tier C).
+1. `schild_boot_runtime` — `Refined_State` ✅ (закрыто).
+2. `Is_Derived_From` — ✅ (контракт + связка с `Cap_Mint`).
+3. `schild_firewall` — scaffold (Tier C); контракты после наполнения пакетного
+   фильтра (отдельная задача, не блокирует релиз).
 
 ### C. Релиз v0.1.0 — когда A закрыт

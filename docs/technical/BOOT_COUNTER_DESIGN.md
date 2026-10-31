@@ -123,10 +123,11 @@ Boot counter **должен переживать перезагрузку** — 
 
 ## 5. Что отложено (граница «без железа»)
 
-1. **Load/Save shim** — сериализация `Boot_Manager ↔ блок` и вызов
-   `schild_nvme.Read_Block/Write_Block` в root-задаче. Требует живого NVMe в
-   раннем boot; в QEMU-демо root-задача работает от `Initialize` (свежее
-   состояние). Логика уже доказана; обвязка — следующий шаг с железом.
+1. **Load/Save shim** — структурный round-trip `Boot_Manager ↔ Persistent_State`
+   (`To_Persistent`/`From_Persistent`) ✅ доказан. Осталось: byte-упаковка в
+   512-байтовый блок + HMAC-тег + вызов `schild_nvme.Read_Block/Write_Block`
+   в root-задаче (нужно железо/QEMU-NVMe). В QEMU-демо root-задача работает
+   от `Initialize` (свежее состояние).
 2. **CMOS latch** — запись в RTC CMOS 0x2E–0x31 (нужен реальный x86 PIIX4/ICH).
 3. **Связка с `schild_boot_runtime`** — `Boot_Status` (Booting/Stable/Faulted/
    Recovering) в bare-metal-ядре пока не связан с `schild_boot_manager` (это
