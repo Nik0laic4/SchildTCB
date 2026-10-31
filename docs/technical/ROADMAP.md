@@ -1,6 +1,6 @@
 # Schild TCB — Дорожная карта (ROADMAP)
 
-**Version:** v1.0  |  **Date:** 2026-10-04
+**Version:** v1.1  |  **Date:** 2026-10-31
 **Developer:** Ирганов А.Н.
 **Status:** каноничный единый источник истины о «что дальше».
 
@@ -12,13 +12,15 @@
 
 ---
 
-## 1. Текущее валидированное состояние (2026-10-04, HEAD `9c7b2c2`)
+## 1. Текущее валидированное состояние (2026-10-31, HEAD `0fcb0a0`)
 
 | Компонент | Статус | Механическая проверка |
 |---|---|---|
 | Bare-metal ядро — сборка | ✅ 0 ошибок | `./build.sh` |
-| Bare-metal ядро — SPARK L4 | ✅ `not-proved: 0` | `scripts/prove_kernel.sh` → `obj/proof/report.txt` (185 модулей) |
+| Bare-metal ядро — SPARK L4 | ✅ `not-proved: 0` | `scripts/prove_kernel.sh` → `obj/proof/report.txt` (185 модулей; `~108 proved / ~77 out-of-proof`) |
 | Демоны root-задачи — SPARK L4 | ✅ все VC доказаны | `scripts/verify.sh` (`verify.gpr`, 7 модулей) |
+| Модель угроз | ✅ | `docs/technical/THREAT_MODEL.md` |
+| Контрактный аудит (Tier-A) | ✅ усилены, `not-proved: 0` | `docs/technical/SESSION_CONTRACT_AUDIT.md` |
 | Bare-metal boot + сеть | ✅ T580 + QEMU | `run_tests.sh` (`SEL4_PRIMARY=0`); HTTP на T580 (IRQ-driven RX) |
 | seL4 ветка — сборка | ✅ | `SEL4_PRIMARY=1 ./build.sh` |
 | seL4 ветка — QEMU | ✅ 20/20 маркеров | `run_tests.sh` (`SEL4_PRIMARY=1`) |
@@ -185,6 +187,22 @@ upstream-фиксов IOMMU/SMP. `KERNEL_SMP` оставлен в `build_sel4_ke
 **Exit (выполнен):** NVMe инициализируется в seL4; SchildFS write-path
 валидирован в NetServer (`[NVFS] Read-back VERIFY OK` в `SEL4_PRIMARY=1`);
 QEMU **20/20**; bare-metal `[NVFS]` без регрессий.
+
+
+### W8 — Контрактный аудит + модель угроз ✅ ЗАКРЫТ (2026-10-31)
+
+**Итог (W8-сессия):** модель угроз (`THREAT_MODEL.md`) + усиление контрактов
+security-критичных модулей (cap_space, process_manager, signals, mls, ipc).
+Детали и остатки — `SESSION_CONTRACT_AUDIT.md`. Полный proof: `not-proved: 0`,
+`~108 proved / ~77 out-of-proof`.
+
+### W9 — Фаза надёжности (boot/update/recovery) — `[следующий]`
+
+1. **Boot counter** — логика A/B + порог блокировки слота B (расширить
+   `schild_boot_manager`; определить энергонезависимое хранилище).
+2. **Health check перед commit** — проверка сети + MLS перед фиксацией слота.
+3. **Watchdog** — хардварный таймер + «kick»-петля (⚠️ железо).
+4. **Tryboot / Rescue slot** — конфиг bootloader (❌ Pi 4).
 
 
 ---
