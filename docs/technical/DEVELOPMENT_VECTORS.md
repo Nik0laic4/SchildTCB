@@ -88,6 +88,6 @@
 | 4 | Сверка нашего virtio-net с L4Re ✅ `VIRTIO_NET_L4RE_COMPARISON.md` | референтные базы | `[сейчас]` |
 | 5 | Драйвер GENET (порт под seL4) | референтные базы | `[позже]` — ждём Pi 4 |
 | 6 | Контрактный аудит Tier-A ✅ + модель угроз ✅ | high-assurance | `[сделано]` (`SESSION_CONTRACT_AUDIT.md`, `THREAT_MODEL.md`); расширение на остальные модули — `[позже]` |
-| 7 | Фаза надёжности: boot counter ✅ (W9.1) → health check → watchdog → tryboot/rescue | boot/update/recovery | `[в работе]` — next: health check (W9.2) |
+| 7 | Фаза надёжности: boot counter ✅ (W9.1) + health check ✅ (W9.2) → watchdog → tryboot/rescue | boot/update/recovery | `[в работе]` — next: watchdog (W9.3) |
 | — | Прямой перенос кода L4Re / переезд на Fiasco.OC | референтные базы | `[не делаем]` |
 | — | Полная сертификация DO-178C DAL A | high-assurance | `[не делаем]` без заказчика/органа |
