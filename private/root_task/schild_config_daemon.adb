@@ -141,4 +141,30 @@ is
       end if;
    end Tick;
 
+   --  C-level mapping 0..4 -> security level.
+   Level_Map : constant array (0 .. 4) of Security_Level :=
+     (Public, Internal, Confidential, Secret, Top_Secret);
+
+   --  C-callable gate: delegates validation to the verified Validate_Config
+   --  contract on the (richer) private default configuration. Malformed
+   --  requests are denied; commit/rollback are accepted no-ops.
+   function Config_Authorize_Op
+     (Op    : Unsigned_32;
+      Level : Unsigned_32) return Unsigned_32
+   is
+      State : Config_Daemon;
+   begin
+      if Op > 2 or Level > 4 then
+         return 0;  --  malformed request -> deny
+      end if;
+      Initialize (State);
+      if Op = 0 then
+         State.Mode := Validating;
+         State.State_Checksum := Compute_State_Checksum (State);
+         return (if Validate_Config (State, Level_Map (Integer (Level))) then 1 else 0);
+      else
+         return 1;  --  commit/rollback accepted (no-op in the gate)
+      end if;
+   end Config_Authorize_Op;
+
 end Schild_Config_Daemon;

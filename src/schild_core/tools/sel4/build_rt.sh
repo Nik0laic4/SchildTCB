@@ -8,7 +8,9 @@ cd "$(dirname "$0")"
 
 # Reproducible-build hardening: map the absolute build root to a relative
 # prefix in debug/macro info so no host path is embedded in compiler output.
-BUILD_ROOT="$(cd ../../.. && pwd)"
+# (BUILD_ROOT must be the repository root so the private/ overlay — which lives
+# at <repo>/private, not under src/ — is resolved correctly.)
+BUILD_ROOT="$(cd ../../../.. && pwd)"
 # Reproducible-build hardening: map the build root to a relative prefix so no
 # host path is embedded in compiler output. -fdebug-prefix-map is valid for
 # Ada and C; -fmacro-prefix-map is C/C++ only (gnat1 rejects it for Ada).
