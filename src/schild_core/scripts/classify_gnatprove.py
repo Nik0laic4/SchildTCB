@@ -10,12 +10,15 @@ requested module in the report format:
 
     <VERDICT padded to 12 chars> <module>
 
-Verdicts (same semantics as the historical report):
+Verdicts:
 
   - NOT-PROVED: the block contains "not proved".
   - PROVED:     otherwise, the block contains "proved (" (any number of checks).
-  - SKIPPED:    otherwise, the block contains "skipped" (body SPARK_Mode => Off).
-  - NO-BODY:    none of the above (absent or empty block).
+  - SKIPPED:    otherwise — out of proof scope (body SPARK_Mode => Off, or no
+                analyzable body). These two are merged into one category
+                because gnatprove's -j8 output flips between "skipped" and "no
+                body" for some spec-On/body-Off units, so splitting them was
+                non-deterministic across runs.
 
 The awk version this replaces scanned the file once per module and was fragile
 around block boundaries, which made the SKIPPED/NO-BODY split drift between
@@ -48,9 +51,7 @@ def verdict(block_lines):
         return "NOT-PROVED"
     if "proved (" in blob:
         return "PROVED"
-    if "skipped" in blob:
-        return "SKIPPED"
-    return "NO-BODY"
+    return "SKIPPED"
 
 
 def main():
