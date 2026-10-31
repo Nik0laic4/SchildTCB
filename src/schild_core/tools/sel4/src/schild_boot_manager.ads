@@ -77,6 +77,38 @@ is
       Both_Locked       : Boolean;
    end record;
 
+   -- 512-byte non-volatile counter image (one NVMe LBA). Layout in
+   -- BOOT_COUNTER_DESIGN.md §4.2; the integrity tag is carried alongside and
+   -- the NVMe shim will place it at bytes 480..511.
+   subtype Counter_Block is Byte_Array (0 .. 511);
+
+   type Sealed_Block is record
+      Image : Counter_Block;   -- magic + version + fields (LE), 0-padded to 480
+      Tag   : SHA256_Hash;     -- SHA-256 over Image (0 .. 479)
+   end record;
+
+   -- Little-endian field extractors (used in Decode_Block's contract).
+   function Get_U8  (Block : Counter_Block; Off : Natural) return Unsigned_8
+   with Pre => Off <= 511;
+   function Get_U32 (Block : Counter_Block; Off : Natural) return Unsigned_32
+   with Pre => Off <= 508;
+   function Get_U64 (Block : Counter_Block; Off : Natural) return Unsigned_64
+   with Pre => Off <= 504;
+
+   -- Validate magic, version and integrity tag of a sealed block.
+   function Verify_Block (Block : Sealed_Block) return Boolean;
+
+   -- Deserialize a block back into persistent state. The caller is expected to
+   -- have validated the block first with Verify_Block.
+   function Decode_Block (Block : Sealed_Block) return Persistent_State;
+
+   -- Serialize the persistent state into a sealed block. The attempts are stored
+   -- as 32-bit little-endian, so they must fit in 32 bits (always true in valid
+   -- boot-manager states, where attempts <= Max_Boot_Attempts = 3).
+   function Encode_Block (State : Persistent_State) return Sealed_Block
+   with Pre => State.Slot_A_Attempts <= Unsigned_64 (Unsigned_32'Last)
+               and State.Slot_B_Attempts <= Unsigned_64 (Unsigned_32'Last);
+
    -- Compute SHA-256 hash of a memory region
    -- (Stage 7.2: replace with real SHA-256; Stage 7.1: constant for testing)
    function Compute_Hash

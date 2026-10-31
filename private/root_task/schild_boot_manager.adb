@@ -186,4 +186,115 @@ is
       return M;
    end From_Persistent;
 
+   function Get_U8 (Block : Counter_Block; Off : Natural) return Unsigned_8 is
+   begin
+      return Block (Off);
+   end Get_U8;
+
+   function Get_U32 (Block : Counter_Block; Off : Natural) return Unsigned_32 is
+   begin
+      return Unsigned_32 (Block (Off + 0))
+           or Shift_Left (Unsigned_32 (Block (Off + 1)), 8)
+           or Shift_Left (Unsigned_32 (Block (Off + 2)), 16)
+           or Shift_Left (Unsigned_32 (Block (Off + 3)), 24);
+   end Get_U32;
+
+   function Get_U64 (Block : Counter_Block; Off : Natural) return Unsigned_64 is
+   begin
+      return Unsigned_64 (Block (Off + 0))
+           or Shift_Left (Unsigned_64 (Block (Off + 1)), 8)
+           or Shift_Left (Unsigned_64 (Block (Off + 2)), 16)
+           or Shift_Left (Unsigned_64 (Block (Off + 3)), 24)
+           or Shift_Left (Unsigned_64 (Block (Off + 4)), 32)
+           or Shift_Left (Unsigned_64 (Block (Off + 5)), 40)
+           or Shift_Left (Unsigned_64 (Block (Off + 6)), 48)
+           or Shift_Left (Unsigned_64 (Block (Off + 7)), 56);
+   end Get_U64;
+
+   procedure Put_U32 (Block : in out Counter_Block; Off : Natural; V : Unsigned_32) with
+     Pre => Off <= 508
+   is
+   begin
+      Block (Off + 0) := Unsigned_8 (V and 16#FF#);
+      Block (Off + 1) := Unsigned_8 (Shift_Right (V, 8)  and 16#FF#);
+      Block (Off + 2) := Unsigned_8 (Shift_Right (V, 16) and 16#FF#);
+      Block (Off + 3) := Unsigned_8 (Shift_Right (V, 24) and 16#FF#);
+   end Put_U32;
+
+   procedure Put_U64 (Block : in out Counter_Block; Off : Natural; V : Unsigned_64) with
+     Pre => Off <= 504
+   is
+   begin
+      Block (Off + 0) := Unsigned_8 (V and 16#FF#);
+      Block (Off + 1) := Unsigned_8 (Shift_Right (V, 8)  and 16#FF#);
+      Block (Off + 2) := Unsigned_8 (Shift_Right (V, 16) and 16#FF#);
+      Block (Off + 3) := Unsigned_8 (Shift_Right (V, 24) and 16#FF#);
+      Block (Off + 4) := Unsigned_8 (Shift_Right (V, 32) and 16#FF#);
+      Block (Off + 5) := Unsigned_8 (Shift_Right (V, 40) and 16#FF#);
+      Block (Off + 6) := Unsigned_8 (Shift_Right (V, 48) and 16#FF#);
+      Block (Off + 7) := Unsigned_8 (Shift_Right (V, 56) and 16#FF#);
+   end Put_U64;
+
+   function Compute_Tag (Image : Counter_Block) return SHA256_Hash is
+   begin
+      return SHA256 (Image (0 .. 479));
+   end Compute_Tag;
+
+   function Verify_Block (Block : Sealed_Block) return Boolean is
+   begin
+      if Block.Image (0) /= 16#53# or else Block.Image (1) /= 16#43#
+        or else Block.Image (2) /= 16#48# or else Block.Image (3) /= 16#4C#
+        or else Block.Image (4) /= 16#44# or else Block.Image (5) /= 16#42#
+        or else Block.Image (6) /= 16#43# or else Block.Image (7) /= 16#31#
+      then
+         return False;
+      end if;
+      if Get_U32 (Block.Image, 8) /= 1 then
+         return False;
+      end if;
+      return Block.Tag = Compute_Tag (Block.Image);
+   end Verify_Block;
+
+   function Encode_Block (State : Persistent_State) return Sealed_Block is
+      B : Sealed_Block;
+   begin
+      B.Image := (others => 0);
+      B.Image (0) := 16#53#; B.Image (1) := 16#43#;
+      B.Image (2) := 16#48#; B.Image (3) := 16#4C#;
+      B.Image (4) := 16#44#; B.Image (5) := 16#42#;
+      B.Image (6) := 16#43#; B.Image (7) := 16#31#;
+      Put_U32 (B.Image, 8, 1);
+      Put_U64 (B.Image, 16, State.Boot_Count);
+      Put_U64 (B.Image, 24, State.Failed_Boot_Count);
+      B.Image (32) := (if State.Active_Slot = Slot_A then 0 else 1);
+      Put_U32 (B.Image, 33, Unsigned_32 (State.Slot_A_Attempts));
+      Put_U32 (B.Image, 37, Unsigned_32 (State.Slot_B_Attempts));
+      B.Image (41) := 0;
+      if State.Slot_A_Locked then
+         B.Image (41) := B.Image (41) or Unsigned_8'(1);
+      end if;
+      if State.Slot_B_Locked then
+         B.Image (41) := B.Image (41) or Unsigned_8'(2);
+      end if;
+      if State.Both_Locked then
+         B.Image (41) := B.Image (41) or Unsigned_8'(4);
+      end if;
+      B.Tag := Compute_Tag (B.Image);
+      return B;
+   end Encode_Block;
+
+   function Decode_Block (Block : Sealed_Block) return Persistent_State is
+      S : Persistent_State;
+   begin
+      S.Boot_Count        := Get_U64 (Block.Image, 16);
+      S.Failed_Boot_Count := Get_U64 (Block.Image, 24);
+      S.Active_Slot       := (if Block.Image (32) = 0 then Slot_A else Slot_B);
+      S.Slot_A_Attempts   := Unsigned_64 (Get_U32 (Block.Image, 33));
+      S.Slot_B_Attempts   := Unsigned_64 (Get_U32 (Block.Image, 37));
+      S.Slot_A_Locked     := (Block.Image (41) and 1) /= 0;
+      S.Slot_B_Locked     := (Block.Image (41) and 2) /= 0;
+      S.Both_Locked       := (Block.Image (41) and 4) /= 0;
+      return S;
+   end Decode_Block;
+
 end Schild_Boot_Manager;
