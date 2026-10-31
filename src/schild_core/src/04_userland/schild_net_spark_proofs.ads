@@ -90,7 +90,9 @@ package Schild_Net_Spark_Proofs with SPARK_Mode => On is
    with
      Global => null,
      Pre    => Packet_Len in 14 .. 2047,
-     Post   => Valid = (if Packet_Len >= 28 then True else
-                         Packet_Len >= 14);
+     Post   => Valid;
+   --  The Pre already guarantees Packet_Len >= 14 (minimum Ethernet frame), so
+   --  the buffer-safety check is always true; the old "then True" clause was
+   --  vacuous.
 
 end Schild_Net_Spark_Proofs;

@@ -11,7 +11,11 @@ is
       New_Level     : in     Clear_Level_Type;
       Final_Level   :    out Clear_Level_Type;
       Success       :    out Boolean)
-   with Post => (if Success then Final_Level >= Current_Level); 
-   --  The final level is never lower than the current level.
+   with Post => (if Success then
+                   Final_Level = New_Level and Final_Level >= Current_Level
+                 else
+                   Final_Level = Current_Level and New_Level < Current_Level);
+   --  Success: the requested level is accepted (never a downgrade).
+   --  Failure: the request would lower clearance, so the level is unchanged.
 
 end Schild_Mls_Assigner;
