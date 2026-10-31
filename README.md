@@ -4,7 +4,7 @@ A **Trusted Computing Base (TCB)** research prototype: a formally verified core 
 
 [![CI](https://github.com/Nik0laic4/SchildTCB/actions/workflows/ci.yml/badge.svg)](https://github.com/Nik0laic4/SchildTCB/actions/workflows/ci.yml)
 [![ARM64 virtio-net](https://github.com/Nik0laic4/SchildTCB/actions/workflows/arm64-net.yml/badge.svg)](https://github.com/Nik0laic4/SchildTCB/actions/workflows/arm64-net.yml)
-[![SPARK Level 4](https://img.shields.io/badge/SPARK-Level_4-0_unproved_VCs-green)](docs/technical/ASSURANCE.md)
+[![SPARK Level 4](https://img.shields.io/badge/SPARK_Level_4-0_unproved_VCs-green)](docs/technical/ASSURANCE.md)
 [![License: GPL-2.0-only](https://img.shields.io/badge/License-GPL--2.0--only-blue.svg)](LICENSE)
 
 ---
