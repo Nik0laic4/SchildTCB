@@ -25,12 +25,16 @@ package Schild_IPC with SPARK_Mode is
    procedure Write_Byte (Window : in out IPC_Window; Data : Storage_Byte)
      with Pre  => Window.Length < Buffer_Size,
           Post => Window.Length = Window.Length'Old + 1 and
+                  Window.Buffer (Buffer_Index (Window.Length)) = Data and
                   Window.C_Space = Window.C_Space'Old;
 
    procedure Execute_Syscall (Window : in out IPC_Window; Slot : Slot_Index)
      with Pre  => Window.Length > 0 and then
                   (Window.C_Space (Slot).Kind = Cap_Write or
                    Window.C_Space (Slot).Kind = Cap_Grant),
-          Post => Window.Length = 4;
+          Post => Window.Length = 4 and
+                  Window.Buffer (1) = 200 and
+                  (for all I in Buffer_Index =>
+                     (if I /= 1 then Window.Buffer (I) = 0));
 
 end Schild_IPC;
