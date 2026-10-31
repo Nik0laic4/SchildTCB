@@ -63,21 +63,7 @@ EOF
   rm -rf obj/proof/gnatprove
   gnatprove -P /tmp/proof_batch.gpr --level=4 --mode=all -j8 > /tmp/proof_batch.log 2>&1
   outfile=obj/proof/gnatprove/gnatprove.out
-  for m in "${chunk[@]}"; do
-    v=$(awk -v u="$m" '
-      $0 ~ ("^in unit " u ",") { inblock=1; next }
-      inblock && /^in unit / { exit }
-      inblock && /not proved/ { np=1 }
-      inblock && /skipped/ { s=1 }
-      inblock && /proved \(/ { p=1 }
-      END {
-        if (np) print "NOT-PROVED";
-        else if (!p && s) print "SKIPPED";
-        else if (p) print "PROVED";
-        else print "NO-BODY";
-      }' "$outfile")
-    printf '%-12s %s\n' "$v" "$m" >> "$OUT"
-  done
+  python3 "$ROOT_DIR/scripts/classify_gnatprove.py" "$outfile" "${chunk[@]}" >> "$OUT"
   echo "chunk $((i/BATCH+1))/$(( (TOTAL+BATCH-1)/BATCH )) done" >&2
 done
 
