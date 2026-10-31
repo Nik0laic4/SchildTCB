@@ -42,13 +42,13 @@
 - **Watchdog (W9.3, логика)** — `schild_watchdog` (kick/expire), self-test
   `[S7] T7a/T7b`; добавлен в `build_rt.sh` (компиляция+линк) и `verify.gpr`.
   Хардварный таймер — deferred.
-- **Load/Save round-trip** — `To_Persistent`/`From_Persistent`
-  (`Boot_Manager ↔ Persistent_State`) в обеих редакциях; byte-упаковка + NVMe —
-  deferred.
+- **Load/Save round-trip + byte-упаковка** — `To_Persistent`/`From_Persistent`
+  + `Encode_Block`/`Decode_Block`/`Verify_Block` (512-байт блок + SHA-256 тег),
+  self-test `[S7] T8`; остался только NVMe I/O (железо).
 - **Долги контрактов:** `schild_boot_runtime` `Refined_State`/`Refined_Global`
   ✅ (отдельные `Status_State`/`Attempts_State`); `Is_Derived_From` ✅ (контракт
-  + связка с `Cap_Mint`). `schild_firewall` — остаётся scaffold (контракты после
-  наполнения).
+  + связка с `Cap_Mint`). `schild_firewall` — порт-блокировка + контракты ✅
+  (encryption — scaffold).
 
 ## 3. Ключевые факты и gotchas
 
@@ -99,7 +99,7 @@ bash scripts/verify.sh            # гейт: not-proved: 0 (boot_manager 12/12,
 
 1. `schild_boot_runtime` — `Refined_State` ✅ (закрыто).
 2. `Is_Derived_From` — ✅ (контракт + связка с `Cap_Mint`).
-3. `schild_firewall` — scaffold (Tier C); контракты после наполнения пакетного
-   фильтра (отдельная задача, не блокирует релиз).
+3. `schild_firewall` — порт-блокировка + контракты ✅; осталась encryption-часть
+   (scaffold) и полный пакетный фильтр (отдельная задача, не блокирует релиз).
 
 ### C. Релиз v0.1.0 — когда A закрыт
