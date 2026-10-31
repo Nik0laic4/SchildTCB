@@ -23,12 +23,18 @@ is
    --  Outcome of processing one packet through the firewall.
    type Firewall_Verdict is (Allowed, Dropped, Rate_Limited, Encrypted, Logged);
 
-   --  Firewall session state: limiter plus aggregate counters.
+   --  Fixed-size port blocklist.
+   Max_Blocked_Ports : constant := 16;
+   type Port_Table is array (1 .. Max_Blocked_Ports) of Application_Port_Type;
+
+   --  Firewall session state: limiter, counters, and the port blocklist.
    type Firewall_Context is record
       Limiter        : Limiter_Passport_Record;
       Total_Allowed  : Natural := 0;
       Total_Dropped  : Natural := 0;
       Session_Active : Boolean := False;
+      Blocked_Ports  : Port_Table := (others => 1);
+      Num_Blocked    : Natural range 0 .. Max_Blocked_Ports := 0;
    end record;
 
    ------------------------------------------------------------
@@ -36,27 +42,45 @@ is
    ------------------------------------------------------------
 
    --  Initialise the firewall context and arm the session.
-   procedure Init_Firewall (Context : out Firewall_Context);
+   procedure Init_Firewall (Context : out Firewall_Context) with
+     Post => Context.Session_Active
+             and Context.Total_Allowed = 0
+             and Context.Total_Dropped = 0
+             and Context.Num_Blocked = 0;
 
-   --  Inspect one packet and return a firewall verdict.
+   --  Inspect one packet and return a firewall verdict. The aggregate counters
+   --  only grow.
    procedure Process_Incoming_Packet
      (Context : in out Firewall_Context;
       Packet  : in     Network_Packet_Record;
-      Verdict :    out Firewall_Verdict);
+      Verdict :    out Firewall_Verdict) with
+     Post => Context.Total_Allowed >= Context.Total_Allowed'Old
+             and Context.Total_Dropped >= Context.Total_Dropped'Old;
 
    --  Consume one limiter token; Allowed reports whether it passed.
    procedure Apply_Rate_Limit
      (Context : in out Firewall_Context;
-      Allowed :    out Boolean);
+      Allowed :    out Boolean) with
+     Post => (if Allowed then Context.Limiter.Rate_Limit_Ok)
+             and Context.Total_Allowed = Context.Total_Allowed'Old
+             and Context.Total_Dropped = Context.Total_Dropped'Old
+             and Context.Num_Blocked = Context.Num_Blocked'Old;
 
    --  Encrypt an outgoing packet (scaffold).
    procedure Encrypt_Outgoing_Packet
      (Context : in out Firewall_Context;
-      Success :    out Boolean);
+      Success :    out Boolean) with
+     Post => Success;
 
-   --  Block a given port for a process (scaffold trace).
+   --  Block a given port (adds it to the blocklist; no-op if full or present).
    procedure Block_Port
      (Context : in out Firewall_Context;
       Port    :        Application_Port_Type;
-      Pid     :        Interfaces.Unsigned_32);
+      Pid     :        Interfaces.Unsigned_32) with
+     Post => Context.Num_Blocked <= Max_Blocked_Ports;
+
+   --  True when the port is in the blocklist.
+   function Is_Port_Blocked
+     (Context : Firewall_Context;
+      Port    : Application_Port_Type) return Boolean;
 end Schild_Firewall;

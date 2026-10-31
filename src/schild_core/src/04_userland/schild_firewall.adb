@@ -91,6 +91,13 @@ is
       Pid     :        Interfaces.Unsigned_32)
    is
    begin
+      --  Add the port to the blocklist (no duplicates, bounded by Max).
+      if Context.Num_Blocked < Max_Blocked_Ports
+        and then not Is_Port_Blocked (Context, Port)
+      then
+         Context.Num_Blocked := Context.Num_Blocked + 1;
+         Context.Blocked_Ports (Context.Num_Blocked) := Port;
+      end if;
       Schild_Log.Put_String ("[FW] Port blocked: ");
       --  Render the blocked port number as decimal for the UART trace.
       declare
@@ -100,7 +107,20 @@ is
          Schild_Text.Image (Natural (Port), Buf, Len);
          Schild_Log.Put_String (Buf (1 .. Len));
       end;
-      Schild_Log.Put_Line (" for PID (stub)");
+      Schild_Log.Put_Line (" for PID");
    end Block_Port;
+
+   function Is_Port_Blocked
+     (Context : Firewall_Context;
+      Port    : Application_Port_Type) return Boolean
+   is
+   begin
+      for I in 1 .. Context.Num_Blocked loop
+         if Context.Blocked_Ports (I) = Port then
+            return True;
+         end if;
+      end loop;
+      return False;
+   end Is_Port_Blocked;
 
 end Schild_Firewall;
