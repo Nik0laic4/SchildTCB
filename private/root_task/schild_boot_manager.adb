@@ -47,28 +47,79 @@ is
       return Expected = Actual;
    end Verify_Image;
 
-   -- ─── Atomic failover to backup slot ───
+   -- ─── Atomic failover with boot-counter lockout ───
+   function Slot_Locked
+     (Manager : Boot_Manager;
+      Slot    : Boot_Slot) return Boolean
+   is
+   begin
+      return (if Slot = Slot_A then Manager.Slot_A_Locked
+              else Manager.Slot_B_Locked);
+   end Slot_Locked;
+
+   function Is_Bricked (Manager : Boot_Manager) return Boolean is
+   begin
+      return Manager.Both_Locked;
+   end Is_Bricked;
+
    procedure Failover
      (Manager : in out Boot_Manager)
    is
+      Other : constant Boot_Slot :=
+        (if Manager.Active_Slot = Slot_A then Slot_B else Slot_A);
    begin
-      Manager.Active_Slot := (case Manager.Active_Slot is
-                                 when Slot_A => Slot_B,
-                                 when Slot_B => Slot_A);
-      Manager.Verified := False;
+      -- Decrement the failing slot's remaining attempts; lock it on exhaustion.
+      if Manager.Active_Slot = Slot_A then
+         if Manager.Slot_A_Attempts > 0 then
+            Manager.Slot_A_Attempts := Manager.Slot_A_Attempts - 1;
+         end if;
+         if Manager.Slot_A_Attempts = 0 then
+            Manager.Slot_A_Locked := True;
+         end if;
+      else
+         if Manager.Slot_B_Attempts > 0 then
+            Manager.Slot_B_Attempts := Manager.Slot_B_Attempts - 1;
+         end if;
+         if Manager.Slot_B_Attempts = 0 then
+            Manager.Slot_B_Locked := True;
+         end if;
+      end if;
+
       Manager.Failed_Boot_Count := Manager.Failed_Boot_Count + 1;
+      Manager.Verified := False;
+
+      -- Switch to the backup slot only if it is still bootable.
+      if Other = Slot_B then
+         if not Manager.Slot_B_Locked then
+            Manager.Active_Slot := Slot_B;
+         end if;
+      else
+         if not Manager.Slot_A_Locked then
+            Manager.Active_Slot := Slot_A;
+         end if;
+      end if;
+
+      Manager.Both_Locked := Manager.Slot_A_Locked and Manager.Slot_B_Locked;
    end Failover;
 
-   -- ─── Record successful boot ───
+   -- ─── Record successful boot (commit active slot) ───
    procedure Record_Successful_Boot
      (Manager : in out Boot_Manager)
    is
    begin
       Manager.Boot_Count := Manager.Boot_Count + 1;
       Manager.Verified := True;
+
+      if Manager.Active_Slot = Slot_A then
+         Manager.Slot_A_Attempts := Max_Boot_Attempts;
+         Manager.Slot_A_Locked := False;
+      else
+         Manager.Slot_B_Attempts := Max_Boot_Attempts;
+         Manager.Slot_B_Locked := False;
+      end if;
    end Record_Successful_Boot;
 
-   -- ─── Initialize with defaults (Slot A active, placeholder hashes) ───
+   -- ─── Initialize with defaults (Slot A active, full attempt budget) ───
    procedure Initialize
      (Manager : out Boot_Manager)
    is
@@ -80,8 +131,13 @@ is
       Manager.Slot_A_Hash       := Compute_Hash (Default_Addr, Default_Size);
       Manager.Slot_B_Hash       := Compute_Hash (Default_Addr, Default_Size);
       Manager.Verified          := False;
-      Manager.Boot_Count        := 1;
+      Manager.Boot_Count        := 0;
       Manager.Failed_Boot_Count := 0;
+      Manager.Slot_A_Attempts   := Max_Boot_Attempts;
+      Manager.Slot_B_Attempts   := Max_Boot_Attempts;
+      Manager.Slot_A_Locked     := False;
+      Manager.Slot_B_Locked     := False;
+      Manager.Both_Locked       := False;
    end Initialize;
 
 end Schild_Boot_Manager;

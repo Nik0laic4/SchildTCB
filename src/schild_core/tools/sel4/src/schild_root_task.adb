@@ -128,6 +128,37 @@ begin
           Put_Str ("[S7] T4 FAIL" & ASCII.CR & ASCII.LF);
        end if;
 
+       -- T5: Boot counter lockout (A/B + Max_Boot_Attempts threshold)
+       declare
+          BMC : Boot_Manager;
+       begin
+          Initialize (BMC);
+
+          -- Exhaust slot A: after Max_Boot_Attempts failed boots it must be
+          -- locked and the manager must have switched to slot B.
+          Failover (BMC);  -- A: 3 -> 2, switch to B
+          Failover (BMC);  -- B: 3 -> 2, switch to A
+          Failover (BMC);  -- A: 2 -> 1, switch to B
+          Failover (BMC);  -- B: 2 -> 1, switch to A
+          Failover (BMC);  -- A: 1 -> 0 -> lock A, switch to B
+
+          if Slot_Locked (BMC, Slot_A) and then BMC.Active_Slot = Slot_B then
+             Put_Str ("[S7] T5a PASS: slot A locked after threshold, active=slot B" & ASCII.CR & ASCII.LF);
+          else
+             Put_Str ("[S7] T5a FAIL" & ASCII.CR & ASCII.LF);
+          end if;
+
+          -- One more failed boot on slot B exhausts it too: both slots are
+          -- locked, so the system is bricked and defers to recovery.
+          Failover (BMC);  -- B: 1 -> 0 -> lock B; A already locked => bricked
+
+          if Is_Bricked (BMC) then
+             Put_Str ("[S7] T5b PASS: both slots locked (bricked -> recovery)" & ASCII.CR & ASCII.LF);
+          else
+             Put_Str ("[S7] T5b FAIL" & ASCII.CR & ASCII.LF);
+          end if;
+       end;
+
        Put_Str ("[S7] Boots: "); Put_Dec (BM.Boot_Count);
        Put_Str ("  Audits: "); Put_Dec (CD.Audit_Queue);
        Put_Str (ASCII.CR & ASCII.LF);
