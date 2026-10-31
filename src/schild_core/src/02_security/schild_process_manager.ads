@@ -71,7 +71,16 @@ is
       Status      :    out Proc_Status)
    with
      Pre  => Parent_Pid /= Null_PID,
-     Post => (if Status = Success then New_Pid /= Null_PID);
+     Post => (if Status = Success then
+                New_Pid /= Null_PID
+                  and (for some I in Table'Range =>
+                         Table (I).Pid = New_Pid
+                           and Table (I).Parent_Pid = Parent_Pid
+                           and Table (I).Thread_Cap = Thread_Cap
+                           and Table (I).VSpace_Cap = VSpace_Cap
+                           and Table (I).CNode_Cap = CNode_Cap
+                           and Table (I).State = Ready
+                           and Table (I).Level = Level));
 
    --  Terminate a process; fails with Mls_Violation if the caller is below it.
    procedure Terminate_Process
@@ -109,7 +118,9 @@ is
 
    --  Reap exited (Zombie) processes.
    procedure Reap_Zombies
-     (Table : in out Process_Table);
+     (Table : in out Process_Table)
+   with
+     Post => Table = Table'Old;  -- no-op by design: reaping is the parent's Wait
 
 private
    --  Slot index into Process_Table; 0 is the "not found" sentinel. Narrowing
