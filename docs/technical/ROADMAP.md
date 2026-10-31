@@ -223,6 +223,17 @@ security-критичных модулей (cap_space, process_manager, signals,
 bootloader) + encryption-часть firewall (scaffold).
 
 
+### W10 — Контрактное усиление (расширение Tier A/B) — `[следующий]`
+
+Метод — `THREAT_MODEL.md` §10: для каждой security-критичной строки §7 вывести
+точное свойство → SPARK-контракт → доказать (Level 4, без vacuity, без `Assume`).
+Кандидаты (сейчас out-of-proof, чистая логика): сеть/протоколы (`schild_arp_handler`,
+`schild_ipv4_handler`, `schild_icmp_handler`, `schild_http_server`, `schild_net_stack`),
+крипто (`schild_hmac_sha256`, `schild_aes_cbc_engine`, `schild_sha_manager`), ядро
+(`schild_scheduler`, `schild_kernel_logic`, `schild_sentinel`, `schild_schild_fs`).
+Детали и приоритеты — `SESSION_CONTRACT_STRENGTHENING.md`.
+
+
 ---
 
 ## 4. Стратегические решения (зафиксированы)

@@ -17,6 +17,9 @@ __pycache__/
 *.pyc
 .DS_Store
 
+# Generated PDF reports (source of truth is the .md + audit_report.css)
+*.pdf
+
 # Proprietary ledger bodies (two-circuit build): build.sh copies the real
 # implementations from private/userland/ into the tree. Never commit them.
 src/schild_core/src/04_userland/schild_distributed_ledger.adb
