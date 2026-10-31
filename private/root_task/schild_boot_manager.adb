@@ -62,6 +62,11 @@ is
       return Manager.Both_Locked;
    end Is_Bricked;
 
+   function Health_Ok (Status : Health_Status) return Boolean is
+   begin
+      return Status.Network_Up and Status.MLS_Valid;
+   end Health_Ok;
+
    procedure Failover
      (Manager : in out Boot_Manager)
    is
@@ -118,6 +123,18 @@ is
          Manager.Slot_B_Locked := False;
       end if;
    end Record_Successful_Boot;
+
+   procedure Commit_If_Healthy
+     (Manager : in out Boot_Manager;
+      Status  : Health_Status)
+   is
+   begin
+      if Health_Ok (Status) then
+         Record_Successful_Boot (Manager);
+      else
+         Failover (Manager);
+      end if;
+   end Commit_If_Healthy;
 
    -- ─── Initialize with defaults (Slot A active, full attempt budget) ───
    procedure Initialize
