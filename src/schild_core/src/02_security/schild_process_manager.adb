@@ -18,6 +18,8 @@ is
    function Find_Free_Slot (Table : Process_Table) return Slot_Index is
    begin
       for I in Table'Range loop
+         pragma Loop_Invariant
+           (for all J in Table'First .. I - 1 => Table (J).State /= Dead);
          if Table (I).State = Dead then
             return I;
          end if;
@@ -31,6 +33,9 @@ is
    function Find_Process (Table : Process_Table; Pid : Process_Id) return Slot_Index is
    begin
       for I in Table'Range loop
+         pragma Loop_Invariant
+           (for all J in Table'First .. I - 1 =>
+              not (Table (J).Pid = Pid and Table (J).State /= Dead));
          if Table (I).Pid = Pid and then Table (I).State /= Dead then
             return I;
          end if;

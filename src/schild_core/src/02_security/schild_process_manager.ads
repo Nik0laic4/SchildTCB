@@ -101,7 +101,13 @@ is
    procedure Wait_Process
      (Table   : in out Process_Table;
       Pid     : in     Process_Id;
-      Status  :    out Proc_Status);
+      Status  :    out Proc_Status)
+   with Post => (if Status = Success then
+                   (for some I in Table'Range =>
+                      Table'Old (I).Pid = Pid
+                        and Table'Old (I).State = Zombie
+                        and Table (I).State = Dead
+                        and Table (I).Pid = Null_PID));
 
    --  Return the stored context of a process.
    function Get_Process_Context
@@ -129,8 +135,18 @@ private
    --  the return type (0 .. Max_Processes) makes every `Table (Slot)` indexing
    --  provably in-range after the `Slot = 0` guard.
    subtype Slot_Index is Integer range 0 .. Max_Processes;
-   function Find_Free_Slot (Table : Process_Table) return Slot_Index;
-   function Find_Process (Table : Process_Table; Pid : Process_Id) return Slot_Index;
+   function Find_Free_Slot (Table : Process_Table) return Slot_Index
+   with Post => (if Find_Free_Slot'Result = 0 then
+                   (for all I in Table'Range => Table (I).State /= Dead)
+                 else
+                   Table (Find_Free_Slot'Result).State = Dead);
+   function Find_Process (Table : Process_Table; Pid : Process_Id) return Slot_Index
+   with Post => (if Find_Process'Result = 0 then
+                   (for all I in Table'Range =>
+                      not (Table (I).Pid = Pid and Table (I).State /= Dead))
+                 else
+                   Table (Find_Process'Result).Pid = Pid
+                     and Table (Find_Process'Result).State /= Dead);
    function Has_Active_Process (Table : Process_Table) return Boolean
    with Post => Has_Active_Process'Result =
                 (for some I in Table'Range => Table (I).State /= Dead);
