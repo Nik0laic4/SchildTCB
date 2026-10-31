@@ -58,6 +58,12 @@ is
       Handled := False;
       Signal := Sig_Term;  -- default: prevent uninitialized OUT (CVE-2026-002)
       for S in Signal_Type loop
+         pragma Loop_Invariant
+           (not Handled
+              and (for all T in Signal_Type =>
+                     (if Signal_Type'Pos (T) < Signal_Type'Pos (S)
+                      then not (Context.Pending_Signals (T)
+                                  and not Context.Blocked_Signals (T)))));
          if Context.Pending_Signals (S) and not Context.Blocked_Signals (S) then
             Context.Pending_Signals (S) := False;
             Signal := S;
