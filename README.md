@@ -4,7 +4,7 @@ A **Trusted Computing Base (TCB)** research prototype: a formally verified core 
 
 [![CI](https://github.com/Nik0laic4/SchildTCB/actions/workflows/ci.yml/badge.svg)](https://github.com/Nik0laic4/SchildTCB/actions/workflows/ci.yml)
 [![ARM64 virtio-net](https://github.com/Nik0laic4/SchildTCB/actions/workflows/arm64-net.yml/badge.svg)](https://github.com/Nik0laic4/SchildTCB/actions/workflows/arm64-net.yml)
-[![SPARK Level 4](https://img.shields.io/badge/SPARK-108%2F185_proved-blue)](docs/technical/ASSURANCE.md)
+[![SPARK Level 4](https://img.shields.io/badge/SPARK-107%2F185_proved-blue)](docs/technical/ASSURANCE.md)
 [![License: GPL-2.0-only](https://img.shields.io/badge/License-GPL--2.0--only-blue.svg)](LICENSE)
 
 ---
@@ -18,7 +18,7 @@ Schild TCB is a research prototype of a microkernel-based trusted computing base
 
 ## Highlights
 
-- **Formal verification** — 108 of 185 kernel modules proved at **SPARK Level 4** (`gnatprove --level=4 --mode=all`), with **0 unproved VCs**; the remaining 77 are outside proof scope (`SPARK_Mode => Off` drivers/platform code, or no provable body). 7 root-task daemons (MLS policy, config daemon, audit logger, A/B boot manager, HM model, launch model, root task) are also proved.
+- **Formal verification** — 107 of 185 kernel modules proved at **SPARK Level 4** (`gnatprove --level=4 --mode=all`), with **0 unproved VCs**; the remaining 78 are outside proof scope (`SPARK_Mode => Off` drivers/platform code, or no analyzable body). 7 root-task daemons (MLS policy, config daemon, audit logger, A/B boot manager, HM model, launch model, root task) are also proved.
 - **Isolated periphery** — network (e1000e → I219-V) and storage (NVMe + SchildFS) run in the isolated Ring-3 **NetServer**; a fault there cannot reach the proven core.
 - **MLS Bell-LaPadula** — 5 security levels in the seL4 layer (Public..Top_Secret), 4 in the bare-metal kernel.
 - **Crash containment** — faulting a driver is caught and contained without rebooting the platform.

@@ -61,7 +61,7 @@ TCB** and must be isolated (Phase 3).
 
 | Claim | Mechanical check | Result (2026-08-16) |
 |-------|------------------|---------------------|
-| Tier-A modules have no unproved VCs | `bash scripts/prove_kernel.sh` | `not-proved: 0` (108 proved / 77 out of proof, 185 total) |
+| Tier-A modules have no unproved VCs | `bash scripts/prove_kernel.sh` | `not-proved: 0` (107 proved / 78 out of proof, 185 total) |
 | Level-4 root-task daemons prove (7) | `bash scripts/verify.sh` | "all verification conditions proved" (`not-proved: 0`) |
 | Kernel builds clean | `SCHILD_PROFILE=public ./build.sh` | 179 objects, 0 errors |
 | Boot chain works | `SKIP_BUILD=1 SEL4_PRIMARY=0 bash scripts/run_tests.sh` | PASS (Long Mode → e1000e → SMP → MLS → :80) |
