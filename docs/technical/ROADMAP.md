@@ -23,7 +23,8 @@
 | Контрактный аудит (Tier-A) | ✅ усилены, `not-proved: 0` | `docs/technical/SESSION_CONTRACT_AUDIT.md` |
 | Boot counter (A/B + порог блокировки) | ✅ доказано | `scripts/verify.sh` (`schild_boot_manager` 8 подпрограмм); `BOOT_COUNTER_DESIGN.md` |
 | Health check перед commit (W9.2) | ✅ доказано | `scripts/verify.sh` (`Commit_If_Healthy`, `schild_boot_manager` 10 подпрограмм) |
-| Watchdog (W9.3, логика kick/expire) + Load/Save round-trip | ✅ логика доказана | `scripts/verify.sh` (`schild_watchdog` 5; `To_Persistent`/`From_Persistent`); таймер/NVMe-упаковка deferred |
+| Watchdog (W9.3) + Load/Save (round-trip + byte-упаковка) | ✅ логика доказана | `scripts/verify.sh` (`schild_watchdog` 5; `schild_boot_manager` 21: `To_Persistent`/`From_Persistent` + `Encode_Block`/`Decode_Block`/`Verify_Block`); таймер/NVMe I/O deferred |
+| Firewall (порт-блокировка + контракты) | ✅ доказано | `gnatprove` (`schild_firewall` 7 подпрограмм, `not-proved: 0`); encryption — scaffold |
 | Bare-metal boot + сеть | ✅ T580 + QEMU | `run_tests.sh` (`SEL4_PRIMARY=0`); HTTP на T580 (IRQ-driven RX) |
 | seL4 ветка — сборка | ✅ | `SEL4_PRIMARY=1 ./build.sh` |
 | seL4 ветка — QEMU | ✅ 20/20 маркеров | `run_tests.sh` (`SEL4_PRIMARY=1`) |
@@ -215,10 +216,11 @@ security-критичных модулей (cap_space, process_manager, signals,
    таймер (PIT/APIC, BCM2711) — deferred (⚠️ железо).
 4. **Tryboot / Rescue slot** — конфиг bootloader (❌ Pi 4).
 
-**Безжелезные долги закрыты (2026-10-31):** Load/Save round-trip
-(`To_Persistent`/`From_Persistent`) ✅; `schild_boot_runtime` `Refined_State` ✅;
-`Is_Derived_From` (cap_space) ✅. Осталось только железо (таймер, NVMe-упаковка,
-bootloader).
+**Безжелезные долги закрыты (2026-10-31):** Load/Save (round-trip + byte-упаковка
+`Encode_Block`/`Decode_Block`/`Verify_Block`) ✅; `schild_boot_runtime`
+`Refined_State` ✅; `Is_Derived_From` (cap_space) ✅; `schild_firewall`
+(порт-блокировка + контракты) ✅. Осталось только железо (таймер, NVMe I/O,
+bootloader) + encryption-часть firewall (scaffold).
 
 
 ---
