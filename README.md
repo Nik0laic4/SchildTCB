@@ -94,6 +94,7 @@ Contributions and feedback are welcome — see [`CONTRIBUTING.md`](CONTRIBUTING.
 
 - [`PROJECT_PASSPORT.md`](PROJECT_PASSPORT.md) — project overview.
 - [`docs/technical/ASSURANCE.md`](docs/technical/ASSURANCE.md) — assurance case & hardening roadmap.
+- [`docs/technical/THREAT_MODEL.md`](docs/technical/THREAT_MODEL.md) — threat model & adversary model.
 - [`docs/technical/ARCHITECTURE.md`](docs/technical/ARCHITECTURE.md) — technical data sheet.
 - [`docs/technical/ROADMAP.md`](docs/technical/ROADMAP.md) — canonical "what's next".
 - [`docs/technical/CHANGELOG.md`](docs/technical/CHANGELOG.md) — verified results only.

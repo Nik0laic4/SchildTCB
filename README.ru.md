@@ -94,6 +94,7 @@ SKIP_BUILD=1 SEL4_PRIMARY=0 bash scripts/run_tests.sh
 
 - [`PROJECT_PASSPORT.md`](PROJECT_PASSPORT.md) — обзор проекта.
 - [`docs/technical/ASSURANCE.md`](docs/technical/ASSURANCE.md) — assurance-кейс и план укрепления.
+- [`docs/technical/THREAT_MODEL.md`](docs/technical/THREAT_MODEL.md) — модель угроз и модель нарушителя.
 - [`docs/technical/ARCHITECTURE.md`](docs/technical/ARCHITECTURE.md) — технический data-sheet.
 - [`docs/technical/ROADMAP.md`](docs/technical/ROADMAP.md) — каноничное «что дальше».
 - [`docs/technical/CHANGELOG.md`](docs/technical/CHANGELOG.md) — только проверенные результаты.
