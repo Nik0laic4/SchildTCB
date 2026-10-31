@@ -66,8 +66,11 @@ is
    with
      Pre  => Src /= Dest,
      Post => (if Success then
-                Table (Dest).Rights = (Table (Src).Rights and New_Right)
-                  and Table (Dest).Rights <= Table (Src).Rights);
+                Table (Dest).The_Kind = Table'Old (Src).The_Kind
+                  and Table (Dest).Parent = Cap_Id (Src)
+                  and Table (Dest).Badge = Badge
+                  and Table (Dest).Rights = (Table'Old (Src).Rights and New_Right)
+                  and Table (Dest).Rights <= Table'Old (Src).Rights);
 
    procedure Cap_Revoke
      (Table    : in out Cap_Table;
@@ -79,7 +82,7 @@ is
      (Table    : in out Cap_Table;
       Slot     : in     Cap_Index)
    with
-     Post => Table (Slot).The_Kind = Cap_Null;
+     Post => Table (Slot) = Null_Node;
 
    procedure Cap_Copy
      (Table    : in out Cap_Table;
@@ -87,7 +90,8 @@ is
       Dest     : in     Cap_Index;
       Success  :    out Boolean)
    with
-     Pre  => Src /= Dest;
+     Pre  => Src /= Dest,
+     Post => (if Success then Table (Dest) = Table'Old (Src));
 
    procedure Cap_Retype
      (Table      : in out Cap_Table;
@@ -104,6 +108,11 @@ is
               and New_Type in Physical_Cap,
      Post => (if Success then
                 Table (New_Slot).The_Kind = New_Type
+                  and Table (New_Slot).Rights = Right_All
+                  and Table (New_Slot).Parent = Cap_Id (Untyped)
+                  and Table (New_Slot).Depth = 0
+                  and Table (New_Slot).Phys_Addr = Table'Old (Untyped).Phys_Addr
+                  and Table (New_Slot).Size_Bits = Size_Bits
                   and Table (Untyped).The_Kind = Cap_Null);
 
    function Is_Null  (Node : Cap_Node) return Boolean is (Node.The_Kind = Cap_Null);
