@@ -30,16 +30,56 @@ is
       return False;
    end Verify_Image;
 
+   function Slot_Locked
+     (Manager : Boot_Manager;
+      Slot    : Boot_Slot) return Boolean
+   is
+   begin
+      return (if Slot = Slot_A then Manager.Slot_A_Locked
+              else Manager.Slot_B_Locked);
+   end Slot_Locked;
+
+   function Is_Bricked (Manager : Boot_Manager) return Boolean is
+   begin
+      return Manager.Both_Locked;
+   end Is_Bricked;
+
    procedure Failover
      (Manager : in out Boot_Manager)
    is
+      Other : constant Boot_Slot :=
+        (if Manager.Active_Slot = Slot_A then Slot_B else Slot_A);
    begin
+      -- Decrement the failing slot's remaining attempts; lock it on exhaustion.
+      -- (The precondition guarantees the active slot still has attempts left,
+      -- so the subtraction cannot underflow.)
       if Manager.Active_Slot = Slot_A then
-         Manager.Active_Slot := Slot_B;
+         Manager.Slot_A_Attempts := Manager.Slot_A_Attempts - 1;
+         if Manager.Slot_A_Attempts = 0 then
+            Manager.Slot_A_Locked := True;
+         end if;
       else
-         Manager.Active_Slot := Slot_A;
+         Manager.Slot_B_Attempts := Manager.Slot_B_Attempts - 1;
+         if Manager.Slot_B_Attempts = 0 then
+            Manager.Slot_B_Locked := True;
+         end if;
       end if;
+
+      Manager.Failed_Boot_Count := Manager.Failed_Boot_Count + 1;
       Manager.Verified := False;
+
+      -- Switch to the backup slot only if it is still bootable.
+      if Other = Slot_B then
+         if not Manager.Slot_B_Locked then
+            Manager.Active_Slot := Slot_B;
+         end if;
+      else
+         if not Manager.Slot_A_Locked then
+            Manager.Active_Slot := Slot_A;
+         end if;
+      end if;
+
+      Manager.Both_Locked := Manager.Slot_A_Locked and Manager.Slot_B_Locked;
    end Failover;
 
    procedure Record_Successful_Boot
@@ -48,6 +88,16 @@ is
    begin
       Manager.Boot_Count := Manager.Boot_Count + 1;
       Manager.Verified := True;
+
+      -- Commit the active slot: restore its full attempt budget and clear its
+      -- lock flag (it just booted successfully).
+      if Manager.Active_Slot = Slot_A then
+         Manager.Slot_A_Attempts := Max_Boot_Attempts;
+         Manager.Slot_A_Locked := False;
+      else
+         Manager.Slot_B_Attempts := Max_Boot_Attempts;
+         Manager.Slot_B_Locked := False;
+      end if;
    end Record_Successful_Boot;
 
    procedure Initialize
@@ -60,6 +110,11 @@ is
       Manager.Verified          := False;
       Manager.Boot_Count        := 0;
       Manager.Failed_Boot_Count := 0;
+      Manager.Slot_A_Attempts   := Max_Boot_Attempts;
+      Manager.Slot_B_Attempts   := Max_Boot_Attempts;
+      Manager.Slot_A_Locked     := False;
+      Manager.Slot_B_Locked     := False;
+      Manager.Both_Locked       := False;
    end Initialize;
 
 end Schild_Boot_Manager;
