@@ -61,7 +61,9 @@ is
      Post => Context.Blocked_Signals (Signal) = False;
 
    --  True when at least one signal is pending.
-   function Has_Pending_Signals (Context : Signal_Context) return Boolean;
+   function Has_Pending_Signals (Context : Signal_Context) return Boolean
+   with Post => Has_Pending_Signals'Result =
+                (for some S in Signal_Type => Context.Pending_Signals (S));
 
    --  Dequeue and deliver one pending signal.
    procedure Deliver_Pending_Signal

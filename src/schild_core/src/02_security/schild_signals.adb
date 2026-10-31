@@ -47,14 +47,7 @@ is
    end Unblock_Signal;
 
    function Has_Pending_Signals (Context : Signal_Context) return Boolean is
-   begin
-      for S in Signal_Type loop
-         if Context.Pending_Signals (S) then
-            return True;
-         end if;
-      end loop;
-      return False;
-   end Has_Pending_Signals;
+     (for some S in Signal_Type => Context.Pending_Signals (S));
 
    procedure Deliver_Pending_Signal
      (Context : in out Signal_Context;
