@@ -61,7 +61,11 @@ project Proof_Batch is
 end Proof_Batch;
 EOF
   rm -rf obj/proof/gnatprove
-  gnatprove -P /tmp/proof_batch.gpr --level=4 --mode=all -j8 > /tmp/proof_batch.log 2>&1
+  #  No -jN: gnatprove's parallel prover races on the "skipped" marker for
+  #  spec-On/body-Off units (e.g. schild_sel4_ipc), which made the
+  #  SKIPPED/NO-BODY split non-deterministic across runs. Single-threaded
+  #  output is stable (the full sweep is slower but reproducible).
+  gnatprove -P /tmp/proof_batch.gpr --level=4 --mode=all > /tmp/proof_batch.log 2>&1
   outfile=obj/proof/gnatprove/gnatprove.out
   python3 "$ROOT_DIR/scripts/classify_gnatprove.py" "$outfile" "${chunk[@]}" >> "$OUT"
   echo "chunk $((i/BATCH+1))/$(( (TOTAL+BATCH-1)/BATCH )) done" >&2
