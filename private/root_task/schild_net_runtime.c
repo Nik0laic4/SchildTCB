@@ -4,21 +4,29 @@
  */
 
 /*
- *
- * PRIVATE OVERLAY (private/root_task) — Stage 9.2.
- * Production Ring 3 runtime for the NetServer. Overlaid by build_rt.sh when
- * SCHILD_PROFILE=private. Same scaffolding as the public file, except the
- * audit bridge below is the production renderer: schild_debug_render forwards
- * to the Ada export schild_audit_render, which performs the honest Read_Event
- * loop over the (overlaid) Schild_Audit_Logger and fills the buffer with real
- * log lines. In the public profile the logger is a stub ("0 buffered").
+ * Schild TCB Stage 8.1C — Ring 3 runtime for the e1000e driver + network
+ * stack (NetServer).  Provides the C helpers the Ada driver imports, adapted
+ * for the seL4 user-space context:
  *   - UART output via the seL4 DebugPutChar syscall (no port I/O in Ring 3).
  *   - DMA physical-address translation via schild_dma_phys (virtual + offset).
  *   - No-op stubs for Ring 0-only operations (wbinvd, map_mmio_2mb, IOAPIC).
+ *
+ * NOTE (private overlay): kept byte-identical to the public scaffold
+ * (tools/sel4/src/schild_net_runtime.c). The "production renderer" difference
+ * lives in the overlaid Ada Schild_Audit_Logger (schild_audit_render), not in
+ * this C file — schild_debug_render only forwards. Do NOT let this file drift
+ * from the public one.
  */
 
 typedef unsigned long long u64;
 typedef unsigned int u32;
+
+/* Boot-log capture ring. Mirrors runtime_stubs.c so the root-task build can
+ * link schild_nvme.adb (Flush_Log_To_Nvme). In the root task the ring is not
+ * actively filled (logging goes via DebugPutChar), so the flush is a no-op. */
+#define SCHILD_LOG_SIZE 8192
+char schild_log_buf[SCHILD_LOG_SIZE];
+unsigned int schild_log_len = 0;
 
 extern void schild_sel4_debug_putchar(u32 c);
 
@@ -50,6 +58,14 @@ unsigned long long schild_dma_phys(void *ptr) {
 /* CLFLUSH is unprivileged — keep it real for DMA coherence. */
 void schild_clflush(void *addr) {
     __asm__ volatile("clflush (%0)" : : "r"(addr) : "memory");
+}
+
+/* Ring 3 MMIO read/write helpers (W2: ECAM config-space access). */
+unsigned long long schild_mmio_read32(unsigned long long addr) {
+    return (unsigned long long)(*(volatile unsigned int *)(unsigned long)addr);
+}
+void schild_mmio_write32(unsigned long long addr, unsigned long long val) {
+    *(volatile unsigned int *)(unsigned long)addr = (unsigned int)val;
 }
 
 /* One-time warning print: surfacing (not masking) a Ring 0-only helper that was
@@ -98,13 +114,19 @@ unsigned char schild_nvme_read_acq(unsigned int off) {
     (void)off; return 0;
 }
 
+/* W7: NVMe MMIO base vaddr (0 = storage disabled). Set by the Root Task after
+ * mapping the NVMe BAR0 into the NetServer VSpace; read by schild_nvme_init. */
+static unsigned long long nvme_mmio_base = 0;
+void schild_nvme_set_mmio(unsigned long long base) { nvme_mmio_base = base; }
+unsigned long long schild_nvme_get_mmio(void) { return nvme_mmio_base; }
+
 /* ─── Stage 8.4: shared DMA frame (large-frame transfer, no MR limit) ──────
  * A 4KB frame is retyped by the Root Task and mapped at 0x520000 in BOTH the
  * root VSpace and the NetServer VSpace. Large frames (> 960 B, the seL4 MR
  * limit) are exchanged through this frame instead of message registers.
  * These helpers are linked into root_task.elf, so both the Root Task and the
  * NetServer (separate processes sharing the same image) can call them. */
-#define SHARED_FRAME_VADDR 0x520000
+#define SHARED_FRAME_VADDR 0x52A000
 
 void schild_shared_copy_from(void *dst, unsigned int len) {
     unsigned char *s = (unsigned char *)(unsigned long)SHARED_FRAME_VADDR;
@@ -130,4 +152,16 @@ extern void schild_audit_render(void *buffer, int max_len, int *actual_len);
 void schild_debug_render(void *buffer, int max_len, int *actual_len) {
     schild_audit_render(buffer, max_len, actual_len);
 }
+
+/* ─── Standalone-kernel IRQ symbols (link-time stubs for the seL4 build) ──
+ * schild_net_stack.adb imports these for the bare-metal IRQ-driven RX loop
+ * (Run_Loop). The seL4 NetServer does NOT call Run_Loop — it drives RX via its
+ * own seL4 IRQ notification + Poll_And_Process — so these are never invoked
+ * here; they only satisfy the linker. */
+volatile unsigned int e1000e_rx_pending = 0;
+volatile unsigned int e1000e_irq_count = 0;
+void schild_hlt(void) { __asm__ volatile("pause"); }
+void schild_sti(void) { }
+void schild_cli(void) { }
+void schild_log_hex32(unsigned int v) { (void)v; }
 
