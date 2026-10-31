@@ -142,15 +142,15 @@ This is the core mapping. Each row is a claim that must stay true; the
 
 | # | Threat (adversary) | Defense mechanism | Tier | Mechanical check |
 |---|--------------------|-------------------|------|------------------|
-| T1 | P1/P5 remote memory-safety exploit of the TCP/UDP parser (incl. AI-generated UAF/overflow) | seL4 protection domain (own VSpace/CSpace) + IPC-only + fault endpoint | B | `[CONTAINMENT] core alive after fault` in `run_tests.sh` |
+| T1 | P1 (+AI) remote memory-safety exploit of the TCP/UDP parser (incl. AI-generated UAF/overflow) | seL4 protection domain (own VSpace/CSpace) + IPC-only + fault endpoint | B | `[CONTAINMENT] core alive after fault` in `run_tests.sh` |
 | T2 | P2 compromised domain escalates to Tier A via IPC | capability model: mint / copy / retype / revoke / derivation + endpoint badges | A | SPARK Level 4 on `schild_cap_space` (`prove_kernel.sh`) |
 | T3 | P1/P2 MLS bypass (read-up / write-down / control-up) | `Schild_MLS_Policy` + `schild_process_manager` level checks | A | `verify.sh` / `prove_kernel.sh`; QEMU MLS 8/8 |
-| T4 | P2/P5 uninitialized read / integer overflow / out-of-bounds in the core | SPARK: no uninit reads, bounded ranges, narrowed index types (Phase-1 fixes) | A | `prove_kernel.sh` → `not-proved: 0` |
+| T4 | P2 (+AI) uninitialized read / integer overflow / out-of-bounds in the core | SPARK: no uninit reads, bounded ranges, narrowed index types (Phase-1 fixes) | A | `prove_kernel.sh` → `not-proved: 0` |
 | T5 | P2 hangs the root task (availability) | MCS CPU budgets + fault timeouts | A/B | `seL4_Fault_Timeout` (QEMU MCS test) |
 | T6 | P3 DMA write from a malicious NIC/NVMe | **none today** (no IOMMU) | — | residual risk (§8) |
 | T7 | P4 rollback / malicious slot update | `Schild_Boot_Manager` SHA-256 (corruption detection only) | — | residual risk — no signed boot (§8) |
-| T8 | P1/P5 exploit of the C shims/stack (`net_test.c`, `sel4_mmio.c`, `runtime_stubs.c`) | **no memory safety** — containment is the only backstop | B | `[CONTAINMENT] core alive after fault` |
-| T9 | P4/P5 supply-chain (poisoned upstream/toolchain) | none | — | out of scope (§6) |
+| T8 | P1 (+AI) exploit of the C shims/stack (`net_test.c`, `sel4_mmio.c`, `runtime_stubs.c`) | **no memory safety** — containment is the only backstop | B | `[CONTAINMENT] core alive after fault` |
+| T9 | P4 (+AI) supply-chain (poisoned upstream/toolchain) | none | — | out of scope (§6) |
 
 **Reading note:** T1 and T8 are the same defense for the same reason — the
 network stack (Ada `SPARK_Mode => Off` on x86_64, C on ARM64) is **not** memory
