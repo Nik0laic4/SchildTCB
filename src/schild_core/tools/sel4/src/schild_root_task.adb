@@ -159,6 +159,31 @@ begin
           end if;
        end;
 
+       -- T6: Health-gated commit (W9.2): commit only when network + MLS healthy.
+       declare
+          BM_U : Boot_Manager;
+          BM_H : Boot_Manager;
+       begin
+          Initialize (BM_U);
+          Initialize (BM_H);
+
+          -- T6a: network down -> failover (no commit).
+          Commit_If_Healthy (BM_U, (Network_Up => False, MLS_Valid => True));
+          if not BM_U.Verified and then BM_U.Failed_Boot_Count = 1 then
+             Put_Str ("[S7] T6a PASS: unhealthy (net down) -> failover, no commit" & ASCII.CR & ASCII.LF);
+          else
+             Put_Str ("[S7] T6a FAIL" & ASCII.CR & ASCII.LF);
+          end if;
+
+          -- T6b: healthy -> commit.
+          Commit_If_Healthy (BM_H, (Network_Up => True, MLS_Valid => True));
+          if BM_H.Verified and then BM_H.Boot_Count = 1 then
+             Put_Str ("[S7] T6b PASS: healthy (net+MLS) -> commit" & ASCII.CR & ASCII.LF);
+          else
+             Put_Str ("[S7] T6b FAIL" & ASCII.CR & ASCII.LF);
+          end if;
+       end;
+
        Put_Str ("[S7] Boots: "); Put_Dec (BM.Boot_Count);
        Put_Str ("  Audits: "); Put_Dec (CD.Audit_Queue);
        Put_Str (ASCII.CR & ASCII.LF);

@@ -46,6 +46,22 @@ is
       Both_Locked       : Boolean;      -- bricked: no bootable slot remains
    end record;
 
+   -- System health inputs for the health-gated commit (W9.2). Obtained from
+   -- hardware/daemons before the active slot is committed:
+   --   Network_Up — NIC link is up and the driver is ready;
+   --   MLS_Valid  — the MLS policy daemon validated its configuration.
+   type Health_Status is record
+      Network_Up : Boolean;
+      MLS_Valid  : Boolean;
+   end record;
+
+   -- The active slot is committed only when the system is healthy (network up
+   -- AND MLS valid). This is the W9.2 gate between a successful boot and the
+   -- commit of the slot.
+   function Health_Ok (Status : Health_Status) return Boolean
+   with
+     Post => Health_Ok'Result = (Status.Network_Up and Status.MLS_Valid);
+
    -- Compute SHA-256 hash of a memory region
    -- (Stage 7.2: replace with real SHA-256; Stage 7.1: constant for testing)
    function Compute_Hash
@@ -148,6 +164,27 @@ is
                and not Manager.Slot_B_Locked
                and Manager.Slot_A_Attempts = Manager.Slot_A_Attempts'Old
                and Manager.Slot_A_Locked = Manager.Slot_A_Locked'Old);
+
+   -- Health-gated commit (W9.2): commit the active slot only when the system
+   -- is healthy; otherwise fail over to the backup slot.
+   procedure Commit_If_Healthy
+     (Manager : in out Boot_Manager;
+      Status  : Health_Status)
+   with
+     Pre  => not Manager.Both_Locked
+             and Manager.Slot_A_Locked = (Manager.Slot_A_Attempts = 0)
+             and Manager.Slot_B_Locked = (Manager.Slot_B_Attempts = 0)
+             and (if Manager.Active_Slot = Slot_A then
+                     not Manager.Slot_A_Locked
+                  else
+                     not Manager.Slot_B_Locked),
+     Post =>
+       (if Health_Ok (Status) then
+           Manager.Boot_Count = Manager.Boot_Count'Old + 1
+           and Manager.Verified
+        else
+           Manager.Failed_Boot_Count = Manager.Failed_Boot_Count'Old + 1
+           and not Manager.Verified);
 
    -- Initialize boot manager with default (safe) state: slot A active, full
    -- attempt budget on both slots, nothing locked.
