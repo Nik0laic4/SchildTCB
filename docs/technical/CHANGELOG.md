@@ -12,7 +12,7 @@
 
 - `schild_arp_handler`: `Parse_Arp` (37 checks) + `Build_Arp_Reply` (53 checks) proved; `Build_Arp_Reply` gained `Post => Reply_Len = 42` + `Relaxed_Initialization => Reply_Buf`.
 - `schild_icmp_handler`: body `Off → On`, `Process_Icmp_Echo` proved.
-- `schild_ipv4_handler`: flow-fixed (full `Result` init on early-return paths — uninitialized-read class) and checksum rewritten to modular arithmetic (provable), but kept `Off` — `Build_Ipv4_Frame` (variable-length buffer build) needs a dedicated proof session.
+- `schild_ipv4_handler`: package `Off → On`; `Parse_Ipv4` (40 checks) + `Compute_Ipv4_Checksum` (10 checks) proved. Flow-fixed (full `Result` init on early-return paths) + checksum rewritten to modular arithmetic. `Build_Ipv4_Frame` (outgoing frame builder, variable-length) kept `body Off` — pending.
 
 ## v1.0.0-pre (2026-11-01) — private-profile proof gate (closed "compiled but not proved" boundary)
 

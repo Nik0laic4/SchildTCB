@@ -234,11 +234,10 @@ bootloader) + encryption-часть firewall (scaffold).
 Детали и приоритеты — `SESSION_CONTRACT_STRENGTHENING.md`.
 
 **Прогресс (2026-11-01):** ✅ `schild_net_types`, ✅ `schild_icmp_handler`,
-✅ `schild_arp_handler` (Parse_Arp + Build_Arp_Reply) — переведены `On` и доказаны
-(`not-proved: 0`). `schild_ipv4_handler` — flow-фиксы (инициализация `Result`,
-модульная контрольная сумма) готовы, но `Build_Ipv4_Frame` (переменная длина
-буфера) требует отдельной сессии. Далее: `schild_ipv4_handler`,
-`schild_http_server`, `schild_net_stack`.
+✅ `schild_arp_handler` (Parse_Arp + Build_Arp_Reply), ✅ `schild_ipv4_handler`
+(Parse_Ipv4 + Compute_Ipv4_Checksum) — переведены `On` и доказаны
+(`not-proved: 0`). Осталось в IPv4: `Build_Ipv4_Frame` (переменная длина
+буфера, `body Off`). Далее: `schild_http_server`, `schild_net_stack`.
 
 
 ---

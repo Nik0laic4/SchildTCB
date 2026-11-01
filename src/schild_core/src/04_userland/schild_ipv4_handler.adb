@@ -3,7 +3,7 @@
 
 -- Schild TCB Stage 7.9: IPv4 Handler — body
 
-package body Schild_Ipv4_Handler with SPARK_Mode => Off is
+package body Schild_Ipv4_Handler with SPARK_Mode => On is
 
    ----------------
    -- Parse_Ipv4 --
@@ -106,7 +106,8 @@ package body Schild_Ipv4_Handler with SPARK_Mode => Off is
       Payload_Len : in  Unsigned_16;
       Hdr_Buf     : out Byte_Array;
       Hdr_Len     : out Unsigned_16)
-     with Pre => Payload_Len <= 65515,
+     with SPARK_Mode => Off,  -- proof pending (called only by Build_Ipv4_Frame)
+          Pre => Payload_Len <= 65515,
           Post => Hdr_Len = 20,
           Relaxed_Initialization => Hdr_Buf
    is
@@ -162,6 +163,7 @@ package body Schild_Ipv4_Handler with SPARK_Mode => Off is
       Frame_Buf  : out Byte_Array;
       Frame_Len  : out Unsigned_16)
    is
+      pragma SPARK_Mode (Off);  -- proof pending: variable-length buffer build
       Idx : Integer := Frame_Buf'First;
       procedure Put_U8 (V : Unsigned_8) is begin
          Frame_Buf (Idx) := V; Idx := Idx + 1;
