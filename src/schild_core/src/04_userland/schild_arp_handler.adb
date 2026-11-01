@@ -16,6 +16,21 @@ package body Schild_Arp_Handler with SPARK_Mode => On is
       use type Unsigned_16;
    begin
       Valid := False;
+      Arp := (HW_Type    => 0,
+              Proto_Type => 0,
+              HW_Len     => 6,
+              Proto_Len  => 4,
+              Operation  => 0,
+              Sender_MAC => (others => 0),
+              Sender_IP  => 0,
+              Target_MAC => (others => 0),
+              Target_IP  => 0);
+      --  Runtime guard (Pre is not enforced from Off callers / no -gnata): an
+      --  ARP packet is 28 bytes. Reject malformed short frames instead of
+      --  reading out of bounds.
+      if Raw'Length < 28 then
+         return;
+      end if;
       -- HW_Type bytes 0-1
       Arp.HW_Type := Shift_Left (Unsigned_16 (Raw (Raw'First)), 8)
                      or Unsigned_16 (Raw (Raw'First + 1));

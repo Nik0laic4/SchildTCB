@@ -6,6 +6,14 @@
 > *pending* or *target* have not yet been validated. Formal-verification
 > coverage is stated per-module, never as an aggregate percentage.
 
+## v1.0.0-pre (2026-11-01) — W11.2: network ingress boundary fix (short-frame OOB in ARP/IPv4 parsers)
+
+**Fixed: `Parse_Arp` and `Parse_Ipv4` lacked the runtime length guard that `Parse_Tcp` already had, so a runt/short frame dispatched from the Off `schild_net_stack` (where the SPARK `Pre` is not enforced at runtime) reached them and read out of bounds. Both now reject short input defensively (`not-proved: 0` preserved).**
+
+- `schild_arp_handler.Parse_Arp`: added full `Arp` initialization + `if Raw'Length < 28 then return` (a full ARP packet is 28 bytes).
+- `schild_ipv4_handler.Parse_Ipv4`: added `if Raw'Length < 20 then return` after the `Result` init (an IPv4 header is at least 20 bytes).
+- The dispatcher `schild_net_stack.Handle_Arp`/`Handle_Ipv4` slices `Plen = Rx_Len - 14` bytes, so frames of 14–41 (ARP) / 14–33 (IPv4) bytes were the trigger; both are now rejected at the parser level (T1 memory safety).
+
 ## v1.0.0-pre (2026-11-01) — W11.1: audit-chain tamper-evidence (A4) + HTTP decimal-writer boundary fix
 
 **Validated: `schild_audit_chainer` strengthened to a real tamper-evidence contract (`not-proved: 0`); `schild_sha_manager` marked as a scaffold; fixed a latent `Write_U32_Dec` boundary bug in the HTTP server (V = 0 emitted nothing).**

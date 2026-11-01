@@ -27,6 +27,13 @@ package body Schild_Ipv4_Handler with SPARK_Mode => On is
                  Header_Len  => 20,
                  Payload_Off => 20,
                  Payload_Len => 0);
+       --  Runtime guard (Pre is not enforced from Off callers / no -gnata): an
+       --  IPv4 header is at least 20 bytes. Reject malformed short datagrams
+       --  instead of reading out of bounds.
+       if Raw'Length < 20 then
+          return;
+       end if;
+
       Result.Header.Version_IHL := Raw (Raw'First);
       IHL := Result.Header.Version_IHL and 16#0F#;
       if IHL < 5 or IHL > 15 then return; end if;
