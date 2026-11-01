@@ -12,15 +12,16 @@
 
 ---
 
-## 1. Текущее валидированное состояние (2026-10-31, HEAD `03e6c84`)
+## 1. Текущее валидированное состояние (2026-11-01, HEAD — см. `git log -1`)
 
 | Компонент | Статус | Механическая проверка |
 |---|---|---|
 | Bare-metal ядро — сборка | ✅ 0 ошибок | `./build.sh` |
-| Bare-metal ядро — SPARK L4 | ✅ `not-proved: 0` | `scripts/prove_kernel.sh` → `obj/proof/report.txt` (185 модулей; `~108 proved / ~77 out-of-proof`) |
+| Bare-metal ядро — SPARK L4 | ✅ `not-proved: 0` | `scripts/prove_kernel.sh` → `obj/proof/report.txt` (185 модулей; `~112 proved / ~73 out-of-proof`) |
 | Демоны root-задачи — SPARK L4 | ✅ все VC доказаны | `scripts/verify.sh` (`verify.gpr`, 8 модулей) |
 | Модель угроз | ✅ | `docs/technical/THREAT_MODEL.md` |
 | Контрактный аудит (Tier-A) | ✅ усилены, `not-proved: 0` | `docs/technical/SESSION_CONTRACT_AUDIT.md` |
+| W10 — сетевые парсеры | ✅ доказано (arp/icmp/ipv4/udp/tcp — все подпрограммы `On`) | `scripts/prove_kernel.sh`; `http_server` — prover-ограничение (см. §3 W10) |
 | Boot counter (A/B + порог блокировки) | ✅ доказано | `scripts/verify.sh` (`schild_boot_manager` 8 подпрограмм); `BOOT_COUNTER_DESIGN.md` |
 | Health check перед commit (W9.2) | ✅ доказано | `scripts/verify.sh` (`Commit_If_Healthy`, `schild_boot_manager` 10 подпрограмм) |
 | Watchdog (W9.3) + Load/Save (round-trip + byte-упаковка) | ✅ логика доказана | `scripts/verify.sh` (`schild_watchdog` 5; `schild_boot_manager` 21: `To_Persistent`/`From_Persistent` + `Encode_Block`/`Decode_Block`/`Verify_Block`); таймер/NVMe I/O deferred |
@@ -64,7 +65,7 @@
   - `ASSURANCE.md` §3 («`prove_kernel.sh` currently reports `not-proved: 5`»)
     → помечено как историческое (закрыто в Phase 1).
 - ✅ Счётчики модулей выровнены (W4-сессия): README/PASSPORT приведены к
-  каноничным **185** (~108 proved + ~77 skipped/out-of-proof). Каноничный
+  каноничным **185** (~112 proved + ~73 skipped/out-of-proof). Каноничный
   счётчик — `prove_kernel.sh` → `obj/proof/report.txt`; хардкодить число в
   доках не следует.
 
