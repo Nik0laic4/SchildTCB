@@ -68,7 +68,7 @@
 | Факт | Каноничное значение | Механическая проверка |
 |---|---|---|
 | Модули ядра в proof-наборе | **185** `.adb` (без `null/`) | `find src -name '*.adb' -not -path '*/null/*'` |
-| Proof ядра (SPARK L4) | **`not-proved: 0`**; ~111 proved / ~74 out-of-proof (диапазон ±2 из-за `-j8`) | `bash scripts/prove_kernel.sh` → `obj/proof/report.txt` |
+| Proof ядра (SPARK L4) | **`not-proved: 0`**; ~112 proved / ~73 out-of-proof (диапазон ±2 из-за `-j8`) | `bash scripts/prove_kernel.sh` → `obj/proof/report.txt` |
 | Фокусно доказанные (вне канонического `-j8` гейта) | `schild_firewall` (7 подпрограмм), `schild_signals`, `schild_frame_allocator`, `schild_server_security_policy` | фокус-прогон одного модуля (команда ниже) |
 | Демоны root-задачи (SPARK L4) | **8** (verify.gpr), `not-proved: 0`; `schild_boot_manager` 21, `schild_watchdog` 5, `schild_root_task` 76 checks | `bash scripts/verify.sh` |
 | Сборка bare-metal (public) | 181 объект, 0 ошибок | `SCHILD_PROFILE=public ./build.sh` |
@@ -76,7 +76,7 @@
 | Сборка private-оверлея | ✅ доказано (`verify_private.sh`, `not-proved: 0`) | `SCHILD_PROFILE=private bash tools/sel4/build_rt.sh` + `bash scripts/verify_private.sh` |
 | QEMU-маркеры | **20** (seL4) / **6** (standalone) | `bash scripts/run_tests.sh` |
 
-> Число proved (~111/~74) **недетерминировано** в пределах ~2 модулей из-за
+> Число proved (~112/~73) **недетерминировано** в пределах ~2 модулей из-за
 > `gnatprove -j8` (`schild_execution_fabric`, `schild_sentinel`). Стабилен только
 > гейт `not-proved: 0`. См. `ASSURANCE.md` §2.2.
 >

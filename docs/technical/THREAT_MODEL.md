@@ -142,7 +142,7 @@ This is the core mapping. Each row is a claim that must stay true; the
 
 | # | Threat (adversary) | Defense mechanism | Tier | Mechanical check |
 |---|--------------------|-------------------|------|------------------|
-| T1 | P1 (+AI) remote memory-safety exploit of the TCP/UDP parser (incl. AI-generated UAF/overflow) | seL4 protection domain (own VSpace/CSpace) + IPC-only + fault endpoint | B | `[CONTAINMENT] core alive after fault` in `run_tests.sh` |
+| T1 | P1 (+AI) remote memory-safety exploit of the TCP/UDP parser (incl. AI-generated UAF/overflow) | **SPARK Level 4 on the parsers** (`Parse_Tcp`/`Parse_Udp`/`Parse_Arp`/`Parse_Ipv4`/`Validate_Tcp_Checksum`, all `On`) + seL4 protection domain + fault endpoint | A + B | `prove_kernel.sh` (`not-proved: 0`) + `[CONTAINMENT] core alive after fault` |
 | T2 | P2 compromised domain escalates to Tier A via IPC | capability model: mint / copy / retype / revoke / derivation + endpoint badges | A | SPARK Level 4 on `schild_cap_space` (`prove_kernel.sh`) |
 | T3 | P1/P2 MLS bypass (read-up / write-down / control-up) | `Schild_MLS_Policy` + `schild_process_manager` level checks | A | `verify.sh` / `prove_kernel.sh`; QEMU MLS 8/8 |
 | T4 | P2 (+AI) uninitialized read / integer overflow / out-of-bounds in the core | SPARK: no uninit reads, bounded ranges, narrowed index types (Phase-1 fixes) | A | `prove_kernel.sh` → `not-proved: 0` |
@@ -152,11 +152,11 @@ This is the core mapping. Each row is a claim that must stay true; the
 | T8 | P1 (+AI) exploit of the C shims/stack (`net_test.c`, `sel4_mmio.c`, `runtime_stubs.c`) | **no memory safety** — containment is the only backstop | B | `[CONTAINMENT] core alive after fault` |
 | T9 | P4 (+AI) supply-chain (poisoned upstream/toolchain) | none | — | out of scope (§6) |
 
-**Reading note:** T1 and T8 are the same defense for the same reason — the
-network stack (Ada `SPARK_Mode => Off` on x86_64, C on ARM64) is **not** memory
-safe. The only thing that stops a machine-speed AI exploit from reaching the
-core is the Tier-B isolation boundary (TB2/TB3), not memory safety. T2–T4 are
-the *only* rows where the defense is formal proof rather than isolation.
+**Reading note:** T1's network parsers (ARP / IPv4 / ICMP / UDP / TCP) are now
+**formally memory-safe** — SPARK Level 4, `not-proved: 0` (W10). The C shims and
+drivers (`net_test.c`, `sel4_mmio.c`, `e1000e`, `nvme`) remain **not** memory
+safe — for those (T8) containment is the only backstop. T2–T4 are formal proof;
+T1 is now both proof (parser) and isolation (driver / C shim).
 
 ## 8. Residual risks (honest, after all mechanisms)
 
