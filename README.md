@@ -18,7 +18,7 @@ Schild TCB is a research prototype of a microkernel-based trusted computing base
 
 ## Highlights
 
-- **Formal verification** — 185 kernel modules swept at **SPARK Level 4** (`gnatprove --level=4 --mode=all`) with **0 unproved VCs**; ~112 of 185 are in the proof set, the remaining ~73 are outside proof scope (`SPARK_Mode => Off` drivers/platform code, or no analyzable body). 8 root-task daemons (MLS policy, config daemon, audit logger, A/B boot manager, HM model, launch model, watchdog, root task) are also proved.
+- **Formal verification** — 185 kernel modules swept at **SPARK Level 4** (`gnatprove --level=4 --mode=all`) with **0 unproved VCs**; ~129 of 185 are proved, the remaining ~56 are outside proof scope (`SPARK_Mode => Off` drivers/platform code, or no analyzable body). 8 root-task daemons (MLS policy, config daemon, audit logger, A/B boot manager, HM model, launch model, watchdog, root task) are also proved.
 - **Isolated periphery** — network (e1000e → I219-V) and storage (NVMe + SchildFS) run in the isolated Ring-3 **NetServer**; a fault there cannot reach the proven core.
 - **MLS Bell-LaPadula** — 5 security levels in the seL4 layer (Public..Top_Secret), 4 in the bare-metal kernel.
 - **Crash containment** — faulting a driver is caught and contained without rebooting the platform.
