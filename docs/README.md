@@ -69,6 +69,7 @@
 |---|---|---|
 | Модули ядра в proof-наборе | **185** `.adb` (без `null/`) | `find src -name '*.adb' -not -path '*/null/*'` |
 | Proof ядра (SPARK L4) | **`not-proved: 0`**; ~111 proved / ~74 out-of-proof (диапазон ±2 из-за `-j8`) | `bash scripts/prove_kernel.sh` → `obj/proof/report.txt` |
+| Фокусно доказанные (вне канонического `-j8` гейта) | `schild_firewall` (7 подпрограмм), `schild_signals`, `schild_frame_allocator`, `schild_server_security_policy` | фокус-прогон одного модуля (команда ниже) |
 | Демоны root-задачи (SPARK L4) | **8** (verify.gpr), `not-proved: 0`; `schild_boot_manager` 21, `schild_watchdog` 5, `schild_root_task` 76 checks | `bash scripts/verify.sh` |
 | Сборка bare-metal (public) | 181 объект, 0 ошибок | `SCHILD_PROFILE=public ./build.sh` |
 | Сборка seL4 (root task) | `root_task.elf` + `sel4_primary.iso` | `SEL4_PRIMARY=1 ./build.sh` |
@@ -78,6 +79,13 @@
 > Число proved (~111/~74) **недетерминировано** в пределах ~2 модулей из-за
 > `gnatprove -j8` (`schild_execution_fabric`, `schild_sentinel`). Стабилен только
 > гейт `not-proved: 0`. См. `ASSURANCE.md` §2.2.
+>
+> **Фокусно доказанные модули** (доказуемы на Level 4, но канонический батч `-j8`
+> может классифицировать их как SKIPPED): `schild_firewall` (7 подпрограмм),
+> `schild_signals`, `schild_frame_allocator`, `schild_server_security_policy` и др.
+> Проверка — фокус-прогон одного модуля (шаблон в `SESSION_CONTRACT_STRENGTHENING.md`
+> §4): временный `.gpr` с `for Main use ("<module>.adb")` + `gnatprove -P /tmp/f.gpr
+> --level=4 --mode=all`.
 
 ## 6. Двухконтурная сборка и граница доказательства (важно)
 
