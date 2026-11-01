@@ -6,6 +6,17 @@
 > *pending* or *target* have not yet been validated. Formal-verification
 > coverage is stated per-module, never as an aggregate percentage.
 
+## v1.0.0-pre (2026-11-01) — W11: contract semantics — CBC chaining, max-priority scheduler, MLS soundness
+
+**Validated: 6 kernel modules strengthened with security-property contracts and proved at SPARK Level 4 (`not-proved: 0`). Full sweep: 185 modules, `not-proved: 0`, 129 proved / 56 skipped (session start: 112/73). Build: 181 objects, 0 errors.**
+
+- `schild_aes_cbc_engine` (body `Off→On`): `Post` now states the full CBC chaining property (FIPS 800-38A) — `Ciphertext(I) = Plaintext(I) xor Context'Old.Initialization_Vector(I)` and `IV = Ciphertext` — ruling out ECB-style block replay and un-whitened leakage (threat model A1).
+- `schild_crypto_fabric.Process_Secure_Block`: `Post` propagates the CBC property through the fabric seam (state `Context_Active` + whitening + IV advance; A1).
+- `schild_mtf` (spec+body `Off→On`): `Partition_For_Tick` gained `Pre => S'Length > 0` (totality) + `Global => null` (determinism) — the static ARINC-653 schedule never faults on any tick (T5 availability). Exact tick→partition ownership is validated by `tools/sel4/tests/mtf_kat.adb` (liveness, per `THREAT_MODEL.md` §10).
+- `schild_scheduler`: `Find_Next_Task` / `Find_Next_Task_In_Partition` `Post` now state the **maximum-priority** property (no ready task bypassed by a lower-priority one) via a "track max" loop invariant — scheduling determinism / no-priority-inversion (T5).
+- `schild_sentinel`: strangling `Pre (Is_Active)` → `Post => Is_Ok = (Is_Active and Integrity_Checked)`.
+- `schild_file_descriptors.Check_Access`: `Post` states Bell-LaPadula **soundness** — access is granted only when an open descriptor exists at a level compatible with the requested direction (no read-up / no write-down; T3). Completeness is liveness (runtime-tested).
+
 ## v1.0.0-pre (2026-11-01) — W10 start: network parsers into the proof set (ARP + ICMP)
 
 **Validated: `schild_arp_handler` and `schild_icmp_handler` flipped `SPARK_Mode Off → On` and proved at Level 4 (`not-proved: 0`); `schild_net_types` (shared byte-array foundation) also `On`. Full sweep: 185 modules, `not-proved: 0`, ~111 proved / ~74 out-of-proof (previous ~108/~77).**

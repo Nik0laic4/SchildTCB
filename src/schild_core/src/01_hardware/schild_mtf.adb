@@ -1,7 +1,7 @@
 -- Copyright (C) 2026 Alexander Irganov
 -- SPDX-License-Identifier: GPL-2.0-only
 
-package body Schild_MTF with SPARK_Mode => Off is
+package body Schild_MTF with SPARK_Mode => On is
 
    function MTF_Period (S : MTF_Schedule) return Slot_Duration is
       Total : Slot_Duration := 0;

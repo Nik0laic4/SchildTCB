@@ -20,6 +20,13 @@ is
       Ciphertext:    out Cbc_Block_Buffer;
       Success   :    out Boolean)
    with Pre => Context.Is_Ready,
-        Post => (if Success then Context.Initialization_Vector = Ciphertext);
+        Post => (if Success then
+                   --  CBC chaining (FIPS 800-38A): the ciphertext block is the
+                   --  plaintext XOR the running IV, and the IV advances to the
+                   --  new ciphertext. Together these rule out both ECB-style
+                   --  block replay and un-whitened leakage (threat model A1).
+                   Context.Initialization_Vector = Ciphertext
+                   and (for all I in Cbc_Block_Buffer'Range =>
+                          Ciphertext (I) = (Plaintext (I) xor Context'Old.Initialization_Vector (I))));
 
 end Schild_Aes_Cbc_Engine;

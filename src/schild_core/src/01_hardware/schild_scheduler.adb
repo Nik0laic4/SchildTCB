@@ -10,9 +10,18 @@ package body Schild_Scheduler with SPARK_Mode is
             --  Track the best (highest-priority) candidate.
             if Sched.Tasks (Id).Priority >= Max_Pri then
                Max_Pri := Sched.Tasks (Id).Priority;
-               Best_Id := Task_Id (Id);
+               Best_Id := Id;
             end if;
          end if;
+
+         pragma Loop_Invariant
+           ((if Best_Id = 0 then Max_Pri = 0
+             else (Best_Id in Valid_Task_Id
+                   and Sched.Tasks (Best_Id).State = Task_Ready
+                   and Sched.Tasks (Best_Id).Priority = Max_Pri))
+            and (for all J in Valid_Task_Id'First .. Id =>
+                   (if Sched.Tasks (J).State = Task_Ready then
+                      Sched.Tasks (J).Priority <= Max_Pri)));
       end loop;
 
       return Best_Id;
@@ -29,9 +38,20 @@ package body Schild_Scheduler with SPARK_Mode is
            and then Sched.Tasks (Id).Partition = P then
             if Sched.Tasks (Id).Priority >= Max_Pri then
                Max_Pri := Sched.Tasks (Id).Priority;
-               Best_Id := Task_Id (Id);
+               Best_Id := Id;
             end if;
          end if;
+
+         pragma Loop_Invariant
+           ((if Best_Id = 0 then Max_Pri = 0
+             else (Best_Id in Valid_Task_Id
+                   and Sched.Tasks (Best_Id).State = Task_Ready
+                   and Sched.Tasks (Best_Id).Partition = P
+                   and Sched.Tasks (Best_Id).Priority = Max_Pri))
+            and (for all J in Valid_Task_Id'First .. Id =>
+                   (if Sched.Tasks (J).State = Task_Ready
+                      and then Sched.Tasks (J).Partition = P then
+                      Sched.Tasks (J).Priority <= Max_Pri)));
       end loop;
       return Best_Id;
    end Find_Next_Task_In_Partition;

@@ -5,7 +5,7 @@
 > эталонными и где они проверяются механически. Никаких «агрегатных»
 > заявлений — каждое утверждение указывает на модуль и команду проверки.
 
-**Дата актуализации:** 2026-11-01 · **HEAD:** `03e6c84`.
+**Дата актуализации:** 2026-11-01 · **HEAD:** см. `git log -1`.
 
 ---
 
@@ -53,7 +53,8 @@
 | [`technical/SESSION_CONTRACT_AUDIT.md`](technical/SESSION_CONTRACT_AUDIT.md) | Handoff контрактного аудита (W8) | 2026-10-31 |
 | [`technical/SESSION_W9_BOOT_COUNTER.md`](technical/SESSION_W9_BOOT_COUNTER.md) | Handoff W9 (boot/reliability) | 2026-10-31 |
 | [`technical/SESSION_CONTRACT_STRENGTHENING.md`](technical/SESSION_CONTRACT_STRENGTHENING.md) | Handoff W10 (сеть) — заморожен | 2026-11-01 |
-| [`technical/SESSION_W10_CRYPTO_KERNEL.md`](technical/SESSION_W10_CRYPTO_KERNEL.md) | Handoff следующей сессии (крипто/ядро) | 2026-11-01 |
+| [`technical/SESSION_W10_CRYPTO_KERNEL.md`](technical/SESSION_W10_CRYPTO_KERNEL.md) | Handoff крипто/ядро — заморожен | 2026-11-01 |
+| [`technical/SESSION_W11_CONTRACT_SEMANTICS.md`](technical/SESSION_W11_CONTRACT_SEMANTICS.md) | Handoff следующей сессии (контрактная семантика) | 2026-11-01 |
 | [`SCHILD_TCB_AUDIT_REPORT.md`](SCHILD_TCB_AUDIT_REPORT.md) | Снимок self-аудита для сторонних инженеров | 2026-10-04 |
 | [`technical/security/CVE-2026-SCHILD-01.md`](technical/security/CVE-2026-SCHILD-01.md) | Advisory (8 уязвимостей, исправлено) | 2026-08-05 |
 | [`technical/security/CVE-2026-SCHILD-02.md`](technical/security/CVE-2026-SCHILD-02.md) | Advisory (5 уязвимостей, исправлено) | 2026-08-09 |
@@ -69,19 +70,20 @@
 | Факт | Каноничное значение | Механическая проверка |
 |---|---|---|
 | Модули ядра в proof-наборе | **185** `.adb` (без `null/`) | `find src -name '*.adb' -not -path '*/null/*'` |
-| Proof ядра (SPARK L4) | **`not-proved: 0`**; ~112 proved / ~73 out-of-proof (диапазон ±2 из-за `-j8`) | `bash scripts/prove_kernel.sh` → `obj/proof/report.txt` |
-| Фокусно доказанные (вне канонического `-j8` гейта) | `schild_firewall` (7 подпрограмм), `schild_signals`, `schild_frame_allocator`, `schild_server_security_policy` | фокус-прогон одного модуля (команда ниже) |
+| Proof ядра (SPARK L4) | **`not-proved: 0`**; 129 proved / 56 skipped (прогон 2026-11-01, W11) | `bash scripts/prove_kernel.sh` → `obj/proof/report.txt` |
+| Фокусно доказуемые (L4) | `schild_firewall` (7), `schild_signals`, `schild_frame_allocator`, `schild_server_security_policy`, `schild_mtf`, `schild_scheduler`, `schild_aes_cbc_engine`, `schild_crypto_fabric`, `schild_sentinel`, `schild_file_descriptors`, `schild_sha256_pad_guard`, `schild_sha_manager` | фокус-прогон одного модуля (команда ниже) |
 | Демоны root-задачи (SPARK L4) | **8** (verify.gpr), `not-proved: 0`; `schild_boot_manager` 21, `schild_watchdog` 5, `schild_root_task` 76 checks | `bash scripts/verify.sh` |
 | Сборка bare-metal (public) | 181 объект, 0 ошибок | `SCHILD_PROFILE=public ./build.sh` |
 | Сборка seL4 (root task) | `root_task.elf` + `sel4_primary.iso` | `SEL4_PRIMARY=1 ./build.sh` |
 | Сборка private-оверлея | ✅ доказано (`verify_private.sh`, `not-proved: 0`) | `SCHILD_PROFILE=private bash tools/sel4/build_rt.sh` + `bash scripts/verify_private.sh` |
 | QEMU-маркеры | **20** (seL4) / **6** (standalone) | `bash scripts/run_tests.sh` |
 
-> Число proved (~112/~73) **недетерминировано** в пределах ~2 модулей из-за
-> `gnatprove -j8` (`schild_execution_fabric`, `schild_sentinel`). Стабилен только
-> гейт `not-proved: 0`. См. `ASSURANCE.md` §2.2.
+> Число proved/skipped **недетерминировано** (флуктуирует из-за `gnatprove -j8`,
+> напр. `schild_execution_fabric`, `schild_sentinel`). Стабилен только гейт
+> `not-proved: 0`. W11 поднял базовый уровень: 6 модулей переведены `On` и
+> доказаны (см. `CHANGELOG.md` W11). См. `ASSURANCE.md` §2.2.
 >
-> **Фокусно доказанные модули** (доказуемы на Level 4, но канонический батч `-j8`
+> **Фокусно доказуемые модули** (доказуемы на Level 4, но канонический батч `-j8`
 > может классифицировать их как SKIPPED): `schild_firewall` (7 подпрограмм),
 > `schild_signals`, `schild_frame_allocator`, `schild_server_security_policy` и др.
 > Проверка — фокус-прогон одного модуля (шаблон в `SESSION_CONTRACT_STRENGTHENING.md`
