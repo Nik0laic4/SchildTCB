@@ -317,8 +317,9 @@ GPL-2.0-only. Третьесторонние компоненты — под с�
    (`0xE8200000`) into the NetServer VSpace. Validated on the T580 — IRQ-driven
    RX (Notification badge `0xE1`) + end-to-end TCP/HTTP served from the
    isolated Ring 3 NetServer.
-2. **IOMMU (P0-3)**: device isolation after device-bypass removal (PCI-scan +
-   MSI-detect on real hardware — TODO P1).
+2. **IOMMU/VT-d (DMA isolation)**: ⛔ upstream experimental/flaky (sporadic SC race,
+   см. ROADMAP §4). PCI-scan + MSI-detect для устройств — уже ✅ W2 (I219-V через
+   ECAM, MSI).
 3. **seL4 MCS**: ✅ QEMU-валидирован (temporal isolation: CPU budgets, timeouts —
    `Setup_MCS_Thread`, sporadic Config Daemon, `seL4_Fault_Timeout` via shared
    timeout endpoint). Формально верифицирован слабее ARM MCS (отражено в
