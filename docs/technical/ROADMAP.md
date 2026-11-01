@@ -235,10 +235,11 @@ bootloader) + encryption-часть firewall (scaffold).
 
 **Прогресс (2026-11-01):** ✅ `schild_net_types`, ✅ `schild_icmp_handler`,
 ✅ `schild_arp_handler` (Parse_Arp + Build_Arp_Reply), ✅ `schild_ipv4_handler`
-(Parse_Ipv4 + Compute_Ipv4_Checksum), ✅ `schild_udp_handler`, ✅
+(**полностью**: Parse + Checksum + Header + Frame), ✅ `schild_udp_handler`, ✅
 `schild_tcp_handler` — **полностью доказан** (все подпрограммы `On`, `not-proved: 0`).
-Отложено: IPv4 `Build_Ipv4_Frame`, `schild_http_server`
-(`Write_U32_Dec`/`Character'Pos`/SchildFS I/O). Далее: крипто (`aes_*`/`sha_*`/`hmac_sha256`).
+Отложено: `schild_http_server` (строковые операции над неограниченным `Byte_Array` —
+проверщик не выводит границы подтипа `Byte_Index`, `Character'Pos`/`Write_U32_Dec`,
+SchildFS I/O). Далее: крипто (`aes_*`/`sha_*`/`hmac_sha256`).
 
 
 ---
