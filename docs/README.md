@@ -22,6 +22,7 @@
 | [`technical/DEVELOPMENT_VECTORS.md`](technical/DEVELOPMENT_VECTORS.md) | Стратегия (референтные базы, DO-333) | Приоритеты «сейчас/позже/не делаем». |
 | [`technical/TOOL_QUALIFICATION.md`](technical/TOOL_QUALIFICATION.md) | Версии инструментов + детерминизм | Шаг к DO-330/DO-333. |
 | [`technical/ARCHITECTURE.md`](technical/ARCHITECTURE.md) | Технический data-sheet | Архитектура, ABI, история версий. |
+| [`technical/SPARK_PROOF_TECHNIQUES.md`](technical/SPARK_PROOF_TECHNIQUES.md) | Приёмы доказательства (gnatprove gotchas) | Единый справочник приёмов; читать перед работой с proof. |
 
 ## 2. Требования с трассируемостью (пилоты)
 
@@ -37,6 +38,7 @@
 | [`technical/BOOT_COUNTER_DESIGN.md`](technical/BOOT_COUNTER_DESIGN.md) | A/B boot counter + блокировка |
 | [`technical/GENET_DRIVER_DESIGN.md`](technical/GENET_DRIVER_DESIGN.md) | Конспект драйвера GENET (Pi 4) |
 | [`technical/VIRTIO_NET_L4RE_COMPARISON.md`](technical/VIRTIO_NET_L4RE_COMPARISON.md) | Сверка virtio-net с L4Re |
+| [`technical/ARM64_VIRTIO_NET.md`](technical/ARM64_VIRTIO_NET.md) | Конспект порта AArch64 (файлы, seL4 gotchas, харнесс) |
 | [`technical/HARDWARE.md`](technical/HARDWARE.md) | Карта железа ThinkPad T580 |
 
 ## 4. Исторические / замороженные документы
@@ -49,19 +51,12 @@
 | [`technical/SEL4_INTEGRATION.md`](technical/SEL4_INTEGRATION.md) | Лог интеграции seL4 (Stage 5–8) | 2026-08-17 |
 | [`technical/MCS_MIGRATION.md`](technical/MCS_MIGRATION.md) | Миграция на MCS API | 2026-10-03 |
 | [`technical/RING3_NETWORK_MIGRATION.md`](technical/RING3_NETWORK_MIGRATION.md) | Миграция сети в Ring 3 | 2026-10-04 |
-| [`technical/SESSION_ARM64_NET.md`](technical/SESSION_ARM64_NET.md) | Handoff ARM64 virtio-net | 2026-10-24 |
-| [`technical/SESSION_CONTRACT_AUDIT.md`](technical/SESSION_CONTRACT_AUDIT.md) | Handoff контрактного аудита (W8) | 2026-10-31 |
-| [`technical/SESSION_W9_BOOT_COUNTER.md`](technical/SESSION_W9_BOOT_COUNTER.md) | Handoff W9 (boot/reliability) | 2026-10-31 |
-| [`technical/SESSION_CONTRACT_STRENGTHENING.md`](technical/SESSION_CONTRACT_STRENGTHENING.md) | Handoff W10 (сеть) — заморожен | 2026-11-01 |
-| [`technical/SESSION_W10_CRYPTO_KERNEL.md`](technical/SESSION_W10_CRYPTO_KERNEL.md) | Handoff крипто/ядро — заморожен | 2026-11-01 |
-| [`technical/SESSION_W11_CONTRACT_SEMANTICS.md`](technical/SESSION_W11_CONTRACT_SEMANTICS.md) | Handoff следующей сессии (контрактная семантика) | 2026-11-01 |
 | [`SCHILD_TCB_AUDIT_REPORT.md`](SCHILD_TCB_AUDIT_REPORT.md) | Снимок self-аудита для сторонних инженеров | 2026-10-04 |
 | [`technical/security/CVE-2026-SCHILD-01.md`](technical/security/CVE-2026-SCHILD-01.md) | Advisory (8 уязвимостей, исправлено) | 2026-08-05 |
 | [`technical/security/CVE-2026-SCHILD-02.md`](technical/security/CVE-2026-SCHILD-02.md) | Advisory (5 уязвимостей, исправлено) | 2026-08-09 |
 
-> Session handoff (`SESSION_*.md`) по своей природе — снимки «с чего начинать
-> чистую сессию». После закрытия сессии они становятся историей; актуальный
-> handoff — только самый свежий.
+> Session-handoff'ы (`SESSION_*.md`) упразднены: «что сделано» — в `CHANGELOG.md`,
+> «что дальше» — в `ROADMAP.md`, приёмы доказательства — в `SPARK_PROOF_TECHNIQUES.md`.
 
 ## 5. Единый источник истины — числа
 
@@ -86,9 +81,7 @@
 > **Фокусно доказуемые модули** (доказуемы на Level 4, но канонический батч `-j8`
 > может классифицировать их как SKIPPED): `schild_firewall` (7 подпрограмм),
 > `schild_signals`, `schild_frame_allocator`, `schild_server_security_policy` и др.
-> Проверка — фокус-прогон одного модуля (шаблон в `SESSION_CONTRACT_STRENGTHENING.md`
-> §4): временный `.gpr` с `for Main use ("<module>.adb")` + `gnatprove -P /tmp/f.gpr
-> --level=4 --mode=all`.
+> Проверка — фокус-прогон одного модуля (шаблон в `SPARK_PROOF_TECHNIQUES.md` §8).
 
 ## 6. Двухконтурная сборка и граница доказательства (важно)
 

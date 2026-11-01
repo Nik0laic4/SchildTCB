@@ -37,7 +37,7 @@
 
 ## v1.0.0-pre (2026-10-31) — W8: threat model + Tier-A contract audit
 
-**Validated: `THREAT_MODEL.md` (assets A1–A6, adversary classes P1–P4 + AI-agent capability axis, trust boundaries TB1–TB4, security-property map T1–T9, seL4 axiomatics) and Tier-A contract strengthening — all proved at Level 4, `not-proved: 0` (details in `SESSION_CONTRACT_AUDIT.md`).**
+**Validated: `THREAT_MODEL.md` (assets A1–A6, adversary classes P1–P4 + AI-agent capability axis, trust boundaries TB1–TB4, security-property map T1–T9, seL4 axiomatics) and Tier-A contract strengthening — all proved at Level 4, `not-proved: 0` (details in `THREAT_MODEL.md` §7/§10).**
 
 - Contracts proved: `cap_space` (`Cap_Copy`/`Cap_Mint`/`Cap_Delete`/`Cap_Retype`, `Is_Derived_From`), `process_manager` (`Terminate_Process`/`Create_Process`/`Reap_Zombies`/`Init_Process_Table`/`Check_Mls_Compatibility`/`Find_*`/`Wait_Process`), `signals` (`Send_Signal`/`Has_Pending_Signals`/`Deliver_Pending_Signal`), `mls_assigner`, `ipc` (`Write_Byte`/`Execute_Syscall`), `net_spark_proofs` (vacuous `then True` removed).
 - Full proof: `not-proved: 0`; ~108 proved / ~77 out-of-proof (185 modules).

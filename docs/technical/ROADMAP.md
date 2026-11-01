@@ -17,10 +17,10 @@
 | Компонент | Статус | Механическая проверка |
 |---|---|---|
 | Bare-metal ядро — сборка | ✅ 0 ошибок | `./build.sh` |
-| Bare-metal ядро — SPARK L4 | ✅ `not-proved: 0` | `scripts/prove_kernel.sh` → `obj/proof/report.txt` (185 модулей; `~112 proved / ~73 out-of-proof`) |
+| Bare-metal ядро — SPARK L4 | ✅ `not-proved: 0` | `scripts/prove_kernel.sh` → `obj/proof/report.txt` (185 модулей; `129 proved / 56 skipped`, 2026-11-01) |
 | Демоны root-задачи — SPARK L4 | ✅ все VC доказаны | `scripts/verify.sh` (`verify.gpr`, 8 модулей) |
 | Модель угроз | ✅ | `docs/technical/THREAT_MODEL.md` |
-| Контрактный аудит (Tier-A) | ✅ усилены, `not-proved: 0` | `docs/technical/SESSION_CONTRACT_AUDIT.md` |
+| Контрактный аудит (Tier-A) | ✅ усилены, `not-proved: 0` | `docs/technical/THREAT_MODEL.md` §7 + `CHANGELOG.md` (W8) |
 | W10 — сетевые парсеры | ✅ доказано (arp/icmp/ipv4/udp/tcp — все подпрограммы `On`) | `scripts/prove_kernel.sh`; `http_server` — prover-ограничение (см. §3 W10) |
 | Boot counter (A/B + порог блокировки) | ✅ доказано | `scripts/verify.sh` (`schild_boot_manager` 8 подпрограмм); `BOOT_COUNTER_DESIGN.md` |
 | Health check перед commit (W9.2) | ✅ доказано | `scripts/verify.sh` (`Commit_If_Healthy`, `schild_boot_manager` 10 подпрограмм) |
@@ -65,7 +65,7 @@
   - `ASSURANCE.md` §3 («`prove_kernel.sh` currently reports `not-proved: 5`»)
     → помечено как историческое (закрыто в Phase 1).
 - ✅ Счётчики модулей выровнены (W4-сессия): README/PASSPORT приведены к
-  каноничным **185** (~112 proved + ~73 skipped/out-of-proof). Каноничный
+  каноничным **185** (129 proved + 56 skipped, прогон 2026-11-01). Каноничный
   счётчик — `prove_kernel.sh` → `obj/proof/report.txt`; хардкодить число в
   доках не следует.
 
@@ -198,7 +198,7 @@ QEMU **20/20**; bare-metal `[NVFS]` без регрессий.
 
 **Итог (W8-сессия):** модель угроз (`THREAT_MODEL.md`) + усиление контрактов
 security-критичных модулей (cap_space, process_manager, signals, mls, ipc).
-Детали и остатки — `SESSION_CONTRACT_AUDIT.md`. Полный proof: `not-proved: 0`,
+Детали и остатки — `CHANGELOG.md` (W8). Полный proof: `not-proved: 0`,
 `~108 proved / ~77 out-of-proof`.
 
 ### W9 — Фаза надёжности (boot/update/recovery) — `[в работе]`
@@ -232,7 +232,7 @@ bootloader) + encryption-часть firewall (scaffold).
 `schild_ipv4_handler`, `schild_icmp_handler`, `schild_http_server`, `schild_net_stack`),
 крипто (`schild_hmac_sha256`, `schild_aes_cbc_engine`, `schild_sha_manager`), ядро
 (`schild_scheduler`, `schild_kernel_logic`, `schild_sentinel`, `schild_schild_fs`).
-Детали и приоритеты — `SESSION_CONTRACT_STRENGTHENING.md`.
+Метод и приёмы — `THREAT_MODEL.md` §10, `SPARK_PROOF_TECHNIQUES.md`.
 
 **Прогресс (2026-11-01):** ✅ `schild_net_types`, ✅ `schild_icmp_handler`,
 ✅ `schild_arp_handler` (Parse_Arp + Build_Arp_Reply), ✅ `schild_ipv4_handler`
@@ -300,7 +300,7 @@ SchildFS I/O). Далее: крипто (`aes_*`/`sha_*`/`hmac_sha256`).
    `raspi4b` не эмулирует GENET (проверено по исходникам QEMU); seL4 `bcm2711`
    собирается, но валидировать драйвер без «Малинки» негде.
 
-Детали и gotchas — `docs/technical/SESSION_ARM64_NET.md`.
+Детали и gotchas — `docs/technical/ARM64_VIRTIO_NET.md`.
 
 ---
 

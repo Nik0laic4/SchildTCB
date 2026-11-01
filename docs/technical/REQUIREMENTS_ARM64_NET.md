@@ -4,7 +4,7 @@
 **Scope:** `src/schild_core/arm64/ada/` — seL4 AArch64 + virtio-net + изоляция + валидация.
 **Цель:** пилот формата «требование → дизайн → код → тест» как шаг к DO-178C / DO-333 /
 Common Criteria (см. `DEVELOPMENT_VECTORS.md`).
-**Связанные:** `ROADMAP.md` (§6), `SESSION_ARM64_NET.md`.
+**Связанные:** `ROADMAP.md` (§6), `ARM64_VIRTIO_NET.md`.
 
 > Каждое требование механически проверяемо (маркер в UART-выводе QEMU, в сборке или в
 > харнессе). Никаких «агрегатных» утверждений без per-component проверки.
