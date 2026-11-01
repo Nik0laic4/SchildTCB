@@ -227,10 +227,10 @@ package body Schild_Net_Stack with SPARK_Mode => Off is
       end if;
       -- Demultiplex by (source IP, source port); allocate a fresh slot for a
       -- new SYN so multiple concurrent clients are served independently.
-      Conn_Idx := Schild_Tcp_Handler.Find_Connection
-        (Tcp_Table, Ipv4_Res.Header.Src_IP, Tcp_Hdr.Src_Port);
+      Schild_Tcp_Handler.Find_Connection
+        (Tcp_Table, Ipv4_Res.Header.Src_IP, Tcp_Hdr.Src_Port, Conn_Idx);
       if Conn_Idx < 0 and then (Tcp_Hdr.Flags and Schild_Tcp_Handler.Flag_SYN) /= 0 then
-         Conn_Idx := Schild_Tcp_Handler.Alloc_Connection (Tcp_Table);
+         Schild_Tcp_Handler.Alloc_Connection (Tcp_Table, Conn_Idx);
       end if;
       if Conn_Idx < 0 then
          declare
