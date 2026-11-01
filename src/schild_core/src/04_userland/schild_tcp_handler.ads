@@ -37,7 +37,7 @@ package Schild_Tcp_Handler with SPARK_Mode => On, Abstract_State => (Entropy_Sta
 
    --  Pseudo-random initial sequence number (RDTSC + per-boot counter),
    --  replacing the previous fixed 16#DEAD_BEEF# (predictable-ISN flaw).
-   function Generate_Isn return Unsigned_32 with SPARK_Mode => Off;
+   procedure Generate_Isn (Result : out Unsigned_32) with Global => (In_Out => Entropy_State);
 
    procedure Find_Connection (Table : in out Tcp_Conn_Table; IP : Unsigned_32; Port : Unsigned_16; Result : out Integer);
    procedure Alloc_Connection (Table : in out Tcp_Conn_Table; Result : out Integer);
@@ -50,13 +50,16 @@ package Schild_Tcp_Handler with SPARK_Mode => On, Abstract_State => (Entropy_Sta
       Src_IP : in Unsigned_32; Src_MAC : in Unsigned_8_Array_6;
       Payload : in Byte_Array; Reply_Buf : out Byte_Array;
       Reply_Len : out Unsigned_16; Has_Data : out Boolean)
-     with SPARK_Mode => Off, Pre => Reply_Buf'Length >= 1500;
+     with Pre => Reply_Buf'Length >= 1500,
+          Relaxed_Initialization => Reply_Buf;
 
    procedure Build_Tcp_Reply
-     (Conn : in out Tcp_Connection; Flags : Unsigned_8;
+     (Conn : in Tcp_Connection; Flags : Unsigned_8;
       Seq, Ack : Unsigned_32; Payload : Byte_Array;
       Reply_Buf : out Byte_Array; Reply_Len : out Unsigned_16)
-     with SPARK_Mode => Off, Pre => Reply_Buf'Length >= 1500;
+     with Pre => Reply_Buf'Length >= Payload'Length + 20,
+          Post => Reply_Len = Unsigned_16 (20 + Payload'Length),
+          Relaxed_Initialization => Reply_Buf;
 
    --  Server-initiated close: after serving a response the server sends FIN
    --  (HTTP/1.0 always answers "Connection: close"). Valid only from
@@ -65,7 +68,9 @@ package Schild_Tcp_Handler with SPARK_Mode => On, Abstract_State => (Entropy_Sta
    procedure Initiate_Close
      (Conn : in out Tcp_Connection;
       Reply_Buf : out Byte_Array; Reply_Len : out Unsigned_16)
-     with SPARK_Mode => Off, Pre => Reply_Buf'Length >= 1500;
+     with Pre => Reply_Buf'Length >= 1500,
+          Post => (if Conn.State'Old = ESTABLISHED then Reply_Len = 20 else Reply_Len = 0),
+          Relaxed_Initialization => Reply_Buf;
 
    function Validate_Tcp_Checksum (Src_IP, Dst_IP : Unsigned_32;
       Tcp_Seg : Byte_Array) return Boolean
