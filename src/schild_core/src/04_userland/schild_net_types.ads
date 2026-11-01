@@ -2,7 +2,7 @@
 
 with Interfaces;
 
-package Schild_Net_Types with SPARK_Mode => Off is
+package Schild_Net_Types with SPARK_Mode => On is
    use Interfaces;
 
    subtype Byte_Index is Integer range 0 .. 4095;
