@@ -40,6 +40,7 @@
 | [`technical/VIRTIO_NET_L4RE_COMPARISON.md`](technical/VIRTIO_NET_L4RE_COMPARISON.md) | Сверка virtio-net с L4Re |
 | [`technical/ARM64_VIRTIO_NET.md`](technical/ARM64_VIRTIO_NET.md) | Конспект порта AArch64 (файлы, seL4 gotchas, харнесс) |
 | [`technical/HARDWARE.md`](technical/HARDWARE.md) | Карта железа ThinkPad T580 |
+| [`technical/USE_CASE.md`](technical/USE_CASE.md) | Пилотный сценарий «Защищённый сетевой шлюз с MLS» |
 
 ## 4. Исторические / замороженные документы
 
