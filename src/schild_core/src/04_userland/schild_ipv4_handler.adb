@@ -87,11 +87,11 @@ package body Schild_Ipv4_Handler with SPARK_Mode => On is
       Sum := Sum + (Header.Src_IP mod 65536);
       Sum := Sum + (Header.Dst_IP / 65536);
       Sum := Sum + (Header.Dst_IP mod 65536);
-      -- RFC 1071 fold: (Sum and 0xFFFF) + (Sum >> 16)
-      --                  == (Sum mod 65536) + (Sum / 65536).
-      -- The accumulator is bounded by 9 * 65535, so two fold steps suffice.
-      Sum := (Sum mod 65536) + (Sum / 65536);
-      Sum := (Sum mod 65536) + (Sum / 65536);
+      -- RFC 1071 fold (modular): (Sum mod 65536) + (Sum / 65536).
+      while Sum > 65535 loop
+         pragma Loop_Variant (Decreases => Sum);
+         Sum := (Sum mod 65536) + (Sum / 65536);
+      end loop;
       -- One's complement of the low 16 bits:
       --   (not Sum) and 0xFFFF == 65535 - (Sum mod 65536).
       return Unsigned_16 (65535 - (Sum mod 65536));
@@ -106,9 +106,10 @@ package body Schild_Ipv4_Handler with SPARK_Mode => On is
       Payload_Len : in  Unsigned_16;
       Hdr_Buf     : out Byte_Array;
       Hdr_Len     : out Unsigned_16)
-     with SPARK_Mode => Off,  -- proof pending (called only by Build_Ipv4_Frame)
-          Pre => Payload_Len <= 65515,
-          Post => Hdr_Len = 20,
+     with Pre => Hdr_Buf'Length >= 20 and Payload_Len <= 65515,
+          Post => Hdr_Len = 20
+            and (for all I in Hdr_Buf'First .. Hdr_Buf'First + 19 =>
+                   Hdr_Buf (I)'Initialized),
           Relaxed_Initialization => Hdr_Buf
    is
       Hdr : Ipv4_Header;
@@ -163,7 +164,6 @@ package body Schild_Ipv4_Handler with SPARK_Mode => On is
       Frame_Buf  : out Byte_Array;
       Frame_Len  : out Unsigned_16)
    is
-      pragma SPARK_Mode (Off);  -- proof pending: variable-length buffer build
       Idx : Integer := Frame_Buf'First;
       procedure Put_U8 (V : Unsigned_8) is begin
          Frame_Buf (Idx) := V; Idx := Idx + 1;
@@ -175,15 +175,25 @@ package body Schild_Ipv4_Handler with SPARK_Mode => On is
       Ipv4_Buf : Byte_Array (0 .. 19);
       Ipv4_Len : Unsigned_16;
    begin
-      for J in 0 .. 5 loop Put_U8 (Dst_MAC (J)); end loop;
-      for J in 0 .. 5 loop Put_U8 (Src_MAC (J)); end loop;
+      for J in 0 .. 5 loop
+         pragma Loop_Invariant (Idx - Idx'Loop_Entry = J);
+         Put_U8 (Dst_MAC (J));
+      end loop;
+      for J in 0 .. 5 loop
+         pragma Loop_Invariant (Idx - Idx'Loop_Entry = J);
+         Put_U8 (Src_MAC (J));
+      end loop;
       Put_U16 (16#0800#);
       Build_Ipv4_Header (Proto, Dst_IP, Unsigned_16 (Payload'Length),
                          Ipv4_Buf, Ipv4_Len);
       for J in 0 .. Integer (Ipv4_Len) - 1 loop
+         pragma Loop_Invariant (Idx - Idx'Loop_Entry = J);
          Put_U8 (Ipv4_Buf (Ipv4_Buf'First + J));
       end loop;
-      for J in Payload'Range loop Put_U8 (Payload (J)); end loop;
+      for J in Payload'Range loop
+         pragma Loop_Invariant (Idx - Idx'Loop_Entry = J - Payload'First);
+         Put_U8 (Payload (J));
+      end loop;
       Frame_Len := Unsigned_16 (Idx - Frame_Buf'First);
    end Build_Ipv4_Frame;
 
