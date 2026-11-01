@@ -21,7 +21,7 @@ with an Ada/SPARK user-space environment (MLS policy formally verified; drivers 
 
 **Key characteristics:**
 - seL4 microkernel (GPL-2.0-only) — 186 KB; upstream-proofed, locally patched
-- Root Task in Ada/SPARK — 55 KB
+- Root Task in Ada/SPARK — ~239 KB (with NetServer)
 - Bell-LaPadula MLS (Multi-Level Security)
 - SPARK Level 4: MLS Bell-LaPadula policy proved (gnatprove 0 unproved)
 - Hardware platform: x86_64, QEMU, built on Linux
@@ -99,15 +99,15 @@ timeout 10 qemu-system-x86_64 -cdrom sel4_primary.iso \
 
 | Component | Size |
 |-----------|--------|
-| root_task.elf (Ada/SPARK) | ~55 000 bytes |
-| kernel.elf (seL4, C/ASM) | ~195 000 bytes |
+| root_task.elf (Ada/SPARK, with NetServer) | ~239 000 bytes |
+| kernel.elf (seL4, C/ASM) | ~186 000 bytes |
 | sel4_primary.iso | ~22 MB |
 
 ### 3.3. Source file stack
 
 | Language | Files | Purpose |
 |------|--------|------------|
-| Ada (.ads/.adb) | 176 | Kernel, drivers, SPARK modules |
+| Ada (.ads/.adb) | 185 | Kernel, drivers, SPARK modules (proof set; 181 compiled objects by default) |
 | C (.c) | 6 | seL4 IPC, runtime stubs, interrupts |
 | ASM (.S) | 3 | Entry point, syscall stubs, MLS server |
 
@@ -124,6 +124,7 @@ Verified mandatory access control model (gnatprove, 0 unproved):
 | No Read Up | `Subject >= Object` | ✅ Proved |
 | No Write Down | `Subject <= Object` | ✅ Proved |
 | Strict IPC | `Sender = Receiver` | ✅ Proved |
+| No Control Up | `Caller_Level >= Target_Level` | ✅ QEMU |
 
 **Levels:** Public → Internal → Confidential → Secret → Top_Secret
 
@@ -228,7 +229,7 @@ Verified mandatory access control model (gnatprove, 0 unproved):
    c. SPARK tests: MLS Policy (T5-T7)
    d. SPARK tests: Audit Logger (T8)
    e. Init_Fault_Handler: Retype Endpoint, TCBSetSpace
-   f. Launch_MLS_Server: 10-step pipeline
+   f. Launch_MLS_Server: 12-step pipeline
    g. blocking Recv on the fault endpoint (containment) + NBRecv for e1000e IRQ
 ```
 
@@ -270,7 +271,7 @@ Total RAM: 510 MB
 | 8 | ICMP Handler | `Raw_Len in 8..65507` | ✅ |
 | 9 | Mount Manager | `Point.Ctx_Id = Target` | ✅ |
 
-**MLS Bell-LaPadula policy: 0 unproved (gnatprove). Root-task orchestration (W4): `schild_root_task.adb` `SPARK_Mode => On` (54 checks); `Schild_Launch_Model` / `Schild_HM_Model` (Level 4). Storage isolation (W7): NVMe + SchildFS run in the Ring 3 NetServer (`[NVFS] Read-back VERIFY OK`, QEMU 20/20). HW/driver/crypto: `SPARK_Mode => Off`.**
+**MLS Bell-LaPadula policy: 0 unproved (gnatprove). Root-task orchestration (W4): `schild_root_task.adb` `SPARK_Mode => On` (76 checks); `Schild_Launch_Model` / `Schild_HM_Model` (Level 4). Storage isolation (W7): NVMe + SchildFS run in the Ring 3 NetServer (`[NVFS] Read-back VERIFY OK`, QEMU 20/20). HW/driver/crypto: `SPARK_Mode => Off`.**
 
 ---
 
@@ -310,7 +311,7 @@ GPL-2.0-only. Третьесторонние компоненты — под с�
 9. **`reply`/`recv` ABI** → FIXED: info RDI→RSI, RSI zeroing, `"=S"` return
 10. **End-to-end IPC** → ✅ Root Task → Call → MLS → Recv → Reply → Root Task (0 faults)
 
-### Remaining (Stage 11)
+### Current status (W2–W7, post-Stage 11)
 1. **e1000e IRQ-driven RX (seL4 NetServer path)**: ✅ RESOLVED (W2). The root
    task discovers the real I219-V via ECAM, programs MSI, and maps BAR0
    (`0xE8200000`) into the NetServer VSpace. Validated on the T580 — IRQ-driven
