@@ -97,7 +97,7 @@ plus `src/03_crypto` (`schild_hmac_sha256`). Полные (private) тела т�
 | CVE | Date | Vulnerabilities | Status |
 |-----|------|-------------|--------|
 | [CVE-2026-SCHILD-01](security/CVE-2026-SCHILD-01.md) | 2026-08-09 | 8 | ✅ Fixed |
-| [CVE-2026-SCHILD-02](security/CVE-2026-SCHILD-02.md) | 2026-08-09 | 5 | ✅ Fixed |
+| [CVE-2026-SCHILD-02](security/CVE-2026-SCHILD-02.md) | 2026-08-09 | 5 (4 fixed + 1 noted) | ✅ |
 
 ## Hardware countermeasures (x86_64 seL4 kernel)
 
