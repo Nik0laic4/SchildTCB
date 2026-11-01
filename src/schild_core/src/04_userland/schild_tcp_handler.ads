@@ -2,7 +2,7 @@
 
 with Interfaces; with Schild_Net_Types; with Schild_Net_Config;
 
-package Schild_Tcp_Handler with SPARK_Mode => Off is
+package Schild_Tcp_Handler with SPARK_Mode => On, Abstract_State => (Entropy_State) is
    use Interfaces;
 
    subtype Byte_Array is Schild_Net_Types.Byte_Array;
@@ -37,10 +37,10 @@ package Schild_Tcp_Handler with SPARK_Mode => Off is
 
    --  Pseudo-random initial sequence number (RDTSC + per-boot counter),
    --  replacing the previous fixed 16#DEAD_BEEF# (predictable-ISN flaw).
-   function Generate_Isn return Unsigned_32;
+   function Generate_Isn return Unsigned_32 with SPARK_Mode => Off;
 
-   function Find_Connection (Table : in out Tcp_Conn_Table; IP : Unsigned_32; Port : Unsigned_16) return Integer;
-   function Alloc_Connection (Table : in out Tcp_Conn_Table) return Integer;
+   function Find_Connection (Table : in out Tcp_Conn_Table; IP : Unsigned_32; Port : Unsigned_16) return Integer with SPARK_Mode => Off;
+   function Alloc_Connection (Table : in out Tcp_Conn_Table) return Integer with SPARK_Mode => Off;
 
    procedure Parse_Tcp (Raw : in Byte_Array; Header : out Tcp_Header; Valid : out Boolean)
      with Pre => Raw'Length >= 20;
@@ -50,13 +50,13 @@ package Schild_Tcp_Handler with SPARK_Mode => Off is
       Src_IP : in Unsigned_32; Src_MAC : in Unsigned_8_Array_6;
       Payload : in Byte_Array; Reply_Buf : out Byte_Array;
       Reply_Len : out Unsigned_16; Has_Data : out Boolean)
-     with Pre => Reply_Buf'Length >= 1500;
+     with SPARK_Mode => Off, Pre => Reply_Buf'Length >= 1500;
 
    procedure Build_Tcp_Reply
      (Conn : in out Tcp_Connection; Flags : Unsigned_8;
       Seq, Ack : Unsigned_32; Payload : Byte_Array;
       Reply_Buf : out Byte_Array; Reply_Len : out Unsigned_16)
-     with Pre => Reply_Buf'Length >= 1500;
+     with SPARK_Mode => Off, Pre => Reply_Buf'Length >= 1500;
 
    --  Server-initiated close: after serving a response the server sends FIN
    --  (HTTP/1.0 always answers "Connection: close"). Valid only from
@@ -65,11 +65,11 @@ package Schild_Tcp_Handler with SPARK_Mode => Off is
    procedure Initiate_Close
      (Conn : in out Tcp_Connection;
       Reply_Buf : out Byte_Array; Reply_Len : out Unsigned_16)
-     with Pre => Reply_Buf'Length >= 1500;
+     with SPARK_Mode => Off, Pre => Reply_Buf'Length >= 1500;
 
    function Validate_Tcp_Checksum (Src_IP, Dst_IP : Unsigned_32;
       Tcp_Seg : Byte_Array) return Boolean
-     with Pre => Tcp_Seg'Length >= 20;
+     with SPARK_Mode => Off, Pre => Tcp_Seg'Length >= 20;
 
    Our_IP : Unsigned_32 renames Schild_Net_Config.Our_IP;
 end Schild_Tcp_Handler;
