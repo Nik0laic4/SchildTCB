@@ -69,7 +69,7 @@ package Schild_Tcp_Handler with SPARK_Mode => On, Abstract_State => (Entropy_Sta
 
    function Validate_Tcp_Checksum (Src_IP, Dst_IP : Unsigned_32;
       Tcp_Seg : Byte_Array) return Boolean
-     with SPARK_Mode => Off, Pre => Tcp_Seg'Length >= 20;
+     with Pre => Tcp_Seg'Length >= 20;
 
    Our_IP : Unsigned_32 renames Schild_Net_Config.Our_IP;
 end Schild_Tcp_Handler;
