@@ -34,6 +34,8 @@
 
 ## Воспроизведение
 
+Пошаговый учебник (build → run → verify) — [`docs/GUIDE.md`](docs/GUIDE.md).
+
 ```bash
 cd src/schild_core
 ./build.sh                          # bare-metal (181 объект, 0 ошибок)
