@@ -10,8 +10,8 @@
 
 **Validated: the HTTP/1.0 request parser was extracted from the Off `schild_http_server` into a new On package `schild_http_core` and proved at SPARK Level 4 (`not-proved: 0`), then wired back into the server. This resolves the prover limitation (gotcha §4.5) via constrained buffer/pattern types.**
 
-- `schild_http_core` (new, `On`): `Str_Match` (7 checks), `Extract_Path` (10), `Is_Debug_Path` (2) — the P1 input path is now memory-safe by proof. Constrained `Request_Buffer (0..1023)` + `Pattern (1..12)` avoid the unconstrained-`String` (index `Positive`) gnat2why explosion documented in gotcha §4.5.
-- `schild_http_server` (`Off`): the local `Str_Match`/`Extract_Path`/`Is_Debug_Path` were removed and replaced with calls to the proven core; added runtime guards (`Request'Length < 5 → 404`, `> 1024 → 414`) before invoking the core (its `Pre` is not enforced from Off callers).
+- `schild_http_core` (new, `On`): `Str_Match` (7 checks), `Extract_Path` (10), `Is_Debug_Path` (2), `Digit_Count` (1), `Write_U32_Dec` (16), `Write_Str` (12) — the HTTP request parser **and** response builders are now memory-safe by proof. Constrained `Request_Buffer (0..1023)` + `Pattern (1..12)` avoid the unconstrained-`String` (index `Positive`) gnat2why explosion documented in gotcha §4.5; `Digit_Count` is a comparison chain (provable upper bound 10); `Write_U32_Dec` writes right-to-left directly (no scratch array).
+- `schild_http_server` (`Off`): the local `Str_Match`/`Extract_Path`/`Is_Debug_Path`/`Write_Str`/`Write_U32_Dec`/`Digit_Count` were removed and replaced with calls to the proven core; added runtime guards (`Request'Length < 5 → 404`, `> 1024 → 414`) before invoking the core (its `Pre` is not enforced from Off callers).
 - Proof set grows **185 → 186** modules; build **181 → 182** objects.
 
 ## v1.0.0-pre (2026-11-01) — W11.2: network ingress boundary fix (short-frame OOB in ARP/IPv4 parsers)

@@ -23,33 +23,6 @@ package body Schild_Http_Server with SPARK_Mode => Off is
       Actual_Len : out Natural);
    pragma Import (C, Schild_Debug_Render, "schild_debug_render");
 
-   procedure Write_Str (B : out Byte_Array; Idx : in out Integer; S : String) is
-   begin
-      for I in S'Range loop B (Idx) := Character'Pos (S (I)); Idx := Idx + 1; end loop;
-   end Write_Str;
-
-   procedure Write_U32_Dec (B : out Byte_Array; Idx : in out Integer; V : Unsigned_32) is
-      Tmp : array (0 .. 9) of Unsigned_8;
-      Pos : Integer := 9;
-      Val : Unsigned_32 := V;
-   begin
-      if Val = 0 then Tmp (9) := 48; Pos := 8;  --  emit exactly one digit "0"
-      else
-         while Val > 0 loop
-            Tmp (Pos) := 48 + Unsigned_8 (Val rem 10); Pos := Pos - 1; Val := Val / 10;
-         end loop;
-      end if;
-      for J in Pos + 1 .. 9 loop B (Idx) := Tmp (J); Idx := Idx + 1; end loop;
-   end Write_U32_Dec;
-
-   function Digit_Count (V : Unsigned_32) return Integer is
-      D : Integer := 1;
-      X : Unsigned_32 := V;
-   begin
-      while X >= 10 loop X := X / 10; D := D + 1; end loop;
-      return D;
-   end Digit_Count;
-
    procedure Handle_Request
      (Request   : in     Byte_Array;
       Reply_Buf :    out Byte_Array;
@@ -92,7 +65,7 @@ package body Schild_Http_Server with SPARK_Mode => Off is
 
       --  Primitive-fuzz guard: reject oversized request headers outright.
       if Request'Length > Max_Header_Len then
-         Write_Str (Reply_Buf, Idx, Http_Too_Long);
+         Schild_Http_Core.Write_Str (Reply_Buf, Idx, Http_Too_Long);
          Reply_Len := Unsigned_16 (Idx - Reply_Buf'First);
          Success := True;
          return;
@@ -100,7 +73,7 @@ package body Schild_Http_Server with SPARK_Mode => Off is
 
       -- Parse the path through the proven core (memory-safe on 5..1024 bytes).
       if Request'Length < 5 then
-         Write_Str (Reply_Buf, Idx, Http_404);
+         Schild_Http_Core.Write_Str (Reply_Buf, Idx, Http_404);
          Reply_Len := Unsigned_16 (Idx - Reply_Buf'First);
          Success := True;
          return;
@@ -124,27 +97,27 @@ package body Schild_Http_Server with SPARK_Mode => Off is
             Written   : Natural := 0;
          begin
             --  HTTP 200 header (text/html) with a 5-digit Content-Length slot.
-            Write_Str (Reply_Buf, Idx, Http_200);
+            Schild_Http_Core.Write_Str (Reply_Buf, Idx, Http_200);
             Body_Start := Idx;
             for J in 1 .. 5 loop Reply_Buf (Idx) := 32; Idx := Idx + 1; end loop;
-            Write_Str (Reply_Buf, Idx, ASCII.CR & ASCII.LF & ASCII.CR & ASCII.LF);
+            Schild_Http_Core.Write_Str (Reply_Buf, Idx, ASCII.CR & ASCII.LF & ASCII.CR & ASCII.LF);
             Body_Start := Idx;
 
             --  HTML body: prefix + audit log text (C-bridge) + suffix.
-            Write_Str (Reply_Buf, Idx, Html_Head);
+            Schild_Http_Core.Write_Str (Reply_Buf, Idx, Html_Head);
             Schild_Debug_Render
               (Reply_Buf (Idx)'Address,
                Reply_Buf'Last - Idx + 1,
                Written);
             Idx := Idx + Integer (Written);
-            Write_Str (Reply_Buf, Idx, Html_Tail);
+            Schild_Http_Core.Write_Str (Reply_Buf, Idx, Html_Tail);
 
             --  Fix Content-Length.
             declare
                Body_Len : constant Unsigned_32 := Unsigned_32 (Idx - Body_Start);
-               Tmp : Integer := Body_Start - 4 - Digit_Count (Body_Len);
+               Tmp : Integer := Body_Start - 4 - Schild_Http_Core.Digit_Count (Body_Len);
             begin
-               Write_U32_Dec (Reply_Buf, Tmp, Body_Len);
+               Schild_Http_Core.Write_U32_Dec (Reply_Buf, Tmp, Body_Len);
             end;
 
             Reply_Len := Unsigned_16 (Idx - Reply_Buf'First);
@@ -155,10 +128,10 @@ package body Schild_Http_Server with SPARK_Mode => Off is
 
       -- Built-in landing page for GET / (no filesystem required).
       if Path (1 .. 10) = "index.html" then
-         Write_Str (Reply_Buf, Idx, Http_200);
-         Write_U32_Dec (Reply_Buf, Idx, Unsigned_32 (Index_Html'Length));
-         Write_Str (Reply_Buf, Idx, ASCII.CR & ASCII.LF & ASCII.CR & ASCII.LF);
-         Write_Str (Reply_Buf, Idx, Index_Html);
+         Schild_Http_Core.Write_Str (Reply_Buf, Idx, Http_200);
+         Schild_Http_Core.Write_U32_Dec (Reply_Buf, Idx, Unsigned_32 (Index_Html'Length));
+         Schild_Http_Core.Write_Str (Reply_Buf, Idx, ASCII.CR & ASCII.LF & ASCII.CR & ASCII.LF);
+         Schild_Http_Core.Write_Str (Reply_Buf, Idx, Index_Html);
          Reply_Len := Unsigned_16 (Idx - Reply_Buf'First);
          Success := True;
          return;
@@ -171,18 +144,18 @@ package body Schild_Http_Server with SPARK_Mode => Off is
       Schild_Schild_Fs.Open (Path, File, FS_OK);
 
       if not FS_OK then
-         Write_Str (Reply_Buf, Idx, Http_404);
+         Schild_Http_Core.Write_Str (Reply_Buf, Idx, Http_404);
          Reply_Len := Unsigned_16 (Idx - Reply_Buf'First);
          Success := True;
          return;
       end if;
 
       -- Write HTTP 200 header
-      Write_Str (Reply_Buf, Idx, Http_200);
+      Schild_Http_Core.Write_Str (Reply_Buf, Idx, Http_200);
       Body_Start := Idx;
       -- Reserve space for Content-Length (placeholder, will be overwritten)
       for J in 1 .. 5 loop Reply_Buf (Idx) := 32; Idx := Idx + 1; end loop;
-      Write_Str (Reply_Buf, Idx, ASCII.CR & ASCII.LF & ASCII.CR & ASCII.LF);
+      Schild_Http_Core.Write_Str (Reply_Buf, Idx, ASCII.CR & ASCII.LF & ASCII.CR & ASCII.LF);
 
       Body_Start := Idx;
 
@@ -200,9 +173,9 @@ package body Schild_Http_Server with SPARK_Mode => Off is
       -- Fix Content-Length
       declare
          Body_Len : constant Unsigned_32 := Unsigned_32 (Idx - Body_Start);
-         Tmp : Integer := Body_Start - 4 - Digit_Count (Body_Len);
+         Tmp : Integer := Body_Start - 4 - Schild_Http_Core.Digit_Count (Body_Len);
       begin
-         Write_U32_Dec (Reply_Buf, Tmp, Body_Len);
+         Schild_Http_Core.Write_U32_Dec (Reply_Buf, Tmp, Body_Len);
       end;
 
       Reply_Len := Unsigned_16 (Idx - Reply_Buf'First);

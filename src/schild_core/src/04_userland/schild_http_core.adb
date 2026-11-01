@@ -59,4 +59,51 @@ package body Schild_Http_Core with SPARK_Mode => On is
       return False;
    end Is_Debug_Path;
 
+   function Digit_Count (V : Unsigned_32) return Integer is
+   begin
+      if V >= 1_000_000_000 then
+         return 10;
+      elsif V >= 100_000_000 then
+         return 9;
+      elsif V >= 10_000_000 then
+         return 8;
+      elsif V >= 1_000_000 then
+         return 7;
+      elsif V >= 100_000 then
+         return 6;
+      elsif V >= 10_000 then
+         return 5;
+      elsif V >= 1_000 then
+         return 4;
+      elsif V >= 100 then
+         return 3;
+      elsif V >= 10 then
+         return 2;
+      else
+         return 1;
+      end if;
+   end Digit_Count;
+
+   procedure Write_U32_Dec (B : out Byte_Array; Idx : in out Integer; V : Unsigned_32) is
+      D   : constant Integer := Digit_Count (V);
+      Val : Unsigned_32 := V;
+   begin
+      --  Emit the D decimal digits of V right-to-left into B(Idx .. Idx + D - 1).
+      for K in 0 .. D - 1 loop
+         pragma Loop_Invariant (K in 0 .. D - 1);
+         B (Idx + D - 1 - K) := 48 + Unsigned_8 (Val rem 10);
+         Val := Val / 10;
+      end loop;
+      Idx := Idx + D;
+   end Write_U32_Dec;
+
+   procedure Write_Str (B : out Byte_Array; Idx : in out Integer; S : String) is
+   begin
+      for I in S'Range loop
+         pragma Loop_Invariant (Idx - Idx'Loop_Entry = I - S'First);
+         B (Idx) := Character'Pos (S (I));
+         Idx := Idx + 1;
+      end loop;
+   end Write_Str;
+
 end Schild_Http_Core;

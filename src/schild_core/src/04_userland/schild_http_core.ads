@@ -35,4 +35,27 @@ package Schild_Http_Core with SPARK_Mode => On is
 
    function Is_Debug_Path (P : Path_String) return Boolean;
 
+   subtype Byte_Array is Schild_Net_Types.Byte_Array;
+
+   function Digit_Count (V : Unsigned_32) return Integer
+     with Post => Digit_Count'Result in 1 .. 10;
+
+   -- Write the decimal representation of V at B(Idx..), advancing Idx by
+   -- Digit_Count(V). The Pre guarantees the write stays inside B.
+   procedure Write_U32_Dec
+     (B : out Byte_Array; Idx : in out Integer; V : Unsigned_32)
+     with Pre  => Idx in B'First .. B'Last
+                  and then Idx + Digit_Count (V) - 1 <= B'Last,
+          Post => Idx = Idx'Old + Digit_Count (V),
+          Relaxed_Initialization => B;
+
+   -- Write S (as bytes) at B(Idx..), advancing Idx by S'Length.
+   procedure Write_Str
+     (B : out Byte_Array; Idx : in out Integer; S : String)
+     with Pre  => Idx in B'First .. B'Last
+                  and then S'Length <= B'Length
+                  and then Idx + S'Length - 1 <= B'Last,
+          Post => Idx = Idx'Old + S'Length,
+          Relaxed_Initialization => B;
+
 end Schild_Http_Core;
