@@ -2,7 +2,7 @@
 
 with Interfaces; with Schild_Net_Types; with Schild_Net_Config;
 
-package Schild_Ipv4_Handler with SPARK_Mode => Off is
+package Schild_Ipv4_Handler with SPARK_Mode => On is
    use Interfaces;
 
    subtype Byte_Array is Schild_Net_Types.Byte_Array;
