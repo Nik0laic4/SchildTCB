@@ -32,7 +32,7 @@
 
 - `gnatprove -j8` флипает PROVED/out-of-proof для ~2 модулей
   (`schild_execution_fabric`, `schild_sentinel`). Стабильно только **`not-proved: 0`**;
-  число «proved» флуктуирует (W11-прогон: 129) — **не хардкодить** (сноска в `ASSURANCE.md` §2.2).
+  число «proved» флуктуирует (W11-прогон: 130) — **не хардкодить** (сноска в `ASSURANCE.md` §2.2).
 
 ---
 

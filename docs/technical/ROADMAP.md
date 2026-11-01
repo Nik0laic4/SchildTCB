@@ -17,7 +17,7 @@
 | Компонент | Статус | Механическая проверка |
 |---|---|---|
 | Bare-metal ядро — сборка | ✅ 0 ошибок | `./build.sh` |
-| Bare-metal ядро — SPARK L4 | ✅ `not-proved: 0` | `scripts/prove_kernel.sh` → `obj/proof/report.txt` (185 модулей; `129 proved / 56 skipped`, 2026-11-01) |
+| Bare-metal ядро — SPARK L4 | ✅ `not-proved: 0` | `scripts/prove_kernel.sh` → `obj/proof/report.txt` (186 модулей; `130 proved / 56 skipped`, 2026-11-01) |
 | Демоны root-задачи — SPARK L4 | ✅ все VC доказаны | `scripts/verify.sh` (`verify.gpr`, 8 модулей) |
 | Модель угроз | ✅ | `docs/technical/THREAT_MODEL.md` |
 | Контрактный аудит (Tier-A) | ✅ усилены, `not-proved: 0` | `docs/technical/THREAT_MODEL.md` §7 + `CHANGELOG.md` (W8) |
@@ -65,7 +65,7 @@
   - `ASSURANCE.md` §3 («`prove_kernel.sh` currently reports `not-proved: 5`»)
     → помечено как историческое (закрыто в Phase 1).
 - ✅ Счётчики модулей выровнены (W4-сессия): README/PASSPORT приведены к
-  каноничным **185** (129 proved + 56 skipped, прогон 2026-11-01). Каноничный
+  каноничным **186** (130 proved + 56 skipped, прогон 2026-11-01). Каноничный
   счётчик — `prove_kernel.sh` → `obj/proof/report.txt`; хардкодить число в
   доках не следует.
 

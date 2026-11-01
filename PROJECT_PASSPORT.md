@@ -22,7 +22,7 @@ Schild TCB — исследовательский прототип довере�
 
 **Достижения текущей версии:**
 
-- ~129 из 185 модулей ядра входят в proof-набор на SPARK Level 4 (`not-proved: 0`); остальные ~56 — вне proof (драйверы/платформа `SPARK_Mode => Off` либо без анализируемого тела).
+- ~130 из 186 модулей ядра входят в proof-набор на SPARK Level 4 (`not-proved: 0`); остальные ~56 — вне proof (драйверы/платформа `SPARK_Mode => Off` либо без анализируемого тела).
 - 8 демонов root-задачи доказаны в `verify.gpr` (Level 4): MLS, Config, Audit,
   Boot, HM Model, Launch Model, Watchdog, Root Task.
 - Сборка: 181 объект (базовая, public), 0 ошибок.
@@ -155,7 +155,7 @@ SEL4_PRIMARY=1 ./build.sh
 
 # Формальная верификация
 bash scripts/verify.sh          # 8 демонов root-задачи, Level 4
-bash scripts/prove_kernel.sh    # полный прогон ядра (185 модулей)
+bash scripts/prove_kernel.sh    # полный прогон ядра (186 модулей)
 
 # Прогон в QEMU
 SKIP_BUILD=1 SEL4_PRIMARY=0 bash scripts/run_tests.sh

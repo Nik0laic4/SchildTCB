@@ -18,7 +18,7 @@ Schild TCB is a research prototype of a microkernel-based trusted computing base
 
 ## Highlights
 
-- **Formal verification** — 185 kernel modules swept at **SPARK Level 4** (`gnatprove --level=4 --mode=all`) with **0 unproved VCs**; ~129 of 185 are proved, the remaining ~56 are outside proof scope (`SPARK_Mode => Off` drivers/platform code, or no analyzable body). 8 root-task daemons (MLS policy, config daemon, audit logger, A/B boot manager, HM model, launch model, watchdog, root task) are also proved. *(A few modules — `schild_firewall`, `schild_signals`, `schild_frame_allocator`, `schild_server_security_policy` — are provable at Level 4 in a focused run but may be classified `SKIPPED` by the canonical `-j8` batch; the stable gate is `not-proved: 0`. See [`SPARK_PROOF_TECHNIQUES.md`](docs/technical/SPARK_PROOF_TECHNIQUES.md).)*
+- **Formal verification** — 186 kernel modules swept at **SPARK Level 4** (`gnatprove --level=4 --mode=all`) with **0 unproved VCs**; ~130 of 186 are proved, the remaining ~56 are outside proof scope (`SPARK_Mode => Off` drivers/platform code, or no analyzable body). 8 root-task daemons (MLS policy, config daemon, audit logger, A/B boot manager, HM model, launch model, watchdog, root task) are also proved. *(A few modules — `schild_firewall`, `schild_signals`, `schild_frame_allocator`, `schild_server_security_policy` — are provable at Level 4 in a focused run but may be classified `SKIPPED` by the canonical `-j8` batch; the stable gate is `not-proved: 0`. See [`SPARK_PROOF_TECHNIQUES.md`](docs/technical/SPARK_PROOF_TECHNIQUES.md).)*
 - **Isolated periphery** — network (e1000e → I219-V) and storage (NVMe + SchildFS) run in the isolated Ring-3 **NetServer**; a fault there cannot reach the proven core.
 - **MLS Bell-LaPadula** — 5 security levels in the seL4 layer (Public..Top_Secret), 4 in the bare-metal kernel.
 - **Crash containment** — faulting a driver is caught and contained without rebooting the platform.
@@ -75,7 +75,7 @@ SEL4_PRIMARY=1 ./build.sh
 
 # Formal verification
 bash scripts/verify.sh          # root-task daemons, SPARK Level 4
-bash scripts/prove_kernel.sh    # full kernel run (185 modules)
+bash scripts/prove_kernel.sh    # full kernel run (186 modules)
 
 # Run in QEMU
 SKIP_BUILD=1 SEL4_PRIMARY=0 bash scripts/run_tests.sh
@@ -84,7 +84,7 @@ SKIP_BUILD=1 SEL4_PRIMARY=0 bash scripts/run_tests.sh
 ## CI (GitHub Actions)
 
 - **Push / PR to `master`** → `build` (bare-metal kernel + ISO) and `verify` (8 root-task daemons, SPARK Level 4) run automatically.
-- **Manual** (`Actions` → `CI` → *Run workflow*) → the `prove-full` job runs the complete 185-module SPARK Level-4 proof (`scripts/prove_kernel.sh`) and uploads `obj/proof/report.txt` as an artifact.
+- **Manual** (`Actions` → `CI` → *Run workflow*) → the `prove-full` job runs the complete 186-module SPARK Level-4 proof (`scripts/prove_kernel.sh`) and uploads `obj/proof/report.txt` as an artifact.
 
 ## Contributing
 

@@ -82,7 +82,7 @@ SKIP_BUILD=1 SEL4_PRIMARY=1 scripts/run_tests.sh  # QEMU, 20 маркеров
 cd src/schild_core
 bash scripts/verify.sh            # 8 демонов root-задачи (not-proved: 0)
 bash scripts/verify_private.sh     # полные (private) тела демонов
-bash scripts/prove_kernel.sh       # полный свип 185 модулей (~10 мин)
+bash scripts/prove_kernel.sh       # полный свип 186 модулей (~10 мин)
 ```
 
 Каноничный гейт — **`not-proved: 0`**. Число proved/skipped недетерминировано
