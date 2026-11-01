@@ -3,7 +3,7 @@
 
 -- Schild TCB Stage 7.9: IPv4 Handler — body
 
-package body Schild_Ipv4_Handler with SPARK_Mode => Off is
+package body Schild_Ipv4_Handler with SPARK_Mode => On is
 
    ----------------
    -- Parse_Ipv4 --
@@ -17,6 +17,16 @@ package body Schild_Ipv4_Handler with SPARK_Mode => Off is
       use type Unsigned_16; use type Unsigned_32;
    begin
       Valid := False;
+      -- Fully initialize the OUT record so early returns (invalid IHL /
+      -- length guards) leave no uninitialized field for the caller.
+      Result := (Header      => (Version_IHL => 0, DSCP_ECN => 0, Total_Len => 0, Ident => 0,
+                                 Flags_Frag => 0, TTL => 0, Protocol => 0, Checksum => 0,
+                                 Src_IP => 0, Dst_IP => 0),
+                 Is_For_Us   => False,
+                 Checksum_OK => False,
+                 Header_Len  => 20,
+                 Payload_Off => 20,
+                 Payload_Len => 0);
       Result.Header.Version_IHL := Raw (Raw'First);
       IHL := Result.Header.Version_IHL and 16#0F#;
       if IHL < 5 or IHL > 15 then return; end if;
@@ -71,14 +81,20 @@ package body Schild_Ipv4_Handler with SPARK_Mode => Off is
       W := Shift_Left (Unsigned_16 (Header.TTL), 8)
            or Unsigned_16 (Header.Protocol);
       Sum := Sum + Unsigned_32 (W);
-      Sum := Sum + Unsigned_32 (Shift_Right (Header.Src_IP, 16) and 65535);
-      Sum := Sum + Unsigned_32 (Header.Src_IP and 65535);
-      Sum := Sum + Unsigned_32 (Shift_Right (Header.Dst_IP, 16) and 65535);
-      Sum := Sum + Unsigned_32 (Header.Dst_IP and 65535);
-      while Sum > 65535 loop
-         Sum := (Sum and 65535) + Shift_Right (Sum, 16);
-      end loop;
-      return Unsigned_16 (not Sum and 65535);
+      -- High/low 16-bit words of Src_IP / Dst_IP, expressed with modular
+      -- arithmetic (provable) instead of bit masks (hard for SMT bit-vectors).
+      Sum := Sum + (Header.Src_IP / 65536);
+      Sum := Sum + (Header.Src_IP mod 65536);
+      Sum := Sum + (Header.Dst_IP / 65536);
+      Sum := Sum + (Header.Dst_IP mod 65536);
+      -- RFC 1071 fold: (Sum and 0xFFFF) + (Sum >> 16)
+      --                  == (Sum mod 65536) + (Sum / 65536).
+      -- The accumulator is bounded by 9 * 65535, so two fold steps suffice.
+      Sum := (Sum mod 65536) + (Sum / 65536);
+      Sum := (Sum mod 65536) + (Sum / 65536);
+      -- One's complement of the low 16 bits:
+      --   (not Sum) and 0xFFFF == 65535 - (Sum mod 65536).
+      return Unsigned_16 (65535 - (Sum mod 65536));
    end Compute_Ipv4_Checksum;
 
    -------------------------
@@ -90,6 +106,10 @@ package body Schild_Ipv4_Handler with SPARK_Mode => Off is
       Payload_Len : in  Unsigned_16;
       Hdr_Buf     : out Byte_Array;
       Hdr_Len     : out Unsigned_16)
+     with SPARK_Mode => Off,  -- proof pending (called only by Build_Ipv4_Frame)
+          Pre => Payload_Len <= 65515,
+          Post => Hdr_Len = 20,
+          Relaxed_Initialization => Hdr_Buf
    is
       Hdr : Ipv4_Header;
       Idx : Integer := Hdr_Buf'First;
@@ -143,6 +163,7 @@ package body Schild_Ipv4_Handler with SPARK_Mode => Off is
       Frame_Buf  : out Byte_Array;
       Frame_Len  : out Unsigned_16)
    is
+      pragma SPARK_Mode (Off);  -- proof pending: variable-length buffer build
       Idx : Integer := Frame_Buf'First;
       procedure Put_U8 (V : Unsigned_8) is begin
          Frame_Buf (Idx) := V; Idx := Idx + 1;

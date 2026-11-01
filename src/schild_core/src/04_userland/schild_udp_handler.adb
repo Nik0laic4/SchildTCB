@@ -1,5 +1,5 @@
 package body Schild_Udp_Handler with
-  SPARK_Mode => Off --  Scaffold: reports a fixed DNS (port 53) datagram.
+  SPARK_Mode => On
 is
 
    procedure Process_Udp_Datagram

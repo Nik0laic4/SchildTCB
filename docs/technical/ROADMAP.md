@@ -12,13 +12,13 @@
 
 ---
 
-## 1. Текущее валидированное состояние (2026-10-31, HEAD `a027f5c`)
+## 1. Текущее валидированное состояние (2026-10-31, HEAD `03e6c84`)
 
 | Компонент | Статус | Механическая проверка |
 |---|---|---|
 | Bare-metal ядро — сборка | ✅ 0 ошибок | `./build.sh` |
 | Bare-metal ядро — SPARK L4 | ✅ `not-proved: 0` | `scripts/prove_kernel.sh` → `obj/proof/report.txt` (185 модулей; `~108 proved / ~77 out-of-proof`) |
-| Демоны root-задачи — SPARK L4 | ✅ все VC доказаны | `scripts/verify.sh` (`verify.gpr`, 7 модулей) |
+| Демоны root-задачи — SPARK L4 | ✅ все VC доказаны | `scripts/verify.sh` (`verify.gpr`, 8 модулей) |
 | Модель угроз | ✅ | `docs/technical/THREAT_MODEL.md` |
 | Контрактный аудит (Tier-A) | ✅ усилены, `not-proved: 0` | `docs/technical/SESSION_CONTRACT_AUDIT.md` |
 | Boot counter (A/B + порог блокировки) | ✅ доказано | `scripts/verify.sh` (`schild_boot_manager` 8 подпрограмм); `BOOT_COUNTER_DESIGN.md` |
@@ -223,7 +223,7 @@ security-критичных модулей (cap_space, process_manager, signals,
 bootloader) + encryption-часть firewall (scaffold).
 
 
-### W10 — Контрактное усиление (расширение Tier A/B) — `[следующий]`
+### W10 — Контрактное усиление (расширение Tier A/B) — `[в работе]`
 
 Метод — `THREAT_MODEL.md` §10: для каждой security-критичной строки §7 вывести
 точное свойство → SPARK-контракт → доказать (Level 4, без vacuity, без `Assume`).
@@ -232,6 +232,13 @@ bootloader) + encryption-часть firewall (scaffold).
 крипто (`schild_hmac_sha256`, `schild_aes_cbc_engine`, `schild_sha_manager`), ядро
 (`schild_scheduler`, `schild_kernel_logic`, `schild_sentinel`, `schild_schild_fs`).
 Детали и приоритеты — `SESSION_CONTRACT_STRENGTHENING.md`.
+
+**Прогресс (2026-11-01):** ✅ `schild_net_types`, ✅ `schild_icmp_handler`,
+✅ `schild_arp_handler` (Parse_Arp + Build_Arp_Reply), ✅ `schild_ipv4_handler`
+(Parse_Ipv4 + Compute_Ipv4_Checksum), ✅ `schild_udp_handler` — переведены `On`
+и доказаны (`not-proved: 0`). Осталось в IPv4: `Build_Ipv4_Frame` (`body Off`).
+`schild_http_server` оценён как сложный (`Write_U32_Dec`/`Character'Pos`/SchildFS
+I/O) — отдельная сессия. Далее: `schild_tcp_handler` (L4-парсер, P1) → крипто.
 
 
 ---
@@ -265,7 +272,7 @@ bootloader) + encryption-часть firewall (scaffold).
 
 ## 6. ARM64 (AArch64) — сетевое направление (2026-10-24)
 
-Ветка `arm64` (HEAD `6c61f04`) — virtio-net в QEMU `qemu-arm-virt` как
+Ветка `arm64` (синхронизирована с `master`) — virtio-net в QEMU `qemu-arm-virt` как
 валидационный полигон перед целевой платформой **Raspberry Pi 4B** (BCM2711,
 верифицированная AArch64). Сеть здесь — средство валидации seL4+AArch64, а не
 продакшн-стек; на Pi 4 сетевая карта — **GENET**, а не virtio-net.

@@ -1,9 +1,9 @@
 # Schild TCB — Technical data sheet
 
-**Version:** v1.0.0-pre (Stage 11)  |  **Date:** 2026-08-16
+**Version:** v1.0.0-pre (Stage 12)  |  **Date:** 2026-08-16 (обновлено 2026-11-01)
 **Developer:** Ирганов А.Н.
 **NetServer isolation:** CSpace ✅ (own CNode) · VSpace ✅ (own ASID-bound PML4) · IRQ ✅ · DMA frame ✅ · crash-containment ✅
-**Build:** 177 objects + C + ASM → 0 errors
+**Build:** 181 объектов (public, bare-metal) + C + ASM → 0 ошибок
 **Root Task ELF:** ~239 KB (with NetServer)  |  **kernel.elf:** ~186 KB (nehalem, PRINTING=ON)
 
 ---
@@ -20,7 +20,7 @@ with an Ada/SPARK user-space environment (MLS policy formally verified; drivers 
 - Research on formally verified computing environments
 
 **Key characteristics:**
-- seL4 microkernel (GPL-2.0-only) — 195 KB; upstream-proofed, locally patched
+- seL4 microkernel (GPL-2.0-only) — 186 KB; upstream-proofed, locally patched
 - Root Task in Ada/SPARK — 55 KB
 - Bell-LaPadula MLS (Multi-Level Security)
 - SPARK Level 4: MLS Bell-LaPadula policy proved (gnatprove 0 unproved)
@@ -48,7 +48,7 @@ with an Ada/SPARK user-space environment (MLS policy formally verified; drivers 
 │  │ NetServer Thread (netserver.c + Ada, net_ep)        │  │
 │  │  └─ e1000e + TCP/IP (MMIO @ 0x600000, DMA physics)  │  │
 │  ├────────────────────────────────────────────────────┤  │
-│  │ Schild TCB Kernel (176 Ada modules, bare-metal)     │  │
+│  │ Schild TCB Kernel (185 Ada modules, bare-metal)     │  │
 │  │  ├─ 01_hardware: HAL, MMU, APIC, NVMe, e1000e      │  │
 │  │  ├─ 02_security:  MLS Core, IPC Gateway, Firewall   │  │
 │  │  ├─ 03_crypto:   AES-NI, TME, SHA-256, RNG          │  │
@@ -86,7 +86,7 @@ syscall ABI. They are not derivative works of one another.
 ```bash
 cd src/schild_core
 SEL4_PRIMARY=1 ./build.sh
-# → 176 Ada + 0 errors, root_task.elf ~55 KB, sel4_primary.iso
+# → root_task.elf + sel4_primary.iso (см. tools/sel4/build_rt.sh)
 ```
 
 **Run:**

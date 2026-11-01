@@ -2,7 +2,7 @@
 
 with Interfaces; with Schild_Net_Types; with Schild_Net_Config;
 
-package Schild_Ipv4_Handler with SPARK_Mode => Off is
+package Schild_Ipv4_Handler with SPARK_Mode => On is
    use Interfaces;
 
    subtype Byte_Array is Schild_Net_Types.Byte_Array;
@@ -37,5 +37,7 @@ package Schild_Ipv4_Handler with SPARK_Mode => Off is
    procedure Build_Ipv4_Frame (Dst_MAC : in Unsigned_8_Array_6; Src_MAC : in Unsigned_8_Array_6;
      Proto : in Unsigned_8; Dst_IP : in Unsigned_32;
      Payload : in Byte_Array; Frame_Buf : out Byte_Array; Frame_Len : out Unsigned_16)
-     with Pre => Frame_Buf'Length >= Payload'Length + 34;
+     with Pre => Frame_Buf'Length >= Payload'Length + 34,
+          Post => Frame_Len = Unsigned_16 (Payload'Length + 34),
+          Relaxed_Initialization => Frame_Buf;
 end Schild_Ipv4_Handler;

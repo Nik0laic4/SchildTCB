@@ -2,7 +2,7 @@
 
 **Version:** v1.0 | **Date:** 2026-10-31
 **Scope:** `schild_boot_manager` + `schild_watchdog` (`tools/sel4/src/` + `private/root_task/`),
-self-tests `[S7] T4–T7` в `schild_root_task.adb`.
+self-tests `[S7] T4–T8` в `schild_root_task.adb`.
 **Цель:** формат «требование → дизайн → код → тест» для W9.1–W9.3, как шаг к DO-178C / DO-333
 (см. `DEVELOPMENT_VECTORS.md`).
 **Связанные:** `ROADMAP.md` (§3 W9), `BOOT_COUNTER_DESIGN.md`, `SESSION_W9_BOOT_COUNTER.md`,
@@ -76,7 +76,7 @@ self-tests `[S7] T4–T7` в `schild_root_task.adb`.
 ## 6. Замечания
 
 - Основной механизм проверки — SPARK Level 4 (`verify.sh` → `not-proved: 0`):
-  `schild_boot_manager` 12 подпрограмм, `schild_watchdog` 5, `schild_root_task` 75 checks.
+  `schild_boot_manager` 21 подпрограмма, `schild_watchdog` 5, `schild_root_task` 76 checks.
 - Хардварная часть (таймер PIT/APIC/BCM2711, NVMe `Read/Write_Block`, bootloader) — отдельные
   требования с пометкой «deferred» (см. `BOOT_COUNTER_DESIGN.md` §5).
 - Следующий шаг по `DEVELOPMENT_VECTORS.md`: расставить ID-комментарии в коде

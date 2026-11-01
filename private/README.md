@@ -10,11 +10,16 @@
 
 ```
 root_task/
-  schild_audit_logger.adb/.ads     Журнал аудита (кольцевой буфер, гарантированная доставка)
-  schild_config_daemon.adb/.ads    Конфигурационный демон (транзакционный commit-confirmed)
-  schild_boot_manager.adb/.ads     A/B-загрузчик (failover с проверкой SHA-256)
-  schild_net_runtime.c             Рантайм NetServer (реальный Schild_Debug_Render)
+  schild_audit_logger.adb      Журнал аудита (кольцевой буфер, гарантированная доставка)
+  schild_config_daemon.adb     Конфигурационный демон (транзакционный commit-confirmed)
+  schild_boot_manager.adb      A/B-загрузчик (failover с проверкой HMAC-SHA256)
+  schild_net_runtime.c         Рантайм NetServer (реальный Schild_Debug_Render)
 ```
+
+> Спецификации (`.ads`) здесь **не хранятся**: интерфейс общий со сборкой и
+> лежит в `tools/sel4/src/` (public-профиль). При `SCHILD_PROFILE=private`
+> оверлеятся **только `.adb`-тела** поверх этих общих спек. Отдельные
+> `.ads`-копии удалены как мёртвые/устаревшие (правка их ни на что не влияла).
 
 ## Сборка (тумблер SCHILD_PROFILE)
 

@@ -3,7 +3,7 @@
 
 -- Schild TCB Stage 7.9: ARP Handler — body
 
-package body Schild_Arp_Handler with SPARK_Mode => Off is
+package body Schild_Arp_Handler with SPARK_Mode => On is
 
    ---------------
    -- Parse_Arp --
