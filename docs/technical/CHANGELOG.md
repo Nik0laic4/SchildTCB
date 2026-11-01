@@ -6,6 +6,14 @@
 > *pending* or *target* have not yet been validated. Formal-verification
 > coverage is stated per-module, never as an aggregate percentage.
 
+## v1.0.0-pre (2026-11-01) — W11.3: proven HTTP parser core (schild_http_core)
+
+**Validated: the HTTP/1.0 request parser was extracted from the Off `schild_http_server` into a new On package `schild_http_core` and proved at SPARK Level 4 (`not-proved: 0`), then wired back into the server. This resolves the prover limitation (gotcha §4.5) via constrained buffer/pattern types.**
+
+- `schild_http_core` (new, `On`): `Str_Match` (7 checks), `Extract_Path` (10), `Is_Debug_Path` (2) — the P1 input path is now memory-safe by proof. Constrained `Request_Buffer (0..1023)` + `Pattern (1..12)` avoid the unconstrained-`String` (index `Positive`) gnat2why explosion documented in gotcha §4.5.
+- `schild_http_server` (`Off`): the local `Str_Match`/`Extract_Path`/`Is_Debug_Path` were removed and replaced with calls to the proven core; added runtime guards (`Request'Length < 5 → 404`, `> 1024 → 414`) before invoking the core (its `Pre` is not enforced from Off callers).
+- Proof set grows **185 → 186** modules; build **181 → 182** objects.
+
 ## v1.0.0-pre (2026-11-01) — W11.2: network ingress boundary fix (short-frame OOB in ARP/IPv4 parsers)
 
 **Fixed: `Parse_Arp` and `Parse_Ipv4` lacked the runtime length guard that `Parse_Tcp` already had, so a runt/short frame dispatched from the Off `schild_net_stack` (where the SPARK `Pre` is not enforced at runtime) reached them and read out of bounds. Both now reject short input defensively (`not-proved: 0` preserved).**

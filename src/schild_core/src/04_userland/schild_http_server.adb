@@ -1,12 +1,11 @@
 -- Schild TCB Stage 7.9: HTTP Server — body
 with System; with Interfaces;
-with Schild_Uart_Driver; with Schild_Schild_Fs;
+with Schild_Uart_Driver; with Schild_Schild_Fs; with Schild_Http_Core;
 
 package body Schild_Http_Server with SPARK_Mode => Off is
    use Interfaces;
 
-   -- Fixed-width filename (no secondary stack in the bare-metal runtime).
-   subtype Path_String is String (1 .. 24);
+   -- Fixed-width filename/path lives in Schild_Http_Core.Path_String (proved).
 
    --  Hard cap on the incoming HTTP request size: reject anything larger
    --  before parsing, keeping primitive fuzzing out of the Ada path.
@@ -23,15 +22,6 @@ package body Schild_Http_Server with SPARK_Mode => Off is
       Max_Len    : Natural;
       Actual_Len : out Natural);
    pragma Import (C, Schild_Debug_Render, "schild_debug_render");
-
-   function Str_Match (B : Byte_Array; Start : Integer; S : String) return Boolean is
-   begin
-      if Start + S'Length > B'Last + 1 then return False; end if;
-      for I in S'Range loop
-         if Character'Val (B (Start + I - S'First)) /= S (I) then return False; end if;
-      end loop;
-      return True;
-   end Str_Match;
 
    procedure Write_Str (B : out Byte_Array; Idx : in out Integer; S : String) is
    begin
@@ -60,62 +50,13 @@ package body Schild_Http_Server with SPARK_Mode => Off is
       return D;
    end Digit_Count;
 
-   function Extract_Path (B : Byte_Array) return Path_String is
-      Start : Integer := B'First;
-      Fn    : Path_String := (others => ' ');
-      Fn_Pos : Integer := 1;
-   begin
-      -- Skip "GET /"
-      for I in B'Range loop
-         exit when Start > B'First + 2;
-         if B (I) = 32 then Start := Start + 1; end if;
-      end loop;
-      if not Str_Match (B, B'First, "GET /") then
-         Fn (1 .. 10) := "index.html";
-         return Fn;
-      end if;
-      -- Read path
-      for I in B'First + 5 .. B'Last loop
-         exit when I >= B'First + Max_Header_Len;
-         exit when B (I) = 32;
-         exit when Fn_Pos > 24;
-         if B (I) >= 32 and B (I) <= 126 then
-            Fn (Fn_Pos) := Character'Val (B (I));
-            Fn_Pos := Fn_Pos + 1;
-         end if;
-      end loop;
-      if Fn_Pos = 1 then
-         Fn (1 .. 10) := "index.html";
-      end if;
-      return Fn;
-   end Extract_Path;
-
-   function Is_Debug_Path (P : Path_String) return Boolean is
-      Debug      : constant String := "debug";
-      Debug_Html : constant String := "debug.html";
-   begin
-      --  Match "/debug" or "/debug.html" (the fixed-width path is
-      --  space-padded, so trailing spaces are ignored).
-      if P'Length >= Debug_Html'Length
-        and then P (1 .. Debug_Html'Length) = Debug_Html
-      then
-         return True;
-      elsif P'Length >= Debug'Length
-        and then P (1 .. Debug'Length) = Debug
-        and then (P'Length = Debug'Length or else P (Debug'Length + 1) = ' ')
-      then
-         return True;
-      end if;
-      return False;
-   end Is_Debug_Path;
-
    procedure Handle_Request
      (Request   : in     Byte_Array;
       Reply_Buf :    out Byte_Array;
       Reply_Len :    out Unsigned_16;
       Success   :    out Boolean)
    is
-      Path    : constant Path_String := Extract_Path (Request);
+      Path    : Schild_Http_Core.Path_String := (others => ' ');
       File    : Schild_Schild_Fs.File_Info;
       FS_OK   : Boolean;
       Data_Buf: Schild_Schild_Fs.Unsigned_8_Array (0 .. 4095);
@@ -157,9 +98,25 @@ package body Schild_Http_Server with SPARK_Mode => Off is
          return;
       end if;
 
+      -- Parse the path through the proven core (memory-safe on 5..1024 bytes).
+      if Request'Length < 5 then
+         Write_Str (Reply_Buf, Idx, Http_404);
+         Reply_Len := Unsigned_16 (Idx - Reply_Buf'First);
+         Success := True;
+         return;
+      end if;
+      declare
+         Req : Schild_Http_Core.Request_Buffer := (others => 0);
+      begin
+         for J in Request'Range loop
+            Req (J - Request'First) := Request (J);
+         end loop;
+         Path := Schild_Http_Core.Extract_Path (Req, Request'Length);
+      end;
+
       -- Stage 9: GET /debug (and /debug.html) serve the hardware audit log
       -- through the C-bridge, never through SchildFS.
-      if Is_Debug_Path (Path) then
+      if Schild_Http_Core.Is_Debug_Path (Path) then
          declare
             Html_Head : constant String :=
               "<html><body><h1>Schild TCB Hardware Debug Log</h1><pre>";
