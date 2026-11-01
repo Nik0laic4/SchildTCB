@@ -241,7 +241,7 @@ This document is the **input** to the contract-strengthening phase. The method:
 - [`SEL4_INTEGRATION.md`](SEL4_INTEGRATION.md) — seL4 integration history (Stage 5–8).
 - [`MCS_MIGRATION.md`](MCS_MIGRATION.md) — MCS labels, ABI, fault/timeout details.
 - [`RING3_NETWORK_MIGRATION.md`](RING3_NETWORK_MIGRATION.md) — NetServer isolation details.
-- [`ROADMAP.md`](ROADMAP.md) — work order (W1–W7) and out-of-scope notes.
+- [`ROADMAP.md`](ROADMAP.md) — work order (W1–W10) and out-of-scope notes.
 - [`DEVELOPMENT_VECTORS.md`](DEVELOPMENT_VECTORS.md) — reference codebases and DO-333 prep.
 - [`security/CVE-2026-SCHILD-01.md`](security/CVE-2026-SCHILD-01.md), [`security/CVE-2026-SCHILD-02.md`](security/CVE-2026-SCHILD-02.md) — past audit findings (all fixed).
 

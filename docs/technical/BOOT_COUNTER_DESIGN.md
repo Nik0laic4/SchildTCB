@@ -3,8 +3,9 @@
 **Version:** v1.0
 **Date:** 2026-10-31
 **Owner:** Ирганов А.Н.
-**Status:** реализовано и доказано (W9.1 boot counter + W9.2 health-gated commit);
-энергонезависимое хранилище **зафиксировано**, но NVMe/CMOS-обвязка отложена до «с железа» (см. §5).
+**Status:** реализовано и доказано (W9.1 boot counter + W9.2 health-gated commit +
+W9.3 watchdog/load-save/byte-упаковка); энергонезависимое хранилище **зафиксировано**,
+но NVMe/CMOS-обвязка отложена до «с железа» (см. §5).
 
 ---
 
@@ -71,7 +72,7 @@ Failover x1: B=0(locked) Both_Locked    # оба заблокированы => b
   остаётся прежним.
 
 `Record_Successful_Boot` аналогично frame-корректен. Проверка — `verify.sh`
-(`schild_boot_manager`: 8 подпрограмм доказано, `not-proved: 0`).
+(`schild_boot_manager`: 21 подпрограмма доказано, `not-proved: 0`).
 
 ---
 
@@ -124,10 +125,11 @@ Boot counter **должен переживать перезагрузку** — 
 ## 5. Что отложено (граница «без железа»)
 
 1. **Load/Save shim** — структурный round-trip `Boot_Manager ↔ Persistent_State`
-   (`To_Persistent`/`From_Persistent`) ✅ доказан. Осталось: byte-упаковка в
-   512-байтовый блок + HMAC-тег + вызов `schild_nvme.Read_Block/Write_Block`
-   в root-задаче (нужно железо/QEMU-NVMe). В QEMU-демо root-задача работает
-   от `Initialize` (свежее состояние).
+   (`To_Persistent`/`From_Persistent`) ✅ доказан; byte-упаковка в 512-байтовый
+   блок + HMAC/SHA-256-тег ✅ (`Encode_Block`/`Decode_Block`/`Verify_Block`).
+   Осталось: вызов `schild_nvme.Read_Block/Write_Block` в root-задаче (нужно
+   железо/QEMU-NVMe). В QEMU-демо root-задача работает от `Initialize`
+   (свежее состояние).
 2. **CMOS latch** — запись в RTC CMOS 0x2E–0x31 (нужен реальный x86 PIIX4/ICH).
 3. **Связка с `schild_boot_runtime`** — `Boot_Status` (Booting/Stable/Faulted/
    Recovering) в bare-metal-ядре пока не связан с `schild_boot_manager` (это
@@ -140,7 +142,7 @@ Boot counter **должен переживать перезагрузку** — 
 
 ```bash
 cd /home/null/Рабочий стол/SchildTCB/src/schild_core
-bash scripts/verify.sh     # гейт: schild_boot_manager 8/8 + root_task 63 checks, not-proved: 0
+bash scripts/verify.sh     # гейт: schild_boot_manager 21 + root_task 76 checks, not-proved: 0
 # полная версия компилируется (SPARK_Mode Off, оверлей):
 #   gcc -c --RTS=.../bare_runtime -I../../src -I../../src/03_crypto \
 #       private/root_task/schild_boot_manager.adb
@@ -171,5 +173,5 @@ MLS-политика валидна. Иначе — `Failover` (слот не к
 В QEMU-демо `schild_root_task.adb` `[S7] T6a/T6b` передают статус явно
 (агрегатом `Health_Status`), поэтому гейт доказуем без железа.
 
-Proof: `verify.sh` — `schild_boot_manager` 10 подпрограмм, `schild_root_task`
-65 checks, `not-proved: 0`.
+Proof: `verify.sh` — `schild_boot_manager` 21 подпрограмма, `schild_root_task`
+76 checks, `not-proved: 0`.

@@ -1,4 +1,4 @@
-# seL4 Integration — current state (2026-08-17)
+# seL4 Integration — исторический лог (заморожен 2026-08-17; актуально — `ROADMAP.md`/`CHANGELOG.md`)
 
 > This file is a historical Stage-5/6/7/8 log. **Current state** (supersedes the
 > old entries below):

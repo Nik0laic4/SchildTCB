@@ -28,7 +28,7 @@ cd src/schild_core
 ```
 
 Result: ELF ~460 KB, ISO ~23 MB.
-175 Ada modules + 6 C + 2 Asm = ~12,500 lines.
+SPARK proof set: 185 Ada modules (см. `scripts/prove_kernel.sh`).
 
 ## Running QEMU
 
@@ -99,7 +99,7 @@ KERNEL_MCS=ON scripts/build_sel4_kernel.sh
 # 2) Build the seL4 primary image (MCS kernel + Ada root task → sel4_primary.iso)
 SEL4_PRIMARY=1 ./build.sh
 
-# 3) Validate in QEMU (18 markers)
+# 3) Validate in QEMU (20 markers)
 SKIP_BUILD=1 SEL4_PRIMARY=1 ./scripts/run_tests.sh
 ```
 
@@ -151,7 +151,7 @@ gnatprove -P schild_core.gpr --RTS=bare_runtime --level=4 \
   -u src/02_security/schild_signals.adb
 ```
 
-### Current results (session 2026-08-10)
+### Results (session 2026-08-10 — историческая выжимка; актуальные гейты — `verify.sh`/`prove_kernel.sh`)
 | File | Level-4 | Status |
 |------|---------|--------|
 | schild_timer.ads | ✅ | Postcondition proved |

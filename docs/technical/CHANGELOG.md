@@ -6,6 +6,36 @@
 > *pending* or *target* have not yet been validated. Formal-verification
 > coverage is stated per-module, never as an aggregate percentage.
 
+## v1.0.0-pre (2026-11-01) — W10 start: network parsers into the proof set (ARP + ICMP)
+
+**Validated: `schild_arp_handler` and `schild_icmp_handler` flipped `SPARK_Mode Off → On` and proved at Level 4 (`not-proved: 0`); `schild_net_types` (shared byte-array foundation) also `On`. Full sweep: 185 modules, `not-proved: 0`, ~111 proved / ~74 out-of-proof (previous ~108/~77).**
+
+- `schild_arp_handler`: `Parse_Arp` (37 checks) + `Build_Arp_Reply` (53 checks) proved; `Build_Arp_Reply` gained `Post => Reply_Len = 42` + `Relaxed_Initialization => Reply_Buf`.
+- `schild_icmp_handler`: body `Off → On`, `Process_Icmp_Echo` proved.
+- `schild_ipv4_handler`: flow-fixed (full `Result` init on early-return paths — uninitialized-read class) and checksum rewritten to modular arithmetic (provable), but kept `Off` — `Build_Ipv4_Frame` (variable-length buffer build) needs a dedicated proof session.
+
+## v1.0.0-pre (2026-11-01) — private-profile proof gate (closed "compiled but not proved" boundary)
+
+**Validated: the full (private) daemon bodies in `private/root_task/` are now formally proved at SPARK Level 4 via `scripts/verify_private.sh` (`not-proved: 0`).**
+
+- `schild_boot_manager.adb` (private): `SPARK_Mode Off → On`, removed `pragma Suppress (Overflow_Check)`, added `Pre => Image_Size > 0` to `Verify_Image` (shared spec) — 110/110 VCs proved.
+- `schild_audit_logger.adb` + `schild_config_daemon.adb` (private, already `On`): proved.
+- Remaining outside proof (by design): `Schild_Audit_Logger.Persist_Audit_Log` (`Off`, SchildFS I/O) and the C shim `schild_net_runtime.c`.
+
+## v1.0.0-pre (2026-10-31) — W8: threat model + Tier-A contract audit
+
+**Validated: `THREAT_MODEL.md` (assets A1–A6, adversary classes P1–P4 + AI-agent capability axis, trust boundaries TB1–TB4, security-property map T1–T9, seL4 axiomatics) and Tier-A contract strengthening — all proved at Level 4, `not-proved: 0` (details in `SESSION_CONTRACT_AUDIT.md`).**
+
+- Contracts proved: `cap_space` (`Cap_Copy`/`Cap_Mint`/`Cap_Delete`/`Cap_Retype`, `Is_Derived_From`), `process_manager` (`Terminate_Process`/`Create_Process`/`Reap_Zombies`/`Init_Process_Table`/`Check_Mls_Compatibility`/`Find_*`/`Wait_Process`), `signals` (`Send_Signal`/`Has_Pending_Signals`/`Deliver_Pending_Signal`), `mls_assigner`, `ipc` (`Write_Byte`/`Execute_Syscall`), `net_spark_proofs` (vacuous `then True` removed).
+- Full proof: `not-proved: 0`; ~108 proved / ~77 out-of-proof (185 modules).
+
+## v1.0.0-pre (2026-10-31) — W9: boot counter + health check + watchdog + persistent round-trip
+
+**Validated: A/B boot counter with slot-lockout (`Max_Boot_Attempts = 3`), health-gated commit (`Commit_If_Healthy`), watchdog logic (`schild_watchdog`), and persistent Load/Save round-trip with 512-byte byte-packing + SHA-256 tag (`Encode_Block`/`Decode_Block`/`Verify_Block`) — all proved at Level 4 (`verify.sh`, `not-proved: 0`; `schild_boot_manager` 21, `schild_watchdog` 5, `schild_root_task` 76 checks). Hardware timer / NVMe-I/O deferred (see `BOOT_COUNTER_DESIGN.md`, `REQUIREMENTS_BOOT_RELIABILITY.md`).**
+
+- `schild_firewall`: port blocklist + contracts (Tier-C scaffold filled; encryption remains scaffold).
+- `schild_boot_runtime`: `Refined_State`/`Refined_Global` abstraction proved.
+
 ## v1.0.0-pre (2026-10-25) — AArch64: CI workflow + GENET/QEMU feasibility finding
 
 **Validated: a GitHub Actions workflow (`.github/workflows/arm64-net.yml`) automates the ARM64 build (Ada root task + C driver/protocol + child ELF + ELF validation) and a full end-to-end QEMU run (`run_net_test.py --backend socket`).  Feasibility finding: seL4's `bcm2711` (Pi 4) platform builds cleanly, but QEMU's `raspi4b` does NOT emulate the GENET Ethernet controller, so the GENET driver is hardware-blocked (no validation target without a real Pi 4).**

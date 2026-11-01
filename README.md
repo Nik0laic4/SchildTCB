@@ -18,7 +18,7 @@ Schild TCB is a research prototype of a microkernel-based trusted computing base
 
 ## Highlights
 
-- **Formal verification** — 185 kernel modules swept at **SPARK Level 4** (`gnatprove --level=4 --mode=all`) with **0 unproved VCs**; ~108 of 185 are in the proof set, the remaining ~77 are outside proof scope (`SPARK_Mode => Off` drivers/platform code, or no analyzable body). 7 root-task daemons (MLS policy, config daemon, audit logger, A/B boot manager, HM model, launch model, root task) are also proved.
+- **Formal verification** — 185 kernel modules swept at **SPARK Level 4** (`gnatprove --level=4 --mode=all`) with **0 unproved VCs**; ~108 of 185 are in the proof set, the remaining ~77 are outside proof scope (`SPARK_Mode => Off` drivers/platform code, or no analyzable body). 8 root-task daemons (MLS policy, config daemon, audit logger, A/B boot manager, HM model, launch model, watchdog, root task) are also proved.
 - **Isolated periphery** — network (e1000e → I219-V) and storage (NVMe + SchildFS) run in the isolated Ring-3 **NetServer**; a fault there cannot reach the proven core.
 - **MLS Bell-LaPadula** — 5 security levels in the seL4 layer (Public..Top_Secret), 4 in the bare-metal kernel.
 - **Crash containment** — faulting a driver is caught and contained without rebooting the platform.
@@ -83,7 +83,7 @@ SKIP_BUILD=1 SEL4_PRIMARY=0 bash scripts/run_tests.sh
 
 ## CI (GitHub Actions)
 
-- **Push / PR to `master`** → `build` (bare-metal kernel + ISO) and `verify` (7 root-task daemons, SPARK Level 4) run automatically.
+- **Push / PR to `master`** → `build` (bare-metal kernel + ISO) and `verify` (8 root-task daemons, SPARK Level 4) run automatically.
 - **Manual** (`Actions` → `CI` → *Run workflow*) → the `prove-full` job runs the complete 185-module SPARK Level-4 proof (`scripts/prove_kernel.sh`) and uploads `obj/proof/report.txt` as an artifact.
 
 ## Contributing
@@ -92,6 +92,7 @@ Contributions and feedback are welcome — see [`CONTRIBUTING.md`](CONTRIBUTING.
 
 ## Documentation
 
+- [`docs/README.md`](docs/README.md) — documentation index & single source of truth.
 - [`PROJECT_PASSPORT.md`](PROJECT_PASSPORT.md) — project overview.
 - [`docs/technical/ASSURANCE.md`](docs/technical/ASSURANCE.md) — assurance case & hardening roadmap.
 - [`docs/technical/THREAT_MODEL.md`](docs/technical/THREAT_MODEL.md) — threat model & adversary model.

@@ -7,6 +7,9 @@
 | `master` (x86_64) | ✅ |
 | `arm64` (Raspberry Pi 4B) | ✅ (pre-release) |
 
+> `master` и `arm64` в данный момент синхронизированы (один и тот же commit);
+> дерево содержит оба таргета — x86_64 и ARM64.
+
 ## Reporting a vulnerability
 
 Please do **not** open a public issue for security vulnerabilities.

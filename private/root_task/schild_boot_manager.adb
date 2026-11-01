@@ -6,9 +6,8 @@
 -- =============================================================================
 
 package body Schild_Boot_Manager
-  with SPARK_Mode => Off
+  with SPARK_Mode => On
 is
-   pragma Suppress (Overflow_Check);
 
    -- HMAC-SHA256 boot verification key.
    -- MUST be changed in production builds.

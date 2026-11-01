@@ -1,7 +1,7 @@
 # Schild TCB — Security model
 
-> **Обновлено 2026-08-17:** статусные маркеры приведены в соответствие с текущим кодом;
-> каноничные утверждения — в [`ASSURANCE.md`](ASSURANCE.md).
+> **Обновлено 2026-10-31:** статусные маркеры приведены в соответствие с текущим кодом;
+> каноничные утверждения — в [`ASSURANCE.md`](ASSURANCE.md) и [`ROADMAP.md`](ROADMAP.md).
 
 ## 🔒 Security audit (2026-08-11) — all 12 vulnerabilities fixed
 
@@ -79,11 +79,18 @@ Root_Task(5) → Init_Manager(4) → Crypto_Engine(4) → KDF_Service(4)
 | Schild_Mls_Policy | Level 4 | Bell-LaPadula: 11/11 subprograms, 0 unproved |
 | Schild_Config_Daemon | Level 4 | Validate_Config/Commit/Rollback — proved |
 | Schild_Audit_Logger | Level 4 | Initialize/Log_Event/Read_Event — proved |
-| Schild_Boot_Manager | Level 4 | A/B Failover/Verify_Image — proved |
+| Schild_Boot_Manager | Level 4 | 21 подпрограмм (A/B failover, health-gated commit, Load/Save + byte-упаковка) — proved |
 | Schild_HM_Model | Level 4 | partition lifecycle: Launch (one-shot) + Evaluate (escalation) — proved |
+| Schild_Launch_Model | Level 4 | Launch-последовательности MLS/NetServer/Config — proved |
+| Schild_Watchdog | Level 4 | 5 подпрограмм (Initialize/Kick/Tick/Expired) — proved |
+| Schild_Root_Task | Level 4 | 76 checks — proved |
 
-Only these five units are in the `verify.gpr` proof set (run by `scripts/verify.sh`);
-every other module is either `SPARK_Mode => Off` (HW/driver/crypto) or flow-analyzed only.
+`verify.gpr` (run by `scripts/verify.sh`) proves these **8** root-task daemons
+plus `src/03_crypto` (`schild_hmac_sha256`). Полные (private) тела тех же
+демонов доказывает `scripts/verify_private.sh` (`not-proved: 0`), кроме
+`Persist_Audit_Log` (`Off`, I/O) и C-шимса `schild_net_runtime.c` — см.
+`docs/README.md` §6. Прочие модули ядра — либо `SPARK_Mode => Off`
+(HW/driver/crypto), либо вне proof-скоупа (см. `ASSURANCE.md`).
 
 ## Vulnerability audit
 

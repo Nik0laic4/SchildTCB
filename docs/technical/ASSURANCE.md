@@ -1,6 +1,6 @@
 # Schild TCB — Assurance Case & Hardening Roadmap
 
-**Version:** v0.4  |  **Date:** 2026-10-03  |  **Status:** Phases 1-2, 4 complete; Phase 3 containment demonstrated (QEMU); root task on seL4 **MCS** (QEMU-validated)
+**Version:** v0.5  |  **Date:** 2026-11-01  |  **Status:** assurance-кейс и TCB заморожены (Tier A/B/C); «что дальше» вынесено в `ROADMAP.md`. §5 (фазы) и §7 (лог) — исторические.
 **Owner:** Ирганов А.Н.
 
 ---
@@ -62,8 +62,8 @@ TCB** and must be isolated (Phase 3).
 | Claim | Mechanical check | Result (2026-08-16) |
 |-------|------------------|---------------------|
 | Tier-A modules have no unproved VCs | `bash scripts/prove_kernel.sh` | `not-proved: 0` (~108 proved / ~77 out of proof, 185 total) |
-| Level-4 root-task daemons prove (7) | `bash scripts/verify.sh` | "all verification conditions proved" (`not-proved: 0`) |
-| Kernel builds clean | `SCHILD_PROFILE=public ./build.sh` | 179 objects, 0 errors |
+| Level-4 root-task daemons prove (8) | `bash scripts/verify.sh` | "all verification conditions proved" (`not-proved: 0`) |
+| Kernel builds clean | `SCHILD_PROFILE=public ./build.sh` | 181 objects, 0 errors |
 | Boot chain works | `SKIP_BUILD=1 SEL4_PRIMARY=0 bash scripts/run_tests.sh` | PASS (Long Mode → e1000e → SMP → MLS → :80) |
 | Network stack serves HTTP | QEMU + ThinkPad T580 | end-to-end (ARP → IPv4 → TCP → HTTP) |
 | Fatal fault reboots, does not hang | `runtime_stubs.c` / `interrupt_handlers.c` | i8042 reset on all fatal handlers |
@@ -73,6 +73,12 @@ TCB** and must be isolated (Phase 3).
 > `schild_execution_fabric`, `schild_sentinel`) between `PROVED` and
 > out-of-proof across runs. The gate — `not-proved: 0` — is stable; the
 > classifier (`scripts/classify_gnatprove.py`) is deterministic.
+
+> **Note (public vs private build).** The numbers above are for the **public**
+> profile (stubs). The **private** profile overlays full daemon bodies from
+> `private/root_task/`; those are proved by `scripts/verify_private.sh`
+> (`not-proved: 0`), except `Schild_Audit_Logger.Persist_Audit_Log` (`Off`, I/O)
+> and the C shim `schild_net_runtime.c`. See `docs/README.md` §6.
 
 ---
 
@@ -127,6 +133,10 @@ and forwards to the platform UART driver.
 ---
 
 ## 5. Phase plan
+
+> **Историческая секция.** План фаз 1–4 выполнен (см. §7). Дальнейшая работа
+> канонично ведётся в [`ROADMAP.md`](ROADMAP.md) (W1–W10); эта секция оставлена
+> как запись исходного плана.
 
 ### Phase 1 — Close the proof seams (target: `not-proved: 0` in tier A)
 
@@ -212,6 +222,9 @@ assurance argument until the x86_64 MCS proof catches up (see
 ---
 
 ## 7. Progress log
+
+> **Исторический лог (заморожен на 2026-10-04).** Более поздние проверенные
+> результаты — в [`CHANGELOG.md`](CHANGELOG.md) и [`ROADMAP.md`](ROADMAP.md).
 
 - 2026-08-16 — Document adopted. Phase 1 in progress: `Schild_Log` abstraction
   introduced; precise gnatprove diagnosis of the 5 not-proved modules launched.
@@ -300,7 +313,7 @@ Every claim in Section 2.2 is re-verifiable from a clean checkout:
 
 ```bash
 cd src/schild_core
-SCHILD_PROFILE=public ./build.sh                          # build (179 objects, 0 errors)
+SCHILD_PROFILE=public ./build.sh                          # build (181 objects, 0 errors)
 SKIP_BUILD=1 SEL4_PRIMARY=0 bash scripts/run_tests.sh      # boot smoke test
 bash scripts/verify.sh                                      # Level-4 gnatprove (fails on unproved)
 bash scripts/prove_kernel.sh                                # full SPARK sweep → not-proved: 0
