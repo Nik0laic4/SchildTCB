@@ -52,7 +52,8 @@
 | [`technical/SESSION_ARM64_NET.md`](technical/SESSION_ARM64_NET.md) | Handoff ARM64 virtio-net | 2026-10-24 |
 | [`technical/SESSION_CONTRACT_AUDIT.md`](technical/SESSION_CONTRACT_AUDIT.md) | Handoff контрактного аудита (W8) | 2026-10-31 |
 | [`technical/SESSION_W9_BOOT_COUNTER.md`](technical/SESSION_W9_BOOT_COUNTER.md) | Handoff W9 (boot/reliability) | 2026-10-31 |
-| [`technical/SESSION_CONTRACT_STRENGTHENING.md`](technical/SESSION_CONTRACT_STRENGTHENING.md) | Handoff следующей сессии (W10) | 2026-11-01 |
+| [`technical/SESSION_CONTRACT_STRENGTHENING.md`](technical/SESSION_CONTRACT_STRENGTHENING.md) | Handoff W10 (сеть) — заморожен | 2026-11-01 |
+| [`technical/SESSION_W10_CRYPTO_KERNEL.md`](technical/SESSION_W10_CRYPTO_KERNEL.md) | Handoff следующей сессии (крипто/ядро) | 2026-11-01 |
 | [`SCHILD_TCB_AUDIT_REPORT.md`](SCHILD_TCB_AUDIT_REPORT.md) | Снимок self-аудита для сторонних инженеров | 2026-10-04 |
 | [`technical/security/CVE-2026-SCHILD-01.md`](technical/security/CVE-2026-SCHILD-01.md) | Advisory (8 уязвимостей, исправлено) | 2026-08-05 |
 | [`technical/security/CVE-2026-SCHILD-02.md`](technical/security/CVE-2026-SCHILD-02.md) | Advisory (5 уязвимостей, исправлено) | 2026-08-09 |
