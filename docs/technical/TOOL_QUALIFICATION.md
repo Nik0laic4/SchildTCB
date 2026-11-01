@@ -32,7 +32,7 @@
 
 - `gnatprove -j8` флипает PROVED/out-of-proof для ~2 модулей
   (`schild_execution_fabric`, `schild_sentinel`). Стабильно только **`not-proved: 0`**;
-  число «proved» ~108 (наблюдалось 106–109) — **не хардкодить** (сноска в `ASSURANCE.md` §2.2).
+  число «proved» ~112 (наблюдалось 110–113) — **не хардкодить** (сноска в `ASSURANCE.md` §2.2).
 
 ---
 
