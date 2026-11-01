@@ -14,7 +14,7 @@
 - `schild_icmp_handler`: body `Off → On`, `Process_Icmp_Echo` proved.
 - `schild_ipv4_handler`: package `Off → On`; `Parse_Ipv4` (40 checks) + `Compute_Ipv4_Checksum` (10 checks) proved. Flow-fixed (full `Result` init on early-return paths) + checksum rewritten to modular arithmetic. `Build_Ipv4_Frame` (outgoing frame builder, variable-length) kept `body Off` — pending.
 - `schild_udp_handler`: body `Off → On`, `Process_Udp_Datagram` proved (scaffold, like ICMP).
-- `schild_tcp_handler`: package `Off → On` (with `Abstract_State`/`Refined_State` for the ISN entropy counter); `Parse_Tcp` (39 checks) proved. Deferred `Off` (dedicated session): `Find_Connection`/`Alloc_Connection` (functions with `in out` — illegal in SPARK), `Compute_Tcp_Checksum*` (bit-vector fold), `Process_Tcp`/`Build_Tcp_Reply` (state machine + variable buffer).
+- `schild_tcp_handler`: package `Off → On` (with `Abstract_State`/`Refined_State` for the ISN entropy counter); `Parse_Tcp` (39 checks), `Compute_Tcp_Checksum`, `Compute_Tcp_Checksum_Raw` and `Validate_Tcp_Checksum` (25 checks) proved — checksum rewritten to modular arithmetic (RFC 1071). Deferred `Off`: `Find_Connection`/`Alloc_Connection` (functions with `in out` — illegal in SPARK), `Process_Tcp`/`Build_Tcp_Reply` (state machine + variable buffer).
 
 ## v1.0.0-pre (2026-11-01) — private-profile proof gate (closed "compiled but not proved" boundary)
 

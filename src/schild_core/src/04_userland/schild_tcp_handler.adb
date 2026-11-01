@@ -75,7 +75,6 @@ package body Schild_Tcp_Handler with SPARK_Mode => On, Refined_State => (Entropy
 
    function Compute_Tcp_Checksum (Src_IP, Dst_IP : Unsigned_32; Tcp_Hdr : Tcp_Header;
                                    Payload : Byte_Array) return Unsigned_16
-     with SPARK_Mode => Off  -- proof pending: payload-sum loop + bit-vector fold
    is
       Hdr_Len : constant Unsigned_16 := (Unsigned_16 (Tcp_Hdr.Data_Off) / 16) * 4;
       Tcp_Len : constant Unsigned_16 := Hdr_Len + Unsigned_16 (Payload'Length);
@@ -83,31 +82,32 @@ package body Schild_Tcp_Handler with SPARK_Mode => On, Refined_State => (Entropy
       W   : Unsigned_16;
       use type Unsigned_32;
    begin
-      -- Pseudo-header
-      Sum := Sum + Unsigned_32 (Shift_Right (Src_IP, 16) and 65535);
-      Sum := Sum + Unsigned_32 (Src_IP and 65535);
-      Sum := Sum + Unsigned_32 (Shift_Right (Dst_IP, 16) and 65535);
-      Sum := Sum + Unsigned_32 (Dst_IP and 65535);
-      Sum := Sum + Unsigned_32 (6);  -- Protocol TCP
+      -- Pseudo-header (high/low 16-bit words via modular arithmetic).
+      Sum := Sum + (Src_IP / 65536);
+      Sum := Sum + (Src_IP mod 65536);
+      Sum := Sum + (Dst_IP / 65536);
+      Sum := Sum + (Dst_IP mod 65536);
+      Sum := Sum + 6;  -- Protocol TCP
       Sum := Sum + Unsigned_32 (Tcp_Len);
 
-      -- TCP header words
+      -- TCP header words.
       Sum := Sum + Unsigned_32 (Tcp_Hdr.Src_Port);
       Sum := Sum + Unsigned_32 (Tcp_Hdr.Dst_Port);
-      Sum := Sum + Unsigned_32 (Shift_Right (Tcp_Hdr.Seq_Num, 16) and 65535);
-      Sum := Sum + Unsigned_32 (Tcp_Hdr.Seq_Num and 65535);
-      Sum := Sum + Unsigned_32 (Shift_Right (Tcp_Hdr.Ack_Num, 16) and 65535);
-      Sum := Sum + Unsigned_32 (Tcp_Hdr.Ack_Num and 65535);
+      Sum := Sum + (Tcp_Hdr.Seq_Num / 65536);
+      Sum := Sum + (Tcp_Hdr.Seq_Num mod 65536);
+      Sum := Sum + (Tcp_Hdr.Ack_Num / 65536);
+      Sum := Sum + (Tcp_Hdr.Ack_Num mod 65536);
       W := Shift_Left (Unsigned_16 (Tcp_Hdr.Data_Off), 8) or Unsigned_16 (Tcp_Hdr.Flags);
       Sum := Sum + Unsigned_32 (W);
       Sum := Sum + Unsigned_32 (Tcp_Hdr.Window);
       Sum := Sum + Unsigned_32 (Tcp_Hdr.Urgent_Ptr);
 
-      -- Payload
+      -- Payload.
       declare
          I : Integer := Payload'First;
       begin
          while I + 1 <= Payload'Last loop
+            pragma Loop_Variant (Increases => I);
             W := Shift_Left (Unsigned_16 (Payload (I)), 8)
                  or Unsigned_16 (Payload (I + 1));
             Sum := Sum + Unsigned_32 (W);
@@ -118,15 +118,17 @@ package body Schild_Tcp_Handler with SPARK_Mode => On, Refined_State => (Entropy
          end if;
       end;
 
+      -- RFC 1071 fold (modular): (Sum mod 65536) + (Sum / 65536).
       while Sum > 65535 loop
-         Sum := (Sum and 65535) + Shift_Right (Sum, 16);
+         pragma Loop_Variant (Decreases => Sum);
+         Sum := (Sum mod 65536) + (Sum / 65536);
       end loop;
-      return Unsigned_16 (not Sum and 65535);
+      -- One's complement of the low 16 bits: 65535 - (Sum mod 65536).
+      return Unsigned_16 (65535 - (Sum mod 65536));
    end Compute_Tcp_Checksum;
 
    function Compute_Tcp_Checksum_Raw (Src_IP, Dst_IP : Unsigned_32;
       Seg : Byte_Array; Csum_Off : Integer) return Unsigned_16
-     with SPARK_Mode => Off  -- proof pending: segment-sum loop + bit-vector fold
    is
       Sum : Unsigned_32 := 0;
       W   : Unsigned_16;
@@ -134,15 +136,17 @@ package body Schild_Tcp_Handler with SPARK_Mode => On, Refined_State => (Entropy
       use type Unsigned_32;
    begin
       -- Pseudo-header (RFC 793): addresses, zero, protocol, TCP length.
-      Sum := Sum + Unsigned_32 (Shift_Right (Src_IP, 16) and 65535);
-      Sum := Sum + Unsigned_32 (Src_IP and 65535);
-      Sum := Sum + Unsigned_32 (Shift_Right (Dst_IP, 16) and 65535);
-      Sum := Sum + Unsigned_32 (Dst_IP and 65535);
-      Sum := Sum + Unsigned_32 (6);
+      Sum := Sum + (Src_IP / 65536);
+      Sum := Sum + (Src_IP mod 65536);
+      Sum := Sum + (Dst_IP / 65536);
+      Sum := Sum + (Dst_IP mod 65536);
+      Sum := Sum + 6;
       Sum := Sum + Unsigned_32 (Seg'Length);
       -- Sum the whole segment (header + options + payload) with the checksum
       -- field treated as zero, so option-bearing headers validate correctly.
       while I <= Seg'Last loop
+         pragma Loop_Variant (Increases => I);
+         pragma Loop_Invariant (I >= Seg'First);
          if I = Csum_Off then
             I := I + 2;  -- skip the 16-bit checksum field
          elsif I + 1 <= Seg'Last then
@@ -155,15 +159,15 @@ package body Schild_Tcp_Handler with SPARK_Mode => On, Refined_State => (Entropy
          end if;
       end loop;
       while Sum > 65535 loop
-         Sum := (Sum and 65535) + Shift_Right (Sum, 16);
+         pragma Loop_Variant (Decreases => Sum);
+         Sum := (Sum mod 65536) + (Sum / 65536);
       end loop;
-      return Unsigned_16 (not Sum and 65535);
+      return Unsigned_16 (65535 - (Sum mod 65536));
    end Compute_Tcp_Checksum_Raw;
 
    function Validate_Tcp_Checksum (Src_IP, Dst_IP : Unsigned_32;
       Tcp_Seg : Byte_Array) return Boolean
    is
-      pragma SPARK_Mode (Off);
       Csum_Off : constant Integer := Tcp_Seg'First + 16;
       Received : constant Unsigned_16 :=
         Shift_Left (Unsigned_16 (Tcp_Seg (Csum_Off)), 8)
