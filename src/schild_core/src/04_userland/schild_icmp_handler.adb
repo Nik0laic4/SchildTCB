@@ -1,5 +1,5 @@
 package body Schild_Icmp_Handler with
-  SPARK_Mode => Off --  Scaffold: answers with an ICMP echo reply.
+  SPARK_Mode => On
 is
 
    procedure Process_Icmp_Echo

@@ -2,7 +2,7 @@
 
 with Interfaces; with Schild_Net_Types; with Schild_Net_Config;
 
-package Schild_Arp_Handler with SPARK_Mode => Off is
+package Schild_Arp_Handler with SPARK_Mode => On is
    use Interfaces;
 
    subtype Unsigned_8_Array is Schild_Net_Types.Byte_Array;
@@ -34,7 +34,9 @@ package Schild_Arp_Handler with SPARK_Mode => Off is
    procedure Build_Arp_Reply (Request_Arp : in Arp_Packet;
      Src_MAC : in Mac_Addr;
      Reply_Buf : out Unsigned_8_Array; Reply_Len : out Unsigned_16)
-     with Pre => Reply_Buf'Length >= 42;
+     with Pre => Reply_Buf'Length >= 42,
+          Post => Reply_Len = 42,
+          Relaxed_Initialization => Reply_Buf;
 
    procedure Cache_Lookup (Table : in Arp_Table; IP : in Unsigned_32;
      MAC : out Mac_Addr; Found : out Boolean);
