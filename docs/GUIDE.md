@@ -46,7 +46,7 @@ cd src/schild_core
 ./build.sh
 ```
 
-Ожидаемый результат: `Ada: 181 objects, 0 errors` → `schild_os.elf` +
+Ожидаемый результат: `Ada: 182 objects, 0 errors` → `schild_os.elf` +
 `schild_os.iso`. Сборка воспроизводима (`SOURCE_DATE_EPOCH`, `-fdebug-prefix-map`).
 
 ## 4. Шаг 2 — запуск в QEMU

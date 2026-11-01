@@ -25,7 +25,7 @@ Schild TCB — исследовательский прототип довере�
 - ~130 из 186 модулей ядра входят в proof-набор на SPARK Level 4 (`not-proved: 0`); остальные ~56 — вне proof (драйверы/платформа `SPARK_Mode => Off` либо без анализируемого тела).
 - 8 демонов root-задачи доказаны в `verify.gpr` (Level 4): MLS, Config, Audit,
   Boot, HM Model, Launch Model, Watchdog, Root Task.
-- Сборка: 181 объект (базовая, public), 0 ошибок.
+- Сборка: 182 объект (базовая, public), 0 ошибок.
 - Загрузка с USB-флеш на ThinkPad T580; сетевой стек ARP/IPv4/ICMP/TCP/HTTP работает.
 - Crash-containment NetServer продемонстрирован (QEMU).
 
@@ -173,10 +173,10 @@ sudo dd if=schild_os.iso of=/dev/sdX bs=4M status=progress oflag=sync && sync
 
 | Проверка | Команда | Результат |
 |---|---|---|
-| Сборка (базовая) | `./build.sh` | 181 объект, 0 ошибок |
+| Сборка (базовая) | `./build.sh` | 182 объект, 0 ошибок |
 | Сборка seL4 root-задачи (public stub) | `SEL4_PRIMARY=1 ./build.sh` | `root_task.elf` + `sel4_primary.iso` собираются |
 | Сборка seL4 root-задачи (private оверлей) | `SCHILD_PROFILE=private SEL4_PRIMARY=1 ./build.sh` | компилируется (`SPARK_Mode Off`), **не доказано** |
-| Доказательство ядра | `scripts/prove_kernel.sh` | ~108 proved / ~77 вне proof, `not-proved: 0` |
+| Доказательство ядра | `scripts/prove_kernel.sh` | ~130 proved / ~56 вне proof, `not-proved: 0` |
 | Демоны root-задачи | `scripts/verify.sh` | 8 демонов, все VC доказаны |
 | Boot smoke (standalone) | `run_tests.sh` | Long Mode → e1000e → SMP → MLS → :80 |
 | Crash-containment | `SEL4_PRIMARY=1 run_tests.sh` | `[FAULT] Caught fault` + `[CONTAINMENT] core alive` |

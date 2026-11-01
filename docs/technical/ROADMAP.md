@@ -198,7 +198,7 @@ QEMU **20/20**; bare-metal `[NVFS]` без регрессий.
 
 **Итог (W8-сессия):** модель угроз (`THREAT_MODEL.md`) + усиление контрактов
 security-критичных модулей (cap_space, process_manager, signals, mls, ipc).
-Детали и остатки — `CHANGELOG.md` (W8). Полный proof: `not-proved: 0`,
+Детали и остатки — `CHANGELOG.md` (W8). Полный proof на момент W8: `not-proved: 0`,
 `~108 proved / ~77 out-of-proof`.
 
 ### W9 — Фаза надёжности (boot/update/recovery) — `[в работе]`

@@ -57,7 +57,7 @@ jobs:
           cd src/schild_core
           bash scripts/verify.sh
 
-  # Manual-only: the full 185-module SPARK Level-4 proof takes tens of minutes,
+  # Manual-only: the full 186-module SPARK Level-4 proof takes tens of minutes,
   # so it is NOT run on every push. Trigger: Actions -> CI -> Run workflow.
   prove-full:
     if: github.event_name == 'workflow_dispatch'
@@ -85,7 +85,7 @@ jobs:
           alr -n install gnatprove
           echo "$HOME/.alire/bin" >> "$GITHUB_PATH"
 
-      - name: SPARK full proof (185 kernel modules, Level 4)
+      - name: SPARK full proof (186 kernel modules, Level 4)
         run: |
           cd src/schild_core
           bash scripts/prove_kernel.sh

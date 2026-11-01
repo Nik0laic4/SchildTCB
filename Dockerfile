@@ -12,7 +12,7 @@
 #   # build + root-task verification (fast)
 #   docker run --rm -v "$PWD":/repo schild-tcb
 #
-#   # full 185-module SPARK Level-4 proof (tens of minutes)
+#   # full 186-module SPARK Level-4 proof (tens of minutes)
 #   docker run --rm -v "$PWD":/repo schild-tcb prove-full
 
 FROM ubuntu:24.04

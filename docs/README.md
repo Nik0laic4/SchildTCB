@@ -69,7 +69,7 @@
 | Proof ядра (SPARK L4) | **`not-proved: 0`**; 130 proved / 56 skipped (прогон 2026-11-01, W11.3) | `bash scripts/prove_kernel.sh` → `obj/proof/report.txt` |
 | Фокусно доказуемые (L4) | `schild_firewall` (7), `schild_signals`, `schild_frame_allocator`, `schild_server_security_policy`, `schild_mtf`, `schild_scheduler`, `schild_aes_cbc_engine`, `schild_crypto_fabric`, `schild_sentinel`, `schild_file_descriptors`, `schild_sha256_pad_guard`, `schild_sha_manager` | фокус-прогон одного модуля (команда ниже) |
 | Демоны root-задачи (SPARK L4) | **8** (verify.gpr), `not-proved: 0`; `schild_boot_manager` 21, `schild_watchdog` 5, `schild_root_task` 76 checks | `bash scripts/verify.sh` |
-| Сборка bare-metal (public) | 181 объект, 0 ошибок | `SCHILD_PROFILE=public ./build.sh` |
+| Сборка bare-metal (public) | 182 объект, 0 ошибок | `SCHILD_PROFILE=public ./build.sh` |
 | Сборка seL4 (root task) | `root_task.elf` + `sel4_primary.iso` | `SEL4_PRIMARY=1 ./build.sh` |
 | Сборка private-оверлея | ✅ доказано (`verify_private.sh`, `not-proved: 0`) | `SCHILD_PROFILE=private bash tools/sel4/build_rt.sh` + `bash scripts/verify_private.sh` |
 | QEMU-маркеры | **20** (seL4) / **6** (standalone) | `bash scripts/run_tests.sh` |

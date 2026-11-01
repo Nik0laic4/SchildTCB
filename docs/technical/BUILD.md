@@ -28,7 +28,7 @@ cd src/schild_core
 ```
 
 Result: ELF ~460 KB, ISO ~23 MB.
-SPARK proof set: 185 Ada modules (см. `scripts/prove_kernel.sh`).
+SPARK proof set: 186 Ada modules (см. `scripts/prove_kernel.sh`).
 
 ## Running QEMU
 
