@@ -2,15 +2,15 @@
 with System; with Interfaces;
 with Schild_Uart_Driver; with Schild_Ipv4_Handler;
 
-package body Schild_Tcp_Handler with SPARK_Mode => Off is
+package body Schild_Tcp_Handler with SPARK_Mode => On, Refined_State => (Entropy_State => Entropy_Counter) is
    use Interfaces;
 
-   procedure C_Putln (Addr : System.Address; Len : Integer);
+   procedure C_Putln (Addr : System.Address; Len : Integer) with SPARK_Mode => Off;
    pragma Import (C, C_Putln, "schild_uart_putln");
 
    --  Hardware timestamp counter (RDTSC): entropy source for the ISN and the
    --  clock for TCP connection idle timeouts.
-   function C_Rdtsc return Unsigned_64;
+   function C_Rdtsc return Unsigned_64 with SPARK_Mode => Off;
    pragma Import (C, C_Rdtsc, "schild_rdtsc");
 
    --  Monotonic per-boot counter mixed into the ISN (RDTSC low bits + counter).
@@ -21,12 +21,13 @@ package body Schild_Tcp_Handler with SPARK_Mode => Off is
    TCP_Idle_Timeout_Cycles : constant Unsigned_64 := 60_000_000_000;
 
    function Generate_Isn return Unsigned_32 is
+      pragma SPARK_Mode (Off);
    begin
       Entropy_Counter := Entropy_Counter + 1;
       return Unsigned_32 (C_Rdtsc and 16#FFFF_FFFF#) xor Entropy_Counter;
    end Generate_Isn;
 
-   procedure Expire_Stale (Table : in out Tcp_Conn_Table) is
+   procedure Expire_Stale (Table : in out Tcp_Conn_Table) with SPARK_Mode => Off is
       Now : constant Unsigned_64 := C_Rdtsc;
    begin
       for I in Table'Range loop
@@ -42,6 +43,7 @@ package body Schild_Tcp_Handler with SPARK_Mode => Off is
    procedure Parse_Tcp (Raw : in Byte_Array; Header : out Tcp_Header; Valid : out Boolean) is
    begin
       Valid := False;
+      Header := (others => <>);  -- default-init so early return leaves no uninit field
       --  Runtime guard (the Pre condition is not enforced with SPARK_Mode Off
       --  and no -gnata): a TCP header is at least 20 bytes. Reject malformed
       --  short segments instead of reading out of bounds.
@@ -73,6 +75,7 @@ package body Schild_Tcp_Handler with SPARK_Mode => Off is
 
    function Compute_Tcp_Checksum (Src_IP, Dst_IP : Unsigned_32; Tcp_Hdr : Tcp_Header;
                                    Payload : Byte_Array) return Unsigned_16
+     with SPARK_Mode => Off  -- proof pending: payload-sum loop + bit-vector fold
    is
       Hdr_Len : constant Unsigned_16 := (Unsigned_16 (Tcp_Hdr.Data_Off) / 16) * 4;
       Tcp_Len : constant Unsigned_16 := Hdr_Len + Unsigned_16 (Payload'Length);
@@ -123,6 +126,7 @@ package body Schild_Tcp_Handler with SPARK_Mode => Off is
 
    function Compute_Tcp_Checksum_Raw (Src_IP, Dst_IP : Unsigned_32;
       Seg : Byte_Array; Csum_Off : Integer) return Unsigned_16
+     with SPARK_Mode => Off  -- proof pending: segment-sum loop + bit-vector fold
    is
       Sum : Unsigned_32 := 0;
       W   : Unsigned_16;
@@ -159,6 +163,7 @@ package body Schild_Tcp_Handler with SPARK_Mode => Off is
    function Validate_Tcp_Checksum (Src_IP, Dst_IP : Unsigned_32;
       Tcp_Seg : Byte_Array) return Boolean
    is
+      pragma SPARK_Mode (Off);
       Csum_Off : constant Integer := Tcp_Seg'First + 16;
       Received : constant Unsigned_16 :=
         Shift_Left (Unsigned_16 (Tcp_Seg (Csum_Off)), 8)
@@ -173,6 +178,7 @@ package body Schild_Tcp_Handler with SPARK_Mode => Off is
      (Conn : in out Tcp_Connection; Flags : Unsigned_8; Seq, Ack : Unsigned_32;
       Payload : Byte_Array; Reply_Buf : out Byte_Array; Reply_Len : out Unsigned_16)
    is
+      pragma SPARK_Mode (Off);
       Idx : Integer := Reply_Buf'First;
       Hdr : Tcp_Header;
       procedure Put_U8 (V : Unsigned_8) is begin Reply_Buf (Idx) := V; Idx := Idx + 1; end Put_U8;
@@ -216,6 +222,7 @@ package body Schild_Tcp_Handler with SPARK_Mode => Off is
       Payload : in Byte_Array; Reply_Buf : out Byte_Array;
       Reply_Len : out Unsigned_16; Has_Data : out Boolean)
    is
+      pragma SPARK_Mode (Off);
       use type Unsigned_16; use type Unsigned_32;
       Msg_Syn : constant String := "[TCP] SYN -> SYN-ACK";
       Msg_Est : constant String := "[TCP] ACK -> ESTABLISHED";
@@ -306,6 +313,7 @@ package body Schild_Tcp_Handler with SPARK_Mode => Off is
      (Conn : in out Tcp_Connection;
       Reply_Buf : out Byte_Array; Reply_Len : out Unsigned_16)
    is
+      pragma SPARK_Mode (Off);
    begin
       Reply_Len := 0;
       if Conn.State = ESTABLISHED then
@@ -318,6 +326,7 @@ package body Schild_Tcp_Handler with SPARK_Mode => Off is
    end Initiate_Close;
 
    function Find_Connection (Table : in out Tcp_Conn_Table; IP : Unsigned_32; Port : Unsigned_16) return Integer is
+      pragma SPARK_Mode (Off);
    begin
       Expire_Stale (Table);
       for I in Table'Range loop
@@ -332,6 +341,7 @@ package body Schild_Tcp_Handler with SPARK_Mode => Off is
    end Find_Connection;
 
    function Alloc_Connection (Table : in out Tcp_Conn_Table) return Integer is
+      pragma SPARK_Mode (Off);
    begin
       Expire_Stale (Table);
       for I in Table'Range loop
