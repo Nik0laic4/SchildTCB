@@ -39,8 +39,8 @@ package Schild_Tcp_Handler with SPARK_Mode => On, Abstract_State => (Entropy_Sta
    --  replacing the previous fixed 16#DEAD_BEEF# (predictable-ISN flaw).
    function Generate_Isn return Unsigned_32 with SPARK_Mode => Off;
 
-   function Find_Connection (Table : in out Tcp_Conn_Table; IP : Unsigned_32; Port : Unsigned_16) return Integer with SPARK_Mode => Off;
-   function Alloc_Connection (Table : in out Tcp_Conn_Table) return Integer with SPARK_Mode => Off;
+   procedure Find_Connection (Table : in out Tcp_Conn_Table; IP : Unsigned_32; Port : Unsigned_16; Result : out Integer);
+   procedure Alloc_Connection (Table : in out Tcp_Conn_Table; Result : out Integer);
 
    procedure Parse_Tcp (Raw : in Byte_Array; Header : out Tcp_Header; Valid : out Boolean)
      with Pre => Raw'Length >= 20;

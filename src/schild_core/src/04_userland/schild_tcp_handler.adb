@@ -10,7 +10,7 @@ package body Schild_Tcp_Handler with SPARK_Mode => On, Refined_State => (Entropy
 
    --  Hardware timestamp counter (RDTSC): entropy source for the ISN and the
    --  clock for TCP connection idle timeouts.
-   function C_Rdtsc return Unsigned_64 with SPARK_Mode => Off;
+   function C_Rdtsc return Unsigned_64 with Global => null;
    pragma Import (C, C_Rdtsc, "schild_rdtsc");
 
    --  Monotonic per-boot counter mixed into the ISN (RDTSC low bits + counter).
@@ -27,7 +27,7 @@ package body Schild_Tcp_Handler with SPARK_Mode => On, Refined_State => (Entropy
       return Unsigned_32 (C_Rdtsc and 16#FFFF_FFFF#) xor Entropy_Counter;
    end Generate_Isn;
 
-   procedure Expire_Stale (Table : in out Tcp_Conn_Table) with SPARK_Mode => Off is
+   procedure Expire_Stale (Table : in out Tcp_Conn_Table) is
       Now : constant Unsigned_64 := C_Rdtsc;
    begin
       for I in Table'Range loop
@@ -329,31 +329,31 @@ package body Schild_Tcp_Handler with SPARK_Mode => On, Refined_State => (Entropy
       end if;
    end Initiate_Close;
 
-   function Find_Connection (Table : in out Tcp_Conn_Table; IP : Unsigned_32; Port : Unsigned_16) return Integer is
-      pragma SPARK_Mode (Off);
+   procedure Find_Connection (Table : in out Tcp_Conn_Table; IP : Unsigned_32; Port : Unsigned_16; Result : out Integer) is
    begin
       Expire_Stale (Table);
+      Result := -1;
       for I in Table'Range loop
          if Table (I).State /= CLOSED
            and then Table (I).Client_IP = IP
            and then Table (I).Client_Port = Port
          then
-            return I;
+            Result := I;
+            return;
          end if;
       end loop;
-      return -1;
    end Find_Connection;
 
-   function Alloc_Connection (Table : in out Tcp_Conn_Table) return Integer is
-      pragma SPARK_Mode (Off);
+   procedure Alloc_Connection (Table : in out Tcp_Conn_Table; Result : out Integer) is
    begin
       Expire_Stale (Table);
+      Result := -1;
       for I in Table'Range loop
          if Table (I).State = CLOSED then
-            return I;
+            Result := I;
+            return;
          end if;
       end loop;
-      return -1;
    end Alloc_Connection;
 
 end Schild_Tcp_Handler;
