@@ -236,13 +236,9 @@ bootloader) + encryption-часть firewall (scaffold).
 **Прогресс (2026-11-01):** ✅ `schild_net_types`, ✅ `schild_icmp_handler`,
 ✅ `schild_arp_handler` (Parse_Arp + Build_Arp_Reply), ✅ `schild_ipv4_handler`
 (Parse_Ipv4 + Compute_Ipv4_Checksum), ✅ `schild_udp_handler`, ✅
-`schild_tcp_handler.Parse_Tcp` + `Compute_Tcp_Checksum*`/`Validate_Tcp_Checksum` +
-`Expire_Stale`/`Find_Connection`/`Alloc_Connection` — переведены `On` и доказаны
-(`not-proved: 0`).
-Отложено: IPv4 `Build_Ipv4_Frame`, TCP `Generate_Isn`/`Process_Tcp`/`Build_Tcp_Reply`/
-`Initiate_Close` (state machine + переменная длина + функция-мутатор глобала),
-`schild_http_server` (`Write_U32_Dec`/`Character'Pos`/SchildFS I/O). Далее: крипто
-или доработка TCP state machine.
+`schild_tcp_handler` — **полностью доказан** (все подпрограммы `On`, `not-proved: 0`).
+Отложено: IPv4 `Build_Ipv4_Frame`, `schild_http_server`
+(`Write_U32_Dec`/`Character'Pos`/SchildFS I/O). Далее: крипто (`aes_*`/`sha_*`/`hmac_sha256`).
 
 
 ---

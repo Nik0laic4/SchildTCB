@@ -5,7 +5,7 @@ with Schild_Uart_Driver; with Schild_Ipv4_Handler;
 package body Schild_Tcp_Handler with SPARK_Mode => On, Refined_State => (Entropy_State => Entropy_Counter) is
    use Interfaces;
 
-   procedure C_Putln (Addr : System.Address; Len : Integer) with SPARK_Mode => Off;
+   procedure C_Putln (Addr : System.Address; Len : Integer) with Global => null;
    pragma Import (C, C_Putln, "schild_uart_putln");
 
    --  Hardware timestamp counter (RDTSC): entropy source for the ISN and the
@@ -20,11 +20,10 @@ package body Schild_Tcp_Handler with SPARK_Mode => On, Refined_State => (Entropy
    --  ~30 s (assumes a ~2 GHz invariant TSC), preventing SYN-flood exhaustion.
    TCP_Idle_Timeout_Cycles : constant Unsigned_64 := 60_000_000_000;
 
-   function Generate_Isn return Unsigned_32 is
-      pragma SPARK_Mode (Off);
+   procedure Generate_Isn (Result : out Unsigned_32) is
    begin
       Entropy_Counter := Entropy_Counter + 1;
-      return Unsigned_32 (C_Rdtsc and 16#FFFF_FFFF#) xor Entropy_Counter;
+      Result := Unsigned_32 (C_Rdtsc mod 2**32) xor Entropy_Counter;
    end Generate_Isn;
 
    procedure Expire_Stale (Table : in out Tcp_Conn_Table) is
@@ -106,8 +105,10 @@ package body Schild_Tcp_Handler with SPARK_Mode => On, Refined_State => (Entropy
       declare
          I : Integer := Payload'First;
       begin
-         while I + 1 <= Payload'Last loop
+         while I < Payload'Last loop
             pragma Loop_Variant (Increases => I);
+            pragma Loop_Invariant (I >= Payload'First);
+            pragma Loop_Invariant (I <= Payload'Last);
             W := Shift_Left (Unsigned_16 (Payload (I)), 8)
                  or Unsigned_16 (Payload (I + 1));
             Sum := Sum + Unsigned_32 (W);
@@ -179,10 +180,9 @@ package body Schild_Tcp_Handler with SPARK_Mode => On, Refined_State => (Entropy
    end Validate_Tcp_Checksum;
 
    procedure Build_Tcp_Reply
-     (Conn : in out Tcp_Connection; Flags : Unsigned_8; Seq, Ack : Unsigned_32;
+     (Conn : in Tcp_Connection; Flags : Unsigned_8; Seq, Ack : Unsigned_32;
       Payload : Byte_Array; Reply_Buf : out Byte_Array; Reply_Len : out Unsigned_16)
    is
-      pragma SPARK_Mode (Off);
       Idx : Integer := Reply_Buf'First;
       Hdr : Tcp_Header;
       procedure Put_U8 (V : Unsigned_8) is begin Reply_Buf (Idx) := V; Idx := Idx + 1; end Put_U8;
@@ -216,7 +216,10 @@ package body Schild_Tcp_Handler with SPARK_Mode => On, Refined_State => (Entropy
       Put_U16 (Hdr.Checksum);
       Put_U16 (Hdr.Urgent_Ptr);
 
-      for J in Payload'Range loop Put_U8 (Payload (J)); end loop;
+      for J in Payload'Range loop
+         pragma Loop_Invariant (Idx - Idx'Loop_Entry = J - Payload'First);
+         Put_U8 (Payload (J));
+      end loop;
       Reply_Len := Unsigned_16 (Idx - Reply_Buf'First);
    end Build_Tcp_Reply;
 
@@ -226,12 +229,7 @@ package body Schild_Tcp_Handler with SPARK_Mode => On, Refined_State => (Entropy
       Payload : in Byte_Array; Reply_Buf : out Byte_Array;
       Reply_Len : out Unsigned_16; Has_Data : out Boolean)
    is
-      pragma SPARK_Mode (Off);
       use type Unsigned_16; use type Unsigned_32;
-      Msg_Syn : constant String := "[TCP] SYN -> SYN-ACK";
-      Msg_Est : constant String := "[TCP] ACK -> ESTABLISHED";
-      Msg_Fin : constant String := "[TCP] FIN -> FIN-ACK";
-      Msg_Dat : constant String := "[TCP] DATA -> ACK";
    begin
       Has_Data := False;
       Reply_Len := 0;
@@ -254,21 +252,19 @@ package body Schild_Tcp_Handler with SPARK_Mode => On, Refined_State => (Entropy
                Conn.Client_Port := Tcp_Hdr.Src_Port;
                Conn.Client_MAC := Src_MAC;
                Conn.Client_Seq := Tcp_Hdr.Seq_Num;
-               Conn.Our_Seq := Generate_Isn;
+               Generate_Isn (Conn.Our_Seq);
                Build_Tcp_Reply (Conn, Flag_SYN or Flag_ACK,
                  Conn.Our_Seq, Conn.Client_Seq + 1,
                  (0 .. -1 => 0), Reply_Buf, Reply_Len);
                -- SYN consumes one sequence number: advance past it so the
                -- data/ACK segments carry the correct Seq_Num.
                Conn.Our_Seq := Conn.Our_Seq + 1;
-               C_Putln (Msg_Syn'Address, Msg_Syn'Length);
             end if;
 
          when SYN_RCVD =>
             if (Tcp_Hdr.Flags and Flag_ACK) /= 0 then
                Conn.State := ESTABLISHED;
                Conn.Client_Seq := Tcp_Hdr.Seq_Num;
-               C_Putln (Msg_Est'Address, Msg_Est'Length);
             end if;
 
          when ESTABLISHED =>
@@ -277,14 +273,12 @@ package body Schild_Tcp_Handler with SPARK_Mode => On, Refined_State => (Entropy
                Build_Tcp_Reply (Conn, Flag_FIN or Flag_ACK,
                  Conn.Our_Seq, Tcp_Hdr.Seq_Num + 1,
                  (0 .. -1 => 0), Reply_Buf, Reply_Len);
-               C_Putln (Msg_Fin'Address, Msg_Fin'Length);
             elsif Payload'Length > 0 then
                Conn.Client_Seq := Tcp_Hdr.Seq_Num + Unsigned_32 (Payload'Length);
                Build_Tcp_Reply (Conn, Flag_ACK,
                  Conn.Our_Seq, Conn.Client_Seq,
                  (0 .. -1 => 0), Reply_Buf, Reply_Len);
                Has_Data := True;
-               C_Putln (Msg_Dat'Address, Msg_Dat'Length);
             end if;
 
          when LAST_ACK =>
@@ -317,7 +311,6 @@ package body Schild_Tcp_Handler with SPARK_Mode => On, Refined_State => (Entropy
      (Conn : in out Tcp_Connection;
       Reply_Buf : out Byte_Array; Reply_Len : out Unsigned_16)
    is
-      pragma SPARK_Mode (Off);
    begin
       Reply_Len := 0;
       if Conn.State = ESTABLISHED then

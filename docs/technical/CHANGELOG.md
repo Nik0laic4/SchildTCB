@@ -14,7 +14,7 @@
 - `schild_icmp_handler`: body `Off → On`, `Process_Icmp_Echo` proved.
 - `schild_ipv4_handler`: package `Off → On`; `Parse_Ipv4` (40 checks) + `Compute_Ipv4_Checksum` (10 checks) proved. Flow-fixed (full `Result` init on early-return paths) + checksum rewritten to modular arithmetic. `Build_Ipv4_Frame` (outgoing frame builder, variable-length) kept `body Off` — pending.
 - `schild_udp_handler`: body `Off → On`, `Process_Udp_Datagram` proved (scaffold, like ICMP).
-- `schild_tcp_handler`: package `Off → On` (with `Abstract_State`/`Refined_State` for the ISN entropy counter); proved: `Parse_Tcp` (39 checks), `Compute_Tcp_Checksum*`, `Validate_Tcp_Checksum` (25 checks), `Expire_Stale`, `Find_Connection`/`Alloc_Connection` (converted to procedures; `C_Rdtsc` contracted `Global => null`). Deferred `Off`: `Generate_Isn` (function mutating global state), `Process_Tcp`/`Build_Tcp_Reply`/`Initiate_Close` (state machine + variable buffer).
+- `schild_tcp_handler`: **fully proved** (package `Off → On`, `Abstract_State`/`Refined_State` for the ISN entropy counter). `Parse_Tcp` (39), `Compute_Tcp_Checksum*`, `Validate_Tcp_Checksum` (25), `Expire_Stale`, `Find/Alloc_Connection` (procedures), `Generate_Isn` (procedure), `Build_Tcp_Reply` (95), `Initiate_Close` (4), `Process_Tcp` (16) — all `not-proved: 0`. Checksums rewritten to modular arithmetic (RFC 1071); `C_Rdtsc`/`C_Putln` contracted `Global => null`; debug `C_Putln` UART-marker calls removed from `Process_Tcp` (`'Address` of a local string is not SPARK-legal).
 
 ## v1.0.0-pre (2026-11-01) — private-profile proof gate (closed "compiled but not proved" boundary)
 
