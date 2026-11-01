@@ -1,45 +1,47 @@
 # Schild TCB v0.1.0 — release notes (pre-release)
 
-> Честный pre-release исследовательского прототипа. Это НЕ сертифицированная
-> система; каждое заявление — per-component (см. `docs/technical/ASSURANCE.md`,
-> `THREAT_MODEL.md`). Для вставки в поле «Release notes» на GitHub.
+> Honest pre-release of a research prototype. NOT a certified system; every
+> claim is per-component (see `docs/technical/ASSURANCE.md`, `THREAT_MODEL.md`).
+> For the GitHub "Release notes" field.
 
-## Что это
+## What it is
 
-Исследовательский прототип доверенной вычислительной базы (TCB): формально
-верифицируемое ядро (**seL4** микроядро + **Ada/SPARK 2022**) со средой
-изолированной периферии. Два артефакта:
+A research prototype of a Trusted Computing Base (TCB): a formally verifiable
+core (**seL4** microkernel + **Ada/SPARK 2022**) with an isolated-peripheral
+environment. Two artifacts:
 
-- **bare-metal OS** на Ada (загрузчик, NVMe, e1000e, TCP/IP, HTTP) — T580 и QEMU;
-- **seL4 root-task** + демоны, сеть/хранилище изолированы в Ring 3.
+- **bare-metal OS** in Ada (bootloader, NVMe, e1000e, TCP/IP, HTTP) — runs on a
+  ThinkPad T580 and in QEMU;
+- **seL4 root task** + daemons, with network/storage isolated in Ring 3.
 
-## Ключевые результаты (проверяемо)
+## Key results (mechanically checkable)
 
-- 185 модулей ядра прогоняются SPARK **Level 4** с **0 unproved VCs**; ~129 proved / ~56 out-of-proof (`SPARK_Mode => Off` драйверы/платформа).
-- 8 демонов root-задачи доказаны (`verify.sh`); полные (private) тела — `verify_private.sh`.
-- MLS Bell-LaPadula (5 уровней) доказана в `schild_server_security_policy`, `schild_process_manager`, `schild_file_descriptors`.
-- Сеть: ARP/IPv4/ICMP/UDP/TCP-парсеры L4-доказаны (W10); CBC-цепочка, max-priority планировщик + ARINC-653 MTF (W11).
-- Загрузка на ThinkPad T580 (32 ГБ) и QEMU; ARM64 (Pi 4B) — порт в работе.
+- 185 kernel modules swept at **SPARK Level 4** with **0 unproved VCs**; ~129 proved / ~56 out-of-proof (`SPARK_Mode => Off` drivers/platform code).
+- 8 root-task daemons proved (`verify.sh`); full (private) bodies — `verify_private.sh`.
+- MLS Bell-LaPadula (5 levels) proved in `schild_server_security_policy`, `schild_process_manager`, `schild_file_descriptors`.
+- Network: ARP/IPv4/ICMP/UDP/TCP parsers proved at L4 (W10); CBC chaining, max-priority scheduler + ARINC-653 MTF (W11).
+- Boots on a ThinkPad T580 (32 GB) and in QEMU; ARM64 (Raspberry Pi 4B) port in progress.
 
-## Честные ограничения (остаточные риски, THREAT_MODEL §8)
+## Honest limitations (residual risks, THREAT_MODEL §8)
 
-1. **Нет DMA-изоляции** (IOMMU/VT-d — upstream-экспериментально; на Pi 4 нет SMMU). «Изоляция» — процессная, не шинная.
-2. **Непроверенный C-код** (`net_test.c`, `sel4_mmio.c`, `runtime_stubs.c`, …) — memory-unsafe, закрыт только containment'ом.
-3. **Контракты доказывают свойство, не полный end-to-end сценарий** (W11 частично закрыл: CBC/планировщик/MLS).
-4. **Нет signed boot / HWRoT** — SHA-256 ловит порчу, а не злонамеренную подмену.
-5. **x86_64 MCS верифицирован слабее ARM MCS** (upstream).
-6. **Патченый seL4** — upstream-proof переносится частично.
-7. **PID reuse** (CVE-2026-SCHILD-02 #005) — отмечено, не смягчено.
-8. **ARM64** — virtio-net валидирован в QEMU; GENET (Pi 4) блокирован отсутствием железа.
+1. **No DMA isolation** (IOMMU/VT-d is upstream-experimental; the Pi 4 has no SMMU). "Isolation" is process-level, not bus-level.
+2. **Unproven C code** (`net_test.c`, `sel4_mmio.c`, `runtime_stubs.c`, …) — memory-unsafe, backed only by containment.
+3. **Contracts prove the property, not the full end-to-end scenario** (W11 partially closed: CBC / scheduler / MLS).
+4. **No signed boot / HWRoT** — SHA-256 detects corruption, not malice.
+5. **x86_64 MCS** is formally verified weaker than ARM MCS (upstream status).
+6. **Patched seL4** — the upstream proof transfers only partially.
+7. **PID reuse** (CVE-2026-SCHILD-02 #005) — noted, not mitigated.
+8. **ARM64** — virtio-net validated in QEMU; GENET (Pi 4) blocked on hardware availability.
 
-## Воспроизведение
+## Reproduction
 
-Пошаговый учебник (build → run → verify) — [`docs/GUIDE.md`](docs/GUIDE.md).
+Step-by-step tutorial (build → run → verify): [`docs/GUIDE.md`](docs/GUIDE.md).
 
 ```bash
 cd src/schild_core
-./build.sh                          # bare-metal (181 объект, 0 ошибок)
-bash scripts/verify.sh              # 8 демонов (not-proved: 0)
-bash scripts/prove_kernel.sh        # полный свип 185 (~10 мин)
+./build.sh                          # bare-metal (181 objects, 0 errors)
+bash scripts/verify.sh              # 8 daemons (not-proved: 0)
+bash scripts/prove_kernel.sh        # full 185-module sweep (~10 min)
 # Docker: docker build -t schild-tcb . && docker run --rm -v "$PWD":/repo schild-tcb
 ```
+

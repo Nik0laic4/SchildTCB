@@ -25,3 +25,6 @@ __pycache__/
 # tools/sel4/build_rt.sh. They are intentionally COMMITTED (tracked) — the
 # private profile reads them from <repo>/private/root_task/, never from src/.
 # (No other private/ overlay exists; there is no distributed-ledger tree here.)
+
+# Publication drafts (kept locally until ready for the repo)
+docs/ARTICLE.md
