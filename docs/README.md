@@ -101,9 +101,10 @@ I/O side-effect) и C-файл `schild_net_runtime.c` (C-шимс, не SPARK).
 
 ## 7. Как читать репозиторий (маршрут)
 
-1. Начать с [`../README.md`](../README.md) и [`../PROJECT_PASSPORT.md`](../PROJECT_PASSPORT.md) — обзор.
-2. Понять «что доказано» — [`technical/ASSURANCE.md`](technical/ASSURANCE.md) (модель доверия) + [`technical/THREAT_MODEL.md`](technical/THREAT_MODEL.md).
-3. Понять «что дальше» — [`technical/ROADMAP.md`](technical/ROADMAP.md).
-4. Воспроизвести — [`technical/BUILD.md`](technical/BUILD.md), команды из §5 выше.
-5. Проверить историю проверенных результатов — [`technical/CHANGELOG.md`](technical/CHANGELOG.md).
+1. Пошаговый учебник (build → run → verify) — [`GUIDE.md`](GUIDE.md).
+2. Начать с [`../README.md`](../README.md) и [`../PROJECT_PASSPORT.md`](../PROJECT_PASSPORT.md) — обзор.
+3. Понять «что доказано» — [`technical/ASSURANCE.md`](technical/ASSURANCE.md) (модель доверия) + [`technical/THREAT_MODEL.md`](technical/THREAT_MODEL.md).
+4. Понять «что дальше» — [`technical/ROADMAP.md`](technical/ROADMAP.md).
+5. Воспроизвести — [`technical/BUILD.md`](technical/BUILD.md), команды из §5 выше.
+6. Проверить историю проверенных результатов — [`technical/CHANGELOG.md`](technical/CHANGELOG.md).
 

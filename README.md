@@ -92,6 +92,7 @@ Contributions and feedback are welcome — see [`CONTRIBUTING.md`](CONTRIBUTING.
 
 ## Documentation
 
+- [`docs/GUIDE.md`](docs/GUIDE.md) — step-by-step tutorial (build → run → verify).
 - [`docs/README.md`](docs/README.md) — documentation index & single source of truth.
 - [`PROJECT_PASSPORT.md`](PROJECT_PASSPORT.md) — project overview.
 - [`docs/technical/ASSURANCE.md`](docs/technical/ASSURANCE.md) — assurance case & hardening roadmap.
