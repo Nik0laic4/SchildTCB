@@ -122,7 +122,8 @@ is
      (Manager   : Boot_Manager;
       Slot      : Boot_Slot;
       Image_Addr : Unsigned_64;
-      Image_Size : Unsigned_64) return Boolean;
+      Image_Size : Unsigned_64) return Boolean
+   with Pre => Image_Size > 0;
 
    -- True when the given slot is locked (its attempts are exhausted)
    function Slot_Locked

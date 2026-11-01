@@ -1,7 +1,8 @@
 # Schild TCB — Паспорт проекта
 
 > Единый обзорный документ для инженеров, принимающих проект.
-> Актуально на 25.09.2026. Каноничные детали — в `docs/technical/ASSURANCE.md`.
+> Актуально на 2026-10-31. Каноничные детали — в `docs/technical/ASSURANCE.md`;
+> «что дальше» — в `docs/technical/ROADMAP.md`.
 
 **Разработчик:** Ирганов А.Н.
 **Статус:** научно-исследовательский прототип; ограниченное распространение.
@@ -22,9 +23,9 @@ Schild TCB — исследовательский прототип довере�
 **Достижения текущей версии:**
 
 - ~108 из 185 модулей ядра входят в proof-набор на SPARK Level 4 (`not-proved: 0`); остальные ~77 — вне proof (драйверы/платформа `SPARK_Mode => Off` либо без анализируемого тела).
-- 7 демонов root-задачи доказаны в `verify.gpr` (Level 4): MLS, Config, Audit,
-  Boot, HM Model, Launch Model, Root Task.
-- Сборка: 179 объектов (базовая) / 184 (полная), 0 ошибок.
+- 8 демонов root-задачи доказаны в `verify.gpr` (Level 4): MLS, Config, Audit,
+  Boot, HM Model, Launch Model, Watchdog, Root Task.
+- Сборка: 181 объект (базовая, public), 0 ошибок.
 - Загрузка с USB-флеш на ThinkPad T580; сетевой стек ARP/IPv4/ICMP/TCP/HTTP работает.
 - Crash-containment NetServer продемонстрирован (QEMU).
 
@@ -79,6 +80,12 @@ SchildTCB/
 заменены заглушками (stub). `SCHILD_PROFILE=private` — полная версия:
 `tools/sel4/build_rt.sh` копирует реальные `.adb`-тела из `private/root_task/`
 поверх заглушек.
+
+> **Граница доказательства (закрыта 2026-11-01):** `verify.sh` доказывает
+> **public** (stub) профиль — 8 демонов root-задачи + `src/03_crypto`;
+> `verify_private.sh` доказывает полные (private) тела тех же демонов
+> (`not-proved: 0`), кроме `Persist_Audit_Log` (`Off`, I/O) и C-шимса
+> `schild_net_runtime.c`. См. `docs/README.md` §6.
 
 ### 4.2. Слои ядра (автономная конфигурация)
 
@@ -147,7 +154,7 @@ SCHILD_PROFILE=private ./build.sh
 SEL4_PRIMARY=1 ./build.sh
 
 # Формальная верификация
-bash scripts/verify.sh          # 7 демонов root-задачи, Level 4
+bash scripts/verify.sh          # 8 демонов root-задачи, Level 4
 bash scripts/prove_kernel.sh    # полный прогон ядра (185 модулей)
 
 # Прогон в QEMU
@@ -166,10 +173,11 @@ sudo dd if=schild_os.iso of=/dev/sdX bs=4M status=progress oflag=sync && sync
 
 | Проверка | Команда | Результат |
 |---|---|---|
-| Сборка (базовая) | `./build.sh` | 179 объектов, 0 ошибок |
-| Сборка (полная) | `SCHILD_PROFILE=private ./build.sh` | 184 объекта, 0 ошибок |
+| Сборка (базовая) | `./build.sh` | 181 объект, 0 ошибок |
+| Сборка seL4 root-задачи (public stub) | `SEL4_PRIMARY=1 ./build.sh` | `root_task.elf` + `sel4_primary.iso` собираются |
+| Сборка seL4 root-задачи (private оверлей) | `SCHILD_PROFILE=private SEL4_PRIMARY=1 ./build.sh` | компилируется (`SPARK_Mode Off`), **не доказано** |
 | Доказательство ядра | `scripts/prove_kernel.sh` | ~108 proved / ~77 вне proof, `not-proved: 0` |
-| Демоны root-задачи | `scripts/verify.sh` | все VC доказаны |
+| Демоны root-задачи | `scripts/verify.sh` | 8 демонов, все VC доказаны |
 | Boot smoke (standalone) | `run_tests.sh` | Long Mode → e1000e → SMP → MLS → :80 |
 | Crash-containment | `SEL4_PRIMARY=1 run_tests.sh` | `[FAULT] Caught fault` + `[CONTAINMENT] core alive` |
 

@@ -12,7 +12,8 @@
 - Proof-гейты:
   - `verify.sh` (root-задача): `not-proved: 0` — `schild_boot_manager` 21,
     `schild_watchdog` 5, `schild_root_task` 76 checks.
-  - `prove_kernel.sh` (ядро, 185 модулей): `not-proved: 0`, `~107 proved / ~78 out-of-proof`.
+  - `prove_kernel.sh` (ядро, 185 модулей): `not-proved: 0`, `~108 proved / ~77 out-of-proof`
+    (последний прогон — 107/78; см. `ASSURANCE.md` §2.2).
 
 ## 2. Что сделано за прошлые сессии (кратко)
 
@@ -39,8 +40,8 @@
   классифицируется `SKIPPED`, хотя фокусно доказуем. Каноничный гейт — `not-proved: 0`.
 - Инструменты НЕ в PATH: gnatprove 14.1.1 / GNAT 14.2.1 (см. §4). Фокус-прогон
   одного модуля — временный `.gpr` + `gnatprove -P … --level=4 --mode=all`.
-- **`private/` не входит в proof-гейт**: `verify.gpr` доказывает stub (`tools/sel4/src`);
-  полная версия (`private/root_task/`) компилируется (`SPARK_Mode Off`).
+- **`private/`-гейт закрыт (2026-11-01):** `scripts/verify_private.sh` доказывает
+  полные тела (`private/root_task/`) — `not-proved: 0` (кроме `Persist_Audit_Log`, Off/I/O).
 
 ## 4. Команды
 
