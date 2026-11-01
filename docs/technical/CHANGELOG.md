@@ -6,6 +6,15 @@
 > *pending* or *target* have not yet been validated. Formal-verification
 > coverage is stated per-module, never as an aggregate percentage.
 
+## v1.0.0-pre (2026-11-01) — W11.1: audit-chain tamper-evidence (A4) + HTTP decimal-writer boundary fix
+
+**Validated: `schild_audit_chainer` strengthened to a real tamper-evidence contract (`not-proved: 0`); `schild_sha_manager` marked as a scaffold; fixed a latent `Write_U32_Dec` boundary bug in the HTTP server (V = 0 emitted nothing).**
+
+- `schild_audit_chainer`: removed the strangling `Pre (Previous_Hash(I) /= 0)` and replaced the vacuous `Post` (`Is_Chain_Valid` was a constant `True`) with the chaining dependency — `Current_Hash(I) = Previous_Hash(I) xor Record_Payload(I)` — proved via a "track writes" loop invariant (threat model A4). Also removed the unused `with Schild_Sha_Manager`. Noted it is **not yet wired** into the live audit path.
+- `schild_sha_manager`: marked as a scaffold (returns a placeholder magic value, not a SHA-256 digest; the real SHA-256 is `Schild_HMAC_SHA256`, body Off / KAT-validated).
+- `schild_http_server.Write_U32_Dec`: fixed the `V = 0` branch (`Pos := 9` → `Pos := 8`) — previously an empty file's `Content-Length` was left as five uninitialised spaces because the emit loop became empty; now it emits `"0"` (one digit, matching `Digit_Count(0) = 1`).
+- `http_server` proof attempt (extracted `schild_http_core`): confirmed and refined gotcha W10 §4.5 — the unconstrained `String` loops (`Str_Match`/`Extract_Path`) also explode gnat2why, not just the unconstrained `Byte_Array`. Documented in `SPARK_PROOF_TECHNIQUES.md` §4; the WIP core was not kept.
+
 ## v1.0.0-pre (2026-11-01) — W11: contract semantics — CBC chaining, max-priority scheduler, MLS soundness
 
 **Validated: 6 kernel modules strengthened with security-property contracts and proved at SPARK Level 4 (`not-proved: 0`). Full sweep: 185 modules, `not-proved: 0`, 129 proved / 56 skipped (session start: 112/73). Build: 181 objects, 0 errors.**

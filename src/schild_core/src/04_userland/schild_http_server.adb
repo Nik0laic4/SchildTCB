@@ -43,7 +43,7 @@ package body Schild_Http_Server with SPARK_Mode => Off is
       Pos : Integer := 9;
       Val : Unsigned_32 := V;
    begin
-      if Val = 0 then Tmp (9) := 48; Pos := 9;
+      if Val = 0 then Tmp (9) := 48; Pos := 8;  --  emit exactly one digit "0"
       else
          while Val > 0 loop
             Tmp (Pos) := 48 + Unsigned_8 (Val rem 10); Pos := Pos - 1; Val := Val / 10;

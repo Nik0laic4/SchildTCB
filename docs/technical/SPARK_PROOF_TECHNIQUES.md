@@ -54,7 +54,11 @@
   range-check → добавить `Pre`; (3) битовые литералы квалифицировать (`Unsigned_8'(1)`).
 - **`http_server` prover-ограничение:** для неограниченного `Byte_Array`
   (`Byte_Index = Integer range 0..4095`) проверщик не выводит границу подтипа
-  (`B'First <= 4095` недоказуем) → нужны constrained array types.
+  (`B'First <= 4095` недоказуем); дополнительно циклы `for I in S'Range` по
+  неограниченному `String` (`Str_Match`/`Extract_Path`) взрывают gnat2why
+  (VC-генерация висит). → нужны constrained array types **и** ограниченные
+  строки (фиксированная длина / явный `Length`). Попытка выноса
+  `schild_http_core` (W11) подтвердила: зависает именно на `Str_Match`.
 
 ## 5. Арифметика
 
