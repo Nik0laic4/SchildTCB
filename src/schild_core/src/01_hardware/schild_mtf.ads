@@ -10,7 +10,7 @@
 with Schild_Timer; use Schild_Timer;
 with Interfaces;   use Interfaces;
 
-package Schild_MTF with SPARK_Mode => Off is
+package Schild_MTF with SPARK_Mode => On is
 
    Max_Partitions : constant := 4;
    subtype Partition_Id is Positive range 1 .. Max_Partitions;
@@ -33,10 +33,16 @@ package Schild_MTF with SPARK_Mode => Off is
       4 => (Partition => 4, Duration => 25));
 
    -- Total duration of one Major Time Frame (sum of all slots).
-   function MTF_Period (S : MTF_Schedule) return Slot_Duration;
+   -- Pure: a given schedule always yields the same period (determinism, T5).
+   function MTF_Period (S : MTF_Schedule) return Slot_Duration
+     with Global => null;
 
    -- Partition that owns the given tick within the cyclic schedule.
+   -- Total on every non-empty schedule: it never faults on any tick value,
+   -- which is the availability property a static schedule must uphold (T5).
    function Partition_For_Tick (S : MTF_Schedule; Tick : Tick_Count_Type)
-     return Partition_Id;
+     return Partition_Id
+     with Global => null,
+          Pre    => S'Length > 0;
 
 end Schild_MTF;

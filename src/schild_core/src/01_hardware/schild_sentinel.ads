@@ -12,6 +12,8 @@ package Schild_Sentinel is
       Is_Ok    :    out Boolean)
    with
      Global => null,
-     Pre    => Passport.Is_Active = True;
+     Post   => Is_Ok = (Passport.Is_Active and Passport.Integrity_Checked);
+   --  A sentinel only vouches for the system when it is both active and has
+   --  passed its integrity check; either failure means "not OK".
 
 end Schild_Sentinel;

@@ -36,15 +36,29 @@ package Schild_Scheduler with SPARK_Mode is
    end record;
 
    function Find_Next_Task (Sched : Scheduler_Type) return Task_Id
-     with Post => (if Find_Next_Task'Result > 0 then 
-                     Sched.Tasks (Valid_Task_Id (Find_Next_Task'Result)).State = Task_Ready);
+     with Post => (if Find_Next_Task'Result > 0 then
+                     Sched.Tasks (Valid_Task_Id (Find_Next_Task'Result)).State = Task_Ready
+                     and (for all Id in Valid_Task_Id =>
+                            (if Sched.Tasks (Id).State = Task_Ready then
+                               Sched.Tasks (Id).Priority <=
+                                 Sched.Tasks (Valid_Task_Id (Find_Next_Task'Result)).Priority)));
+   --  The returned task is a *maximum-priority* ready task: no ready task is
+   --  ever bypassed in favour of a lower-priority one. This is the scheduling
+   --  determinism / no-priority-inversion property (threat model T5).
 
    -- Highest-priority ready task within a given partition (two-level schedule).
    function Find_Next_Task_In_Partition (Sched : Scheduler_Type; P : Partition_Id)
      return Task_Id
      with Post => (if Find_Next_Task_In_Partition'Result > 0 then
                      Sched.Tasks (Valid_Task_Id (Find_Next_Task_In_Partition'Result)).State = Task_Ready
-                     and then Sched.Tasks (Valid_Task_Id (Find_Next_Task_In_Partition'Result)).Partition = P);
+                     and Sched.Tasks (Valid_Task_Id (Find_Next_Task_In_Partition'Result)).Partition = P
+                     and (for all Id in Valid_Task_Id =>
+                            (if Sched.Tasks (Id).State = Task_Ready
+                               and then Sched.Tasks (Id).Partition = P then
+                               Sched.Tasks (Id).Priority <=
+                                 Sched.Tasks (Valid_Task_Id (Find_Next_Task_In_Partition'Result)).Priority)));
+   --  Same maximum-priority property, restricted to partition P (ARINC 653
+   --  two-level schedule: MTF selects the partition, priority selects the task).
 
    --  Save the current task's context (RAX captured from the incoming register).
    procedure Save_Task_Context (Sched : in out Scheduler_Type; Id : Valid_Task_Id; Incoming_RAX : Unsigned_64)

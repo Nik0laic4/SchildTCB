@@ -14,9 +14,12 @@ is
       --  Chain the record: fold the payload over the previous link (XOR).
       for I in Current_Hash'Range loop
          Current_Hash(I) := Previous_Hash(I) xor Record_Payload(I);
-         
-         --  Bounds invariant for the chaining loop.
-         pragma Loop_Invariant (I in Current_Hash'Range);
+
+         --  Each already-written word equals the XOR of its predecessor word
+         --  and its payload word; at loop exit this covers the whole digest.
+         pragma Loop_Invariant
+           (for all J in Current_Hash'First .. I =>
+              Current_Hash (J) = (Previous_Hash (J) xor Record_Payload (J)));
       end loop;
 
       Passport.Block_Sequence_Id := 1;

@@ -1,5 +1,5 @@
 package body Schild_Aes_Cbc_Engine with
-  SPARK_Mode => Off --  CBC chaining over Schild_Aes_Ni_Core (block cipher is public; CBC wiring pending).
+  SPARK_Mode => On
 is
 
    procedure Encrypt_Cbc_Block
@@ -11,7 +11,7 @@ is
       Xor_Block : Cbc_Block_Buffer;
    begin
       --  CBC chaining: XOR the plaintext block with the running IV.
-      for I in 1 .. 16 loop
+      for I in Cbc_Block_Buffer'Range loop
          Xor_Block(I) := Plaintext(I) xor Context.Initialization_Vector(I);
       end loop;
 

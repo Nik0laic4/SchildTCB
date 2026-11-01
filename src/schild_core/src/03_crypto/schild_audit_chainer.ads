@@ -1,5 +1,13 @@
+-- Schild TCB — audit-chain link (tamper-evidence scaffold).
+--
+-- NOTE (2026-11-01): NOT wired into the live audit path (Schild_Audit_Logger
+-- persists events but does not chain them yet). The XOR fold below is a
+-- placeholder for a cryptographic hash — the real SHA-256 compression lives in
+-- Schild_HMAC_SHA256 (body Off, KAT-validated). What the contract proves is the
+-- *chaining dependency*: every link depends on its predecessor and its payload,
+-- so tampering with any record changes every subsequent link.
+
 with Interfaces; use Interfaces;
-with Schild_Sha_Manager; use Schild_Sha_Manager;
 
 package Schild_Audit_Chainer with
   SPARK_Mode => On
@@ -21,7 +29,13 @@ is
       Passport      :    out Blockchain_Passport_Record;
       Success       :    out Boolean)
    with
-     Pre  => (for all I in Previous_Hash'Range => Previous_Hash(I) /= 0),
-     Post => (if Success then Passport.Is_Chain_Valid and Passport.Block_Sequence_Id > 0);
+     --  Tamper-evidence (threat model A4): the new link is a deterministic
+     --  function of the previous link and the payload. Modifying any record
+     --  (or its predecessor) therefore changes every subsequent link.
+     Post => Success
+             and Passport.Is_Chain_Valid
+             and Passport.Block_Sequence_Id = 1
+             and (for all I in Current_Hash'Range =>
+                    Current_Hash (I) = (Previous_Hash (I) xor Record_Payload (I)));
 
 end Schild_Audit_Chainer;

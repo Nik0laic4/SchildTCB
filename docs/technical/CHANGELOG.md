@@ -6,6 +6,26 @@
 > *pending* or *target* have not yet been validated. Formal-verification
 > coverage is stated per-module, never as an aggregate percentage.
 
+## v1.0.0-pre (2026-11-01) — W11.1: audit-chain tamper-evidence (A4) + HTTP decimal-writer boundary fix
+
+**Validated: `schild_audit_chainer` strengthened to a real tamper-evidence contract (`not-proved: 0`); `schild_sha_manager` marked as a scaffold; fixed a latent `Write_U32_Dec` boundary bug in the HTTP server (V = 0 emitted nothing).**
+
+- `schild_audit_chainer`: removed the strangling `Pre (Previous_Hash(I) /= 0)` and replaced the vacuous `Post` (`Is_Chain_Valid` was a constant `True`) with the chaining dependency — `Current_Hash(I) = Previous_Hash(I) xor Record_Payload(I)` — proved via a "track writes" loop invariant (threat model A4). Also removed the unused `with Schild_Sha_Manager`. Noted it is **not yet wired** into the live audit path.
+- `schild_sha_manager`: marked as a scaffold (returns a placeholder magic value, not a SHA-256 digest; the real SHA-256 is `Schild_HMAC_SHA256`, body Off / KAT-validated).
+- `schild_http_server.Write_U32_Dec`: fixed the `V = 0` branch (`Pos := 9` → `Pos := 8`) — previously an empty file's `Content-Length` was left as five uninitialised spaces because the emit loop became empty; now it emits `"0"` (one digit, matching `Digit_Count(0) = 1`).
+- `http_server` proof attempt (extracted `schild_http_core`): confirmed and refined gotcha W10 §4.5 — the unconstrained `String` loops (`Str_Match`/`Extract_Path`) also explode gnat2why, not just the unconstrained `Byte_Array`. Documented in `SPARK_PROOF_TECHNIQUES.md` §4; the WIP core was not kept.
+
+## v1.0.0-pre (2026-11-01) — W11: contract semantics — CBC chaining, max-priority scheduler, MLS soundness
+
+**Validated: 6 kernel modules strengthened with security-property contracts and proved at SPARK Level 4 (`not-proved: 0`). Full sweep: 185 modules, `not-proved: 0`, 129 proved / 56 skipped (session start: 112/73). Build: 181 objects, 0 errors.**
+
+- `schild_aes_cbc_engine` (body `Off→On`): `Post` now states the full CBC chaining property (FIPS 800-38A) — `Ciphertext(I) = Plaintext(I) xor Context'Old.Initialization_Vector(I)` and `IV = Ciphertext` — ruling out ECB-style block replay and un-whitened leakage (threat model A1).
+- `schild_crypto_fabric.Process_Secure_Block`: `Post` propagates the CBC property through the fabric seam (state `Context_Active` + whitening + IV advance; A1).
+- `schild_mtf` (spec+body `Off→On`): `Partition_For_Tick` gained `Pre => S'Length > 0` (totality) + `Global => null` (determinism) — the static ARINC-653 schedule never faults on any tick (T5 availability). Exact tick→partition ownership is validated by `tools/sel4/tests/mtf_kat.adb` (liveness, per `THREAT_MODEL.md` §10).
+- `schild_scheduler`: `Find_Next_Task` / `Find_Next_Task_In_Partition` `Post` now state the **maximum-priority** property (no ready task bypassed by a lower-priority one) via a "track max" loop invariant — scheduling determinism / no-priority-inversion (T5).
+- `schild_sentinel`: strangling `Pre (Is_Active)` → `Post => Is_Ok = (Is_Active and Integrity_Checked)`.
+- `schild_file_descriptors.Check_Access`: `Post` states Bell-LaPadula **soundness** — access is granted only when an open descriptor exists at a level compatible with the requested direction (no read-up / no write-down; T3). Completeness is liveness (runtime-tested).
+
 ## v1.0.0-pre (2026-11-01) — W10 start: network parsers into the proof set (ARP + ICMP)
 
 **Validated: `schild_arp_handler` and `schild_icmp_handler` flipped `SPARK_Mode Off → On` and proved at Level 4 (`not-proved: 0`); `schild_net_types` (shared byte-array foundation) also `On`. Full sweep: 185 modules, `not-proved: 0`, ~111 proved / ~74 out-of-proof (previous ~108/~77).**
@@ -26,7 +46,7 @@
 
 ## v1.0.0-pre (2026-10-31) — W8: threat model + Tier-A contract audit
 
-**Validated: `THREAT_MODEL.md` (assets A1–A6, adversary classes P1–P4 + AI-agent capability axis, trust boundaries TB1–TB4, security-property map T1–T9, seL4 axiomatics) and Tier-A contract strengthening — all proved at Level 4, `not-proved: 0` (details in `SESSION_CONTRACT_AUDIT.md`).**
+**Validated: `THREAT_MODEL.md` (assets A1–A6, adversary classes P1–P4 + AI-agent capability axis, trust boundaries TB1–TB4, security-property map T1–T9, seL4 axiomatics) and Tier-A contract strengthening — all proved at Level 4, `not-proved: 0` (details in `THREAT_MODEL.md` §7/§10).**
 
 - Contracts proved: `cap_space` (`Cap_Copy`/`Cap_Mint`/`Cap_Delete`/`Cap_Retype`, `Is_Derived_From`), `process_manager` (`Terminate_Process`/`Create_Process`/`Reap_Zombies`/`Init_Process_Table`/`Check_Mls_Compatibility`/`Find_*`/`Wait_Process`), `signals` (`Send_Signal`/`Has_Pending_Signals`/`Deliver_Pending_Signal`), `mls_assigner`, `ipc` (`Write_Byte`/`Execute_Syscall`), `net_spark_proofs` (vacuous `then True` removed).
 - Full proof: `not-proved: 0`; ~108 proved / ~77 out-of-proof (185 modules).

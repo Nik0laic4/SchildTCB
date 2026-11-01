@@ -26,6 +26,13 @@ is
       Success    :    out Boolean)
    with Pre  => (Control.State = Key_Ready or Control.State = Context_Active) 
                 and Control.Cbc_Context.Is_Ready, --  Processing needs ready key material and an armed CBC context.
-        Post => (if Success then Control.State = Context_Active);
+        Post => (if Success then
+                   Control.State = Context_Active
+                   --  Propagate the CBC chaining property through the fabric
+                   --  seam: the output is the whitened block and the IV has
+                   --  advanced to it (threat model A1).
+                   and (for all I in Schild_Aes_Cbc_Engine.Cbc_Block_Buffer'Range =>
+                          Control.Cbc_Context.Initialization_Vector (I) = Output_Data (I)
+                          and Output_Data (I) = (Input_Data (I) xor Control'Old.Cbc_Context.Initialization_Vector (I))));
 
 end Schild_Crypto_Fabric;

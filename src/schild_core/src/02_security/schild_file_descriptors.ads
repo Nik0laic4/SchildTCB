@@ -11,6 +11,7 @@ is
    pragma Elaborate_Body;
 
    use Schild_Sel4_Ipc;
+   use type Interfaces.Unsigned_32;
 
    --  Kind of open stream.
    type Stream_Type is (Stdin, Stdout, Stderr, Pipe, File);
@@ -74,7 +75,17 @@ is
      (Table    : Descriptor_Table;
       Fd       : Descriptor_Id;
       Proc_Level : Interfaces.Unsigned_32;
-      Is_Read  : Boolean) return Boolean;
+      Is_Read  : Boolean) return Boolean
+   with Post => (if Check_Access'Result then
+                   --  Bell-LaPadula soundness (T3): access is granted only when
+                   --  an open descriptor Fd exists at a level compatible with
+                   --  the requested direction (read: no read-up; write: no
+                   --  write-down). Completeness (legitimate access is always
+                   --  granted) is liveness, validated by runtime tests.
+                   (for some I in Table'Range =>
+                      Table (I).Is_Open and then Table (I).Id = Fd
+                      and then (if Is_Read then Proc_Level >= Table (I).Mls_Level
+                                else Proc_Level <= Table (I).Mls_Level)));
 
    --  Reset the descriptor table with a given owner capability.
    procedure Init_Descriptor_Table

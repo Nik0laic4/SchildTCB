@@ -5,7 +5,7 @@
 self-tests `[S7] T4–T8` в `schild_root_task.adb`.
 **Цель:** формат «требование → дизайн → код → тест» для W9.1–W9.3, как шаг к DO-178C / DO-333
 (см. `DEVELOPMENT_VECTORS.md`).
-**Связанные:** `ROADMAP.md` (§3 W9), `BOOT_COUNTER_DESIGN.md`, `SESSION_W9_BOOT_COUNTER.md`,
+**Связанные:** `ROADMAP.md` (§3 W9), `BOOT_COUNTER_DESIGN.md`, `CHANGELOG.md` (W9),
 `THREAT_MODEL.md` (A5/T7).
 
 > Механическая проверка каждого требования — SPARK Level 4 (`verify.sh`, `not-proved: 0`)
@@ -68,7 +68,7 @@ self-tests `[S7] T4–T8` в `schild_root_task.adb`.
 | `BOOT-HLR-2` | `BOOT_COUNTER_DESIGN.md` §2 | `Failover` | `T5a/T5b` |
 | `BOOT-HLR-3` | `BOOT_COUNTER_DESIGN.md` §2 | `Record_Successful_Boot` | `T4` |
 | `BOOT-SYS-2`/`HLR-4` | `BOOT_COUNTER_DESIGN.md` §7 | `Health_Ok`/`Commit_If_Healthy` | `T6a/T6b` |
-| `BOOT-SYS-3`/`HLR-5` | `SESSION_W9_BOOT_COUNTER.md` §3 | `schild_watchdog`: `Initialize`/`Kick`/`Tick`/`Expired` | `T7a/T7b` |
+| `BOOT-SYS-3`/`HLR-5` | `SPARK_PROOF_TECHNIQUES.md` §3 | `schild_watchdog`: `Initialize`/`Kick`/`Tick`/`Expired` | `T7a/T7b` |
 | `BOOT-SYS-4`/`HLR-6` | `BOOT_COUNTER_DESIGN.md` §5 | `To_Persistent`/`From_Persistent` | `verify.sh` (proof) |
 
 ---

@@ -186,6 +186,11 @@ These are the risks that remain even when every §7 check is green:
 7. **Watchdog/DoS.** A hardware watchdog (future work) recovers from hangs but
    is itself a DoS amplifier if an attacker can trigger hangs; it is a last
    resort *after* containment, not a substitute for it.
+8. **PID reuse without delay (CVE-2026-SCHILD-02 #005).** Process IDs are
+   recycled immediately on termination with no cool-down window, so a signal or
+   IPC message intended for a just-terminated process can reach an unrelated
+   successor that happens to reuse the same PID. Noted, not yet mitigated
+   (bound the window with a monotonically increasing PID or a reuse delay).
 
 ---
 
