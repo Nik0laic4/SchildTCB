@@ -124,6 +124,10 @@ package body Schild_Net_Server with SPARK_Mode => Off is
       if not Schild_E1000e.Poll_Rx (Buf, Len) then
          return 0;
       end if;
+      -- Audit H22: Buf is 0..2047; Len must fit before Shared_Copy_To.
+      if Len > 2048 then
+         return 0;
+      end if;
       -- Copy the received frame into the shared DMA frame for the Root Task.
       Shared_Copy_To (Buf'Address, Unsigned_32 (Len));
       return Unsigned_32 (Len);

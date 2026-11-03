@@ -63,6 +63,12 @@ package body Schild_Http_Server with SPARK_Mode => Off is
       Success := False;
       Reply_Len := 0;
 
+      -- Audit C23: Pre Reply_Buf'Length >= 4096 not enforced at Off callers.
+      -- Guard before any Write_Str to prevent OOB on undersized buffer.
+      if Reply_Buf'Length < 4096 then
+         return;
+      end if;
+
       --  Primitive-fuzz guard: reject oversized request headers outright.
       if Request'Length > Max_Header_Len then
          Schild_Http_Core.Write_Str (Reply_Buf, Idx, Http_Too_Long);
