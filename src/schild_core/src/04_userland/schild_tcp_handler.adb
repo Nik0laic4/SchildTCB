@@ -236,7 +236,9 @@ package body Schild_Tcp_Handler with SPARK_Mode => On, Refined_State => (Entropy
 
       if Tcp_Hdr.Dst_Port /= HTTP_Port then return; end if;
 
-      --  Refresh the idle-timeout timestamp on every accepted segment.
+      --  Audit H32: refresh the idle-timeout timestamp only for segments that
+      --  actually target our port. Keeping this after the port check prevents
+      --  a keep-alive flood on a wrong port from holding slots open.
       Conn.Last_Active := C_Rdtsc;
 
       -- RST handling: close connection
