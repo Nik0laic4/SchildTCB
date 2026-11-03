@@ -305,8 +305,16 @@ begin
        Put_Str (" buffered" & ASCII.CR & ASCII.LF);
 
        -- P1 (R9): persist the audit trail to SchildFS so it survives power loss.
-       Persist_Audit_Log (AL);
-       Put_Str ("[S7.2] Audit persisted to SchildFS (audit.log)" & ASCII.CR & ASCII.LF);
+       declare
+          P : Boolean;
+       begin
+          Persist_Audit_Log (AL, P);
+          if P then
+             Put_Str ("[S7.2] Audit persisted to SchildFS (audit.log)" & ASCII.CR & ASCII.LF);
+          else
+             Put_Str ("[S7.2] Audit persistence unavailable (FS/NVMe not ready)" & ASCII.CR & ASCII.LF);
+          end if;
+       end;
     end;
 
    -- Stage 6: Fault handler init (FIRST — sets up IPC buffer for everyone)

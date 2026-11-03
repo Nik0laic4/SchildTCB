@@ -62,10 +62,11 @@ is
    end Initialize;
 
    -- Public scaffold: no persistent storage (no events are buffered here).
-   procedure Persist_Audit_Log (Logger : in out Audit_Logger) is
+   procedure Persist_Audit_Log (Logger : in out Audit_Logger;
+                                Persisted : out Boolean) is
       pragma Unreferenced (Logger);
    begin
-      null;
+      Persisted := False;
    end Persist_Audit_Log;
 
 end Schild_Audit_Logger;

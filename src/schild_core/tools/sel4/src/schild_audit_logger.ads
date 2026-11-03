@@ -71,7 +71,8 @@ is
    -- Persist the buffered audit trail to SchildFS (power-loss survival).
    -- I/O side effect; non-destructive (does not consume the ring).  Declared
    -- Global => null so it is callable from SPARK_Mode => On orchestration.
-   procedure Persist_Audit_Log (Logger : in out Audit_Logger)
+   procedure Persist_Audit_Log (Logger : in out Audit_Logger;
+                                Persisted : out Boolean)
    with Global => null;
 
 end Schild_Audit_Logger;

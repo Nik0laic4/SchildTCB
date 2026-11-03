@@ -105,9 +105,10 @@ is
    -- Persist the buffered audit trail to SchildFS ("audit.log"). Non-destructive
    -- text snapshot (index-based read, does not advance Tail) so the live ring
    -- stays intact for /debug. Survives a power loss thanks to SchildFS CRC.
-   procedure Persist_Audit_Log (Logger : in out Audit_Logger) with SPARK_Mode => Off is
+   procedure Persist_Audit_Log (Logger : in out Audit_Logger;
+                                Persisted : out Boolean) with SPARK_Mode => Off is
       use Schild_Schild_Fs;
-      Buf : Unsigned_8_Array (0 .. 1023) := (others => 0);
+      Buf : Unsigned_8_Array (0 .. 8191) := (others => 0);
       Pos : Integer := 0;
       F   : File_Info;
       S   : Boolean;
@@ -115,7 +116,7 @@ is
 
       procedure Put_Ch (C : Character) is
       begin
-         if Pos < 1024 then Buf (Pos) := Character'Pos (C); Pos := Pos + 1; end if;
+         if Pos < Buf'Length then Buf (Pos) := Character'Pos (C); Pos := Pos + 1; end if;
       end Put_Ch;
       procedure Put_S (Str : String) is
       begin
@@ -136,13 +137,14 @@ is
          for J in TP + 1 .. 19 loop Put_Ch (Character'Val (Tmp (J))); end loop;
       end Put_U64;
    begin
+      Persisted := False;
       if not Is_Mounted then
          Init (S);
          if not S then return; end if;
       end if;
       Open ("audit.log", F, S);
       if not S then
-         Create_File ("audit.log", 1024, S);
+         Create_File ("audit.log", 8192, S);
          if not S then return; end if;
          Open ("audit.log", F, S);
          if not S then return; end if;
@@ -167,6 +169,7 @@ is
       end loop;
       if Pos > 0 then
          Write_File (F, Buf (0 .. Pos - 1), S);
+         Persisted := S;
       end if;
    end Persist_Audit_Log;
 
