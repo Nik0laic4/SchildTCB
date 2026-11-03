@@ -132,6 +132,7 @@ done
 "$TOOL/as" --64 -o "$OBJ/mls_server.o" src/mls_server.S
 "$TOOL/as" --64 -o "$OBJ/config_daemon.o" src/config_daemon.S
 "$TOOL/as" --64 -o "$OBJ/netserver.o" src/netserver.S
+"$TOOL/as" --64 -o "$OBJ/fs_daemon.o" src/fs_daemon.S
 
 # C compilation (MLS server thread)
 "$TOOL/gcc" -m64 -nostdlib -nostdinc -fno-builtin -std=gnu11 \
@@ -147,6 +148,10 @@ done
 "$TOOL/gcc" -m64 -nostdlib -nostdinc -fno-builtin -std=gnu11 \
     -fno-stack-protector -mno-red-zone -ffreestanding -mgeneral-regs-only "${PREFIX_MAP_C[@]}" \
     -c -o "$OBJ/netserver_c.o" src/netserver.c 2>&1
+
+"$TOOL/gcc" -m64 -nostdlib -nostdinc -fno-builtin -std=gnu11 \
+    -fno-stack-protector -mno-red-zone -ffreestanding -mgeneral-regs-only "${PREFIX_MAP_C[@]}" \
+    -c -o "$OBJ/fs_daemon_c.o" src/fs_daemon.c 2>&1
 
 # Link
 "$TOOL/ld" -T src/rt_linker.ld -o root_task.elf \
@@ -183,6 +188,8 @@ done
     "$OBJ/config_daemon_c.o" \
     "$OBJ/netserver.o" \
     "$OBJ/netserver_c.o" \
+    "$OBJ/fs_daemon.o" \
+    "$OBJ/fs_daemon_c.o" \
     "$OBJ/message_info.o" \
     "$OBJ/schild_sel4_ipc.o" \
     "$OBJ/schild_net_runtime.o" 2>&1

@@ -456,3 +456,18 @@ u64 schild_rdtsc(void) {
     return ((u64)hi << 32) | lo;
 }
 
+
+/* === FS Daemon (audit H65/H86 Stage 1) ===
+ * Entry/stack/alive_flag от fs_daemon.S; setters из Launch_FS_Daemon (ADB).
+ * Getter schild_get_fs_alive для alive check после TCBResume + Yield. */
+extern void  fs_daemon_entry(void);
+extern char  fs_daemon_stack_top[];
+extern u64   fs_daemon_alive_flag;
+extern volatile u64 fs_endpoint_cptr;
+extern volatile u64 fs_reply_cptr;
+
+u64 schild_fs_daemon_entry_addr(void) { return (u64)(void*)fs_daemon_entry; }
+u64 schild_fs_daemon_stack_addr(void) { return (u64)fs_daemon_stack_top; }
+void schild_set_fs_endpoint(u64 ep)   { fs_endpoint_cptr = ep; }
+void schild_set_fs_reply(u64 rpl)     { fs_reply_cptr = rpl; }
+u64  schild_get_fs_alive(void)        { return fs_daemon_alive_flag; }

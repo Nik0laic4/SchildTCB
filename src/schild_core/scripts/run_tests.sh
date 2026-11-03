@@ -108,6 +108,7 @@ if [ "$SEL4_PRIMARY" = "1" ]; then
     "[CONTAINMENT] Config Daemon contained"
     "[HM] MLS server fault -> STOP"
     "[TIMEOUT] Caught budget overrun"
+    "[FS] daemon: OK"
     "[NVME] Init OK — queues ready"
     "[NVFS] Read-back VERIFY OK"
     "==== Root Task ready ===="

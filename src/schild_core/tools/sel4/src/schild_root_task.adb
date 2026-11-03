@@ -452,6 +452,19 @@ begin
       end if;
    end;
 
+   -- Audit H65/H86 Stage 1: FS daemon launch (own PML4, Recv loop, alive check).
+   declare
+      FS_R : Word := Schild_Sel4_Syscall.Launch_FS_Daemon;
+   begin
+      if FS_R = 0 then
+         Put_Str ("[FS] daemon: OK" & ASCII.CR & ASCII.LF);
+      else
+         Put_Str ("[FS] daemon: FAILED (code=");
+         Put_Dec (FS_R);
+         Put_Str (")" & ASCII.CR & ASCII.LF);
+      end if;
+   end;
+
    -- P1 (R10): IPC ping-pong benchmark — Call/Reply round-trip against the
    -- NetServer (op=4 = bench noop), timed with RDTSC. Probes the seL4
    -- Fastpath: round-trip cycles should drop when KernelFastpath=ON.

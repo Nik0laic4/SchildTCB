@@ -1415,7 +1415,8 @@ is
     --     D[L] -> Root VSpace RW (producer writes), NetServer VSpace RO;
     --     C[L] -> NetServer VSpace RW (consumer writes), Root VSpace RO.
     --   Addresses: D[L] = 0x520000 + L*0x1000, C[L] = 0x525000 + L*0x1000.
-    --   Slots: frames 4130..4139, mints 4140..4149.
+    --   Slots: frames 4130..4139, mints 4140..4149.  FS daemon uses +64..+74
+    --   (4160..4170); do not collide with MLS mint range.
     -- ==========================================================================
     function Init_Mls_Rings return Word is
        BI : constant BI_Access := Get_BootInfo;
@@ -1471,5 +1472,214 @@ is
        Put_String ("[R4] 5 per-level MLS rings mapped (RO/RW split)" & ASCII.CR & ASCII.LF);
        return 0;
     end Init_Mls_Rings;
+
+   -- Audit H65/H86 Stage 1: FS daemon in separate PML4 (NetServer pattern).
+   function Launch_FS_Daemon return Word is
+      BI : constant BI_Access := Get_BootInfo;
+      Min_Size_Bits : constant Word := 20;
+      -- 5 untyped needed: EP, TCB, IPC frame, CNode, SC+Reply (Setup_MCS_Thread
+      -- retypes SC and Reply from one UT).
+      UT_EP, UT_TCB, UT_IPC, UT_CN, UT_SC, UT_REPLY : Cap_Ref := 0;
+      Found : Natural := 0;
+      CNode_Slot : constant Cap_Ref := 2;
+      ASID_Pool  : constant Cap_Ref := 6;   -- seL4_CapInitThreadASIDPool (shared)
+      FS_IPC_VAddr : constant Word := 16#530000#;
+      FS_CSpace_Bits : constant Word := 4;   -- 16 slots
+      Root_CNode_Depth : constant Word := 64;
+      FS_EP_Cn    : constant Word := 1;
+      FS_Reply_Cn : constant Word := 3;
+      FS_EP_CPtr    : constant Word := 16#1000_0000_0000_0000#;  -- 1 << 60
+      FS_Reply_CPtr : constant Word := 16#3000_0000_0000_0000#;  -- 3 << 60
+      R : Word;
+      Frame : Word;
+      VAddr : Word;
+      I : Word;
+      Alive : Word;
+
+      function FsDaemon_Entry_Addr return Word
+        with Import, Convention => C, External_Name => "schild_fs_daemon_entry_addr";
+      function FsDaemon_Stack_Addr return Word
+        with Import, Convention => C, External_Name => "schild_fs_daemon_stack_addr";
+      function Get_FS_Alive return Word
+        with Import, Convention => C, External_Name => "schild_get_fs_alive";
+   begin
+      -- Block A: find 6 RAM untyped (VSpace + kernel objects).
+      -- Range 0x800000..0x20000000 matches NetServer; leftover UT1..UT6 is reused
+      -- (seL4 keeps remaining memory in the same cap). QEMU 512M ends at 0x20000000.
+      for Idx in 1 .. N_UNTYPED loop
+         exit when Found >= 6;
+         if BI.all.Untyped_List (Idx).Size_Bits > 0
+           and then Word (BI.all.Untyped_List (Idx).Size_Bits) >= Min_Size_Bits
+           and then BI.all.Untyped_List (Idx).Is_Device = 0
+           and then BI.all.Untyped_List (Idx).PAddr >= 16#800000#
+           and then BI.all.Untyped_List (Idx).PAddr < 16#20000000#
+         then
+            if UT_EP = 0 then
+               UT_EP := BI.all.Untyped_Start + Word (Idx - 1); Found := Found + 1;
+            elsif UT_TCB = 0 then
+               UT_TCB := BI.all.Untyped_Start + Word (Idx - 1); Found := Found + 1;
+            elsif UT_IPC = 0 then
+               UT_IPC := BI.all.Untyped_Start + Word (Idx - 1); Found := Found + 1;
+            elsif UT_CN = 0 then
+               UT_CN := BI.all.Untyped_Start + Word (Idx - 1); Found := Found + 1;
+            elsif UT_SC = 0 then
+               UT_SC := BI.all.Untyped_Start + Word (Idx - 1); Found := Found + 1;
+            elsif UT_REPLY = 0 then
+               UT_REPLY := BI.all.Untyped_Start + Word (Idx - 1); Found := Found + 1;
+            end if;
+         end if;
+      end loop;
+
+      Put_String ("[FS] UT: EP="); Put_Hex (UT_EP);
+      Put_String (" TCB="); Put_Hex (UT_TCB);
+      Put_String (" IPC="); Put_Hex (UT_IPC);
+      Put_String (" CN="); Put_Hex (UT_CN);
+      Put_String (" SC="); Put_Hex (UT_SC); Put_String (" RPY="); Put_Hex (UT_REPLY); Put_String (ASCII.CR & ASCII.LF);
+
+      if Found < 6 then
+         Put_String ("[FS] FATAL: untyped exhausted" & ASCII.CR & ASCII.LF);
+         return 1;
+      end if;
+
+      -- Block B: retype objects.
+      Put_String ("[FS] retype EP@4140... ");
+      R := Retype_Object (UT_EP, Object_Endpoint, 0, CNode_Slot, 0, FS_EP_Slot, 1);
+      Put_Hex (R); Put_String (ASCII.CR & ASCII.LF);
+      if R /= 0 then return 2; end if;
+
+      Put_String ("[FS] retype TCB@4141... ");
+      R := Retype_Object (UT_TCB, Object_TCB, 0, CNode_Slot, 0, FS_TCB_Slot, 1);
+      Put_Hex (R); Put_String (ASCII.CR & ASCII.LF);
+      if R /= 0 then return 2; end if;
+
+      Put_String ("[FS] retype IPC@4142... ");
+      R := Retype_Object (UT_IPC, Object_Frame, 0, CNode_Slot, 0, FS_IPC_Slot, 1);
+      Put_Hex (R); Put_String (ASCII.CR & ASCII.LF);
+      if R /= 0 then return 2; end if;
+
+      Put_String ("[FS] retype CNode@4143... ");
+      R := Retype_Object (UT_CN, Object_CNode, FS_CSpace_Bits, CNode_Slot, 0, FS_CSpace_Slot, 1);
+      Put_Hex (R); Put_String (ASCII.CR & ASCII.LF);
+      if R /= 0 then return 2; end if;
+
+      -- Block C: VSpace (separate PML4, NetServer pattern).
+      Put_String ("[FS] retype PML4@4147... ");
+      R := Retype_Object (UT_CN, Object_PML4, 0, CNode_Slot, 0, FS_PML4_Slot, 1);
+      Put_Hex (R); Put_String (ASCII.CR & ASCII.LF);
+      if R /= 0 then return 2; end if;
+
+      Put_String ("[FS] retype PDPT@4148... ");
+      R := Retype_Object (UT_CN, Object_PDPT, 0, CNode_Slot, 0, FS_PDPT_Slot, 1);
+      Put_Hex (R); Put_String (ASCII.CR & ASCII.LF);
+      if R /= 0 then return 2; end if;
+
+      Put_String ("[FS] retype PD@4149... ");
+      R := Retype_Object (UT_CN, Object_PageDirectory, 0, CNode_Slot, 0, FS_PD_Slot, 1);
+      Put_Hex (R); Put_String (ASCII.CR & ASCII.LF);
+      if R /= 0 then return 2; end if;
+
+      Put_String ("[FS] retype PT_Lo@4150... ");
+      R := Retype_Object (UT_CN, Object_PageTable, 0, CNode_Slot, 0, FS_PT_Lo_Slot, 1);
+      Put_Hex (R); Put_String (ASCII.CR & ASCII.LF);
+      if R /= 0 then return 2; end if;
+
+      R := ASID_Pool_Assign (ASID_Pool, FS_PML4_Slot);
+      if R /= 0 then Put_String ("[FS] ASID assign FAIL" & ASCII.CR & ASCII.LF); return 2; end if;
+
+      R := PDPT_Map (FS_PDPT_Slot, FS_PML4_Slot, 0);
+      if R /= 0 then Put_String ("[FS] PDPTMap FAIL" & ASCII.CR & ASCII.LF); return 2; end if;
+      R := Page_Directory_Map (FS_PD_Slot, FS_PML4_Slot, 0);
+      if R /= 0 then Put_String ("[FS] PDMap FAIL" & ASCII.CR & ASCII.LF); return 2; end if;
+      R := Page_Table_Map (FS_PT_Lo_Slot, FS_PML4_Slot, 16#400000#);
+      if R /= 0 then Put_String ("[FS] PTLoMap FAIL" & ASCII.CR & ASCII.LF); return 2; end if;
+
+      -- Mint + map user image frames into FS PML4 (shared with root, same as Net).
+      Frame := BI.all.User_Image_Frames_Start;
+      VAddr := 16#400000#;
+      I := 0;
+      while Frame < BI.all.User_Image_Frames_End loop
+         R := CNode_Mint (CNode_Slot, FS_Image_Frame_Base + I, 64,
+                          CNode_Slot, Frame, 64, 16#F#, 0);
+         if R /= 0 then Put_String ("[FS] ImgMint FAIL" & ASCII.CR & ASCII.LF); return 2; end if;
+         R := Page_Map (FS_Image_Frame_Base + I, FS_PML4_Slot, VAddr);
+         if R /= 0 then Put_String ("[FS] ImgMap FAIL" & ASCII.CR & ASCII.LF); return 2; end if;
+         Frame := Frame + 1;
+         VAddr := VAddr + 16#1000#;
+         I := I + 1;
+      end loop;
+
+      -- Map IPC frame @ 0x530000 (above image, above Net's 0x510000, shared @ 0x520000).
+      R := Page_Map (FS_IPC_Slot, FS_PML4_Slot, FS_IPC_VAddr);
+      if R /= 0 then Put_String ("[FS] IpcMap FAIL" & ASCII.CR & ASCII.LF); return 2; end if;
+
+      -- Block D: CSpace mints (EP, badged fault, Reply).
+      Put_String ("[FS] mint fs_ep... ");
+      R := CNode_Mint (FS_CSpace_Slot, FS_EP_Cn, FS_CSpace_Bits,
+                       CNode_Slot, FS_EP_Slot, Root_CNode_Depth, 16#F#, 0);
+      Put_Hex (R); Put_String (ASCII.CR & ASCII.LF);
+      if R /= 0 then return 2; end if;
+
+      Put_String ("[FS] mint badged fault (root@4146)... ");
+      R := CNode_Mint (CNode_Slot, FS_Fault_Root_Slot, Root_CNode_Depth,
+                       CNode_Slot, Root_Fault_EP_Slot, Root_CNode_Depth, 16#F#, 16#E3#);
+      Put_Hex (R); Put_String (ASCII.CR & ASCII.LF);
+      if R /= 0 then return 2; end if;
+
+      R := Setup_MCS_Thread (BI.all.SchedControl_Start, UT_SC, UT_REPLY,
+                             FS_SC_Slot, FS_Reply_Slot, FS_TCB_Slot,
+                             NetServer_Budget_Us, NetServer_Period_Us, 4);
+      if R /= 0 then Put_String ("[FS] Setup_MCS FAIL" & ASCII.CR & ASCII.LF); return 2; end if;
+
+      Put_String ("[FS] mint reply... ");
+      R := CNode_Mint (FS_CSpace_Slot, FS_Reply_Cn, FS_CSpace_Bits,
+                       CNode_Slot, FS_Reply_Slot, Root_CNode_Depth, 16#F#, 0);
+      Put_Hex (R); Put_String (ASCII.CR & ASCII.LF);
+      if R /= 0 then return 2; end if;
+
+      -- Block E: TCB setup + resume.
+      R := TCB_Set_Fault_Handler (FS_TCB_Slot, FS_Fault_Root_Slot,
+                                   FS_CSpace_Slot, 0, FS_PML4_Slot, 0);
+      if R /= 0 then Put_String ("[FS] SetSpace FAIL" & ASCII.CR & ASCII.LF); return 2; end if;
+
+      R := TCB_Set_IPC_Buffer (FS_TCB_Slot, FS_IPC_Slot, FS_IPC_VAddr);
+      if R /= 0 then Put_String ("[FS] SetIPCBuffer FAIL" & ASCII.CR & ASCII.LF); return 2; end if;
+
+      R := TCB_Write_Registers (FS_TCB_Slot, FsDaemon_Entry_Addr, FsDaemon_Stack_Addr);
+      if R /= 0 then Put_String ("[FS] WriteRegs FAIL" & ASCII.CR & ASCII.LF); return 2; end if;
+
+      declare
+         procedure Set_FS_EP (EP : Word)
+           with Import, Convention => C, External_Name => "schild_set_fs_endpoint";
+         procedure Set_FS_Reply (Rpl : Word)
+           with Import, Convention => C, External_Name => "schild_set_fs_reply";
+      begin
+         Set_FS_EP (FS_EP_CPtr);
+         Set_FS_Reply (FS_Reply_CPtr);
+      end;
+
+      R := TCB_Resume (FS_TCB_Slot);
+      if R /= 0 then Put_String ("[FS] Resume FAIL" & ASCII.CR & ASCII.LF); return 2; end if;
+
+      -- Block F: blocking IPC Call(init) — same pattern as NetServer. Guarantees
+      -- FS daemon gets CPU (Call blocks root task until Reply). If daemon did
+      -- not start, Call hangs (diagnostic: no reply, then timeout kill).
+      Put_String ("[FS] IPC Call (init)... ");
+      R := Call_IPC (FS_EP_Slot, 0, 0);
+      Put_Hex (R); Put_String (ASCII.CR & ASCII.LF);
+      Put_String ("[FS] Reply status: ");
+      Put_Hex (Read_IPC_MR0); Put_String (ASCII.CR & ASCII.LF);
+
+      -- Confirm alive flag was set by the daemon (sanity check).
+      Alive := Get_FS_Alive;
+      Put_String ("[FS] alive flag: "); Put_Hex (Alive); Put_String (ASCII.CR & ASCII.LF);
+
+      if Alive = 16#01# then
+         Put_String ("[FS] daemon: OK" & ASCII.CR & ASCII.LF);
+         return 0;
+      else
+         Put_String ("[FS] daemon: FAILED (alive != 1)" & ASCII.CR & ASCII.LF);
+         return 4;
+      end if;
+   end Launch_FS_Daemon;
 
 end Schild_Sel4_Syscall;

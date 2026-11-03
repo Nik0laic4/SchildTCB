@@ -423,4 +423,26 @@ is
    function Launch_Config_Daemon return Word
      with Global => null;
 
+   -- Audit H65/H86 Stage 1: FS daemon (SchildFS + NVMe) in Ring 3.
+   -- Own CSpace/TCB/endpoint/SC/Reply, separate PML4 (NetServer pattern).
+   -- Slots +44..+50 (MLS rings use +34..+43, free from +44).
+   FS_EP_Slot          : constant Cap_Ref := Slot_Base + 64;  -- 4160
+   FS_TCB_Slot         : constant Cap_Ref := Slot_Base + 65;  -- 4161
+   FS_IPC_Slot         : constant Cap_Ref := Slot_Base + 66;  -- 4162
+   FS_CSpace_Slot      : constant Cap_Ref := Slot_Base + 67;  -- 4163
+   FS_SC_Slot          : constant Cap_Ref := Slot_Base + 68;  -- 4164
+   FS_Reply_Slot       : constant Cap_Ref := Slot_Base + 69;  -- 4165
+   FS_Fault_Root_Slot  : constant Cap_Ref := Slot_Base + 70;  -- 4166
+   FS_PML4_Slot        : constant Cap_Ref := Slot_Base + 71;  -- 4167
+   FS_PDPT_Slot        : constant Cap_Ref := Slot_Base + 72;  -- 4168
+   FS_PD_Slot          : constant Cap_Ref := Slot_Base + 73;  -- 4169
+   FS_PT_Lo_Slot       : constant Cap_Ref := Slot_Base + 74;  -- 4170
+   -- FS image frames live above Net image (Net starts +128, ~60 frames;
+   -- +256 = 4352 leaves a 66-slot gap, no collision with Net or MMIO_Frame_Base).
+   -- FS image frames live above Net image (Net starts +128, ~60 frames).
+   FS_Image_Frame_Base : constant Cap_Ref := Slot_Base + 256;  -- 4352
+
+   function Launch_FS_Daemon return Word
+     with Global => null;
+
 end Schild_Sel4_Syscall;
