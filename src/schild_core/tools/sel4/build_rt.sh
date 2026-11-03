@@ -100,6 +100,7 @@ for spec in \
      ../../src/04_userland/schild_arp_handler \
      ../../src/04_userland/schild_ipv4_handler \
      ../../src/04_userland/schild_tcp_handler \
+     ../../src/04_userland/schild_http_core \
      ../../src/04_userland/schild_http_server \
      ../../src/04_userland/schild_schild_fs \
      ../../src/04_userland/schild_net_stack; do
@@ -168,6 +169,7 @@ done
     "$OBJ/schild_arp_handler.o" \
     "$OBJ/schild_ipv4_handler.o" \
     "$OBJ/schild_tcp_handler.o" \
+    "$OBJ/schild_http_core.o" \
     "$OBJ/schild_http_server.o" \
     "$OBJ/schild_schild_fs.o" \
     "$OBJ/schild_net_stack.o" \
