@@ -428,6 +428,8 @@ package body Schild_E1000e with SPARK_Mode => Off is
    begin
       if not Ready then return; end if;
       if Len > TX_BUF_SIZE then return; end if;
+      -- Audit H55: Data'Length must be >= Len to avoid OOB read below.
+      if Integer (Len) > Data'Length then return; end if;
 
       -- Wait for descriptor availability with timeout (prevents infinite hang)
       -- DD bit (status bit 0): 0 = owned by hardware, 1 = done/free
@@ -501,7 +503,12 @@ package body Schild_E1000e with SPARK_Mode => Off is
          Pkt_Len : constant Unsigned_16 := Rx_Ring (Integer (Idx)).Len;
          Copy_Len : constant Integer := Integer (Unsigned_16'Min (Pkt_Len, Unsigned_16 (Buf'Length)));
       begin
-         Len := Pkt_Len;
+         -- Audit H54: Pkt_Len comes from the DMA descriptor written by the
+         -- device. A malicious/buggy NIC (P3) can set it to 65535; returning
+         -- that raw value would let the caller (net_stack.Handle_Ipv4) index
+         -- past Rx_Buf. Clamp Len to Copy_Len so Len <= Buf'Length always holds.
+         -- Audit H58: Len reflects bytes copied, not raw descriptor length.
+         Len := Unsigned_16 (Copy_Len);
          for I in 0 .. Copy_Len - 1 loop
             Buf (Buf'First + I) := Rx_Buf (Integer (Idx), I);
          end loop;

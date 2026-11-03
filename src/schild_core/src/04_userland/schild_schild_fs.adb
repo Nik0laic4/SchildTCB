@@ -188,6 +188,9 @@ package body Schild_Schild_Fs with SPARK_Mode => Off is
    begin
       Success := False; File.Valid := False;
       if not Mounted then return; end if;
+      -- Audit H42: Ent.Name is String (1 .. 24). Name must be 1-based;
+      -- a sliced Name (Name'First /= 1) would index Ent.Name OOB.
+      if Name'First /= 1 then return; end if;
       for I in 0 .. Integer (Entry_Count) - 1 loop
          Match := True;
          declare
@@ -228,6 +231,9 @@ package body Schild_Schild_Fs with SPARK_Mode => Off is
       Read_OK   : Boolean;
    begin
       Len := 0; Success := False;
+      -- Audit H43: the copy loop indexes Buf by 0-based Copied; reject
+      -- non-0-based Buf to prevent OOB.
+      if Buf'First /= 0 then return; end if;
       if not File.Valid or File.Curr_Off >= File.Size then return; end if;
       Remaining := File.Size - File.Curr_Off;
       if Buf_Size < Remaining then To_Read := Buf_Size;
@@ -393,6 +399,9 @@ package body Schild_Schild_Fs with SPARK_Mode => Off is
       Success := False;
       if Strict_Read_Only then return; end if;
       if not File.Valid then return; end if;
+      -- Audit H52: copy loop indexes Data by 0-based D_Pos; reject
+      -- non-0-based Data to prevent OOB.
+      if Data'First /= 0 then return; end if;
       if Wr_Pos + Unsigned_32 (Data'Length) > File.Size then return; end if;
       while D_Pos < Unsigned_32 (Data'Length) loop
          LBA_Off := File.Start_LBA + (Wr_Pos / 512);
