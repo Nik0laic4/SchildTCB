@@ -418,3 +418,24 @@ residuals or assumptions, not as code bugs. They remain open in the registry
 with status "documented in TM §12" until either (a) code mitigates or
 (b) inline integration into §3-§11.
 
+
+### 12.10 FS hardening + threat model refinement (audit v0.7, 2026-11-03)
+
+**Source:** developer notes + audit cross-check. Half of these were already in §12; the rest are new.
+
+**C-§3.2 AI-axis (concretize).** Split T1 into T1a (single malformed packet, parser memory safety — proven) and T1b (fuzzing-for-race, sequence of legitimate packets targeting connection state / parser state interactions). T1b is the AI-agent fuzzing scenario; not proven, contained by NetServer Ring 3 isolation.
+
+**C-§7 T14 (PID reuse).** Moved from §8.8 residual into the threat table as T14. Threat: P2 sends signal or IPC to a PID that was just recycled by an unrelated process. Status: **deferred to v0.2.0** (design in progress: monotonic PID or reuse delay; capability-based identity preferred long-term). Tracked in audit registry as M1.
+
+**C-§7 T15 (FS metadata tamper, HMAC key placement).** The FS metadata is protected by CRC32 (integrity, not authenticity). P3 (malicious NVMe via DMA) or P4 (write access to disk) can tamper and recompute CRC32. Moving to HMAC-SHA256 requires answering: where does the key live? (a) NetServer (Tier B) — P2 can read it; HMAC protects only against P3. (b) Root task (Tier A) — FS must migrate to Tier A or verify HMAC over IPC per block. (c) Hardware key store — not available (no TPM, no HWRoT). Until decided, FS metadata tamper remains accepted residual (R18). Audit H61.
+
+**C-§8 R16 (signed boot without HWRoT).** P4 with write access to the disk can recompute SHA-256. Without TPM/HWRoT there is no defence. Accepted architectural risk. Boot counter lockout (W9.1) limits availability damage from bad slots, not integrity from malicious P4. This was already stated in §8.4; explicitly restated here as accepted.
+
+**C-§8 R17 (path traversal — architectural mitigation).** `SchildFS.Open` searches by name in a flat `Root_Dir (0..15)` table; there is no hierarchy. `GET /../../etc/passwd` yields a name that matches nothing → 404. Architecturally closed, not mathematically proven. If the FS ever gains directory hierarchy, re-analyze. Audit H20 → CLOSED (architectural).
+
+**C-§8 R18 (FS metadata tamper).** See T15. CRC32 detects corruption, not tampering. Accepted until HMAC key placement is decided.
+
+**C-§9 (patches scope).** Clarify §9's local patches: they do NOT touch the capability model or the scheduler. They DO touch object lifecycle (`seL4-object-zeroing.patch`, security-relevant: uninit memory disclosure) and kernel memory layout (`seL4-bootinfo-8k-untyped.patch`). AS8 applies: if `object-zeroing` or `bootinfo-8k` introduces a defect, kernel memory disclosure is possible; containment depends on seL4's capability model remaining intact (which patches do not touch). Audit H10 remains open, but its scope is narrowed: patches affect object lifecycle and memory layout, not capability model or scheduler.
+
+**C-§9 AS6 refinement.** `Schild_Sel4_Syscall` body is Off (1475 lines). The syscall seam is the largest single trusted component. Mitigations in queue (audit C4): memory-safe C shim, fuzzing of ABI mapping, formal ABI specification. Not fixed in v0.1.0.
+
