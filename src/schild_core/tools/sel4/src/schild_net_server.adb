@@ -63,7 +63,12 @@ package body Schild_Net_Server with SPARK_Mode => Off is
       Schild_Schild_Fs.Init (FS_OK);
       if FS_OK then
          C_Putln (Msg_FS1'Address, Msg_FS1'Length);
-         Schild_Schild_Fs.Create_File ("test.txt", 512, OK);
+         -- Audit H77: open first, create only if missing. Prevents per-boot
+         -- duplicate test.txt files that fill the FS and mask H74.
+         Schild_Schild_Fs.Open ("test.txt", F, OK);
+         if not OK then
+            Schild_Schild_Fs.Create_File ("test.txt", 512, OK);
+         end if;
          if OK then
             C_Putln (Msg_FS2'Address, Msg_FS2'Length);
             Schild_Schild_Fs.Open ("test.txt", F, OK);
