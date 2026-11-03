@@ -46,7 +46,7 @@ package body Schild_Net_Server with SPARK_Mode => Off is
       Buf    : Schild_Schild_Fs.Unsigned_8_Array (0 .. 31);
       Len    : Unsigned_32;
       Msg_FS1 : constant String := "[NVFS] Init OK";
-      Msg_FS2 : constant String := "[NVFS] Create test.txt OK";
+      Msg_FS2 : constant String := "[NVFS] test.txt ready";
       Msg_FS3 : constant String := "[NVFS] Write OK";
       Msg_FS4 : constant String := "[NVFS] Read-back VERIFY OK";
    begin
