@@ -103,7 +103,8 @@ for spec in \
      ../../src/04_userland/schild_http_core \
      ../../src/04_userland/schild_http_server \
      ../../src/04_userland/schild_schild_fs \
-     ../../src/04_userland/schild_net_stack; do
+     ../../src/04_userland/schild_net_stack \
+     src/schild_fs_server; do
     b="$(basename "$spec")"
     if ! "$TOOL/gcc" -c --RTS="$(pwd)/../../bare_runtime" -gnat2022 -gnatwa -gnato -gnatVa -g -O0 "${PREFIX_MAP_ADA[@]}" \
         $DRV_INC -o "$OBJ/${b}.o" "${spec}.adb" 2>&1; then
@@ -173,6 +174,7 @@ done
     "$OBJ/schild_http_server.o" \
     "$OBJ/schild_schild_fs.o" \
     "$OBJ/schild_net_stack.o" \
+    "$OBJ/schild_fs_server.o" \
     "$OBJ/schild_net_config.o" \
     "$OBJ/schild_sel4_syscalls.o" \
     "$OBJ/mls_server.o" \
