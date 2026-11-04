@@ -108,8 +108,9 @@ unsigned char schild_nvme_read_acq(unsigned int off) {
     (void)off; return 0;
 }
 
-/* W7: NVMe MMIO base vaddr (0 = storage disabled). Set by the Root Task after
- * mapping the NVMe BAR0 into the NetServer VSpace; read by schild_nvme_init. */
+/* W7/H86: NVMe MMIO base vaddr (0 = storage disabled). Set by the Root Task
+ * after mapping the NVMe BAR0 into the FS daemon VSpace; read by
+ * Schild_Fs_Server.Fs_Init ("schild_fs_init"). */
 static unsigned long long nvme_mmio_base = 0;
 void schild_nvme_set_mmio(unsigned long long base) { nvme_mmio_base = base; }
 unsigned long long schild_nvme_get_mmio(void) { return nvme_mmio_base; }

@@ -23,6 +23,9 @@ extern volatile u64 schild_recv_mr[4];
 extern volatile u64 schild_reply_mr[4];
 extern volatile u64 fs_daemon_alive_flag;
 
+/* Audit H86: Ada export of Schild_Fs_Server.Fs_Init (nvme + SchildFS mount). */
+extern long long schild_fs_init(void);
+
 _Static_assert(sizeof(schild_recv_mr) == SCHILD_IPC_MR_BYTES,  "recv MR window must be 32 bytes");
 _Static_assert(sizeof(schild_reply_mr) == SCHILD_IPC_MR_BYTES, "reply MR window must be 32 bytes");
 
@@ -48,9 +51,10 @@ void fs_daemon_main(void) {
         int fault_after_reply = 0;
 
         if (op == 0) {
-            /* Stage 1 Init: no NVMe yet (Stage 2 will add NVMe ownership).
-             * Report St_Ok (0) so the root task Call(init) returns cleanly. */
-            result = 0;
+            /* Audit H86: the FS daemon is the single NVMe owner.  Init runs
+             * here (NVMe MMIO was mapped into this VSpace by the root task),
+             * and its status is what the root task's Call(init) receives. */
+            result = (u64) schild_fs_init();
         } else if (op == 99) {
             /* Crash-containment test: reply first, then fault on unmapped
              * 0xFFFFF000 so seL4 delivers a #PF to the FS fault endpoint. */

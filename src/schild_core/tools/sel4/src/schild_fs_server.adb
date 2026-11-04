@@ -16,11 +16,18 @@ package body Schild_Fs_Server with SPARK_Mode => Off is
    function C_Nvme_Get_Mmio return Unsigned_64;
    pragma Import (C, C_Nvme_Get_Mmio, "schild_nvme_get_mmio");
 
+   procedure C_Putln (Addr : System.Address; Len : Integer);
+   pragma Import (C, C_Putln, "schild_uart_putln");
+
    Initialized : Boolean := False;
 
    function Fs_Init return Unsigned_32 is
       MMIO_Base : Unsigned_64;
       Ok        : Boolean;
+      Msg_Mount : constant String := "[NVFS] Init OK";
+      Msg_Ready : constant String := "[NVFS] test.txt ready";
+      Msg_Write : constant String := "[NVFS] Write OK";
+      Msg_Read  : constant String := "[NVFS] Read-back VERIFY OK";
    begin
       MMIO_Base := C_Nvme_Get_Mmio;
       if MMIO_Base = 0 then
@@ -31,6 +38,44 @@ package body Schild_Fs_Server with SPARK_Mode => Off is
       if not Ok then
          return St_Not_Mounted;
       end if;
+      C_Putln (Msg_Mount'Address, Msg_Mount'Length);
+
+      -- Audit H86: the storage self-test moved here from NetServer, because
+      -- this daemon is now the single NVMe owner.  The run_tests markers must
+      -- describe what the owner did, not what the former owner used to do.
+      declare
+         F    : Schild_Schild_Fs.File_Info;
+         Buf  : Schild_Schild_Fs.Unsigned_8_Array (0 .. 31);
+         Len  : Unsigned_32;
+         Data : constant Schild_Schild_Fs.Unsigned_8_Array (0 .. 511) :=
+           (0=>78,1=>101,2=>118,3=>97,4=>79,5=>83,
+            6=>32,7=>119,8=>114,9=>105,10=>116,11=>101,
+            12=>115,13=>116,14=>33,15=>10, others=> 0);
+      begin
+         -- Audit H77: open first, create only if missing.
+         Schild_Schild_Fs.Open ("test.txt", F, Ok);
+         if not Ok then
+            Schild_Schild_Fs.Create_File ("test.txt", 512, Ok);
+         end if;
+         if Ok then
+            C_Putln (Msg_Ready'Address, Msg_Ready'Length);
+            Schild_Schild_Fs.Open ("test.txt", F, Ok);
+            if Ok then
+               Schild_Schild_Fs.Write_File (F, Data, Ok);
+               if Ok then
+                  C_Putln (Msg_Write'Address, Msg_Write'Length);
+                  F.Curr_Off := 0;
+                  Schild_Schild_Fs.Read (F, Buf, Len, Ok);
+                  if Ok and then Len >= 2
+                    and then Buf (0) = 78 and then Buf (1) = 101
+                  then
+                     C_Putln (Msg_Read'Address, Msg_Read'Length);
+                  end if;
+               end if;
+            end if;
+         end if;
+      end;
+
       Initialized := True;
       return St_Ok;
    end Fs_Init;

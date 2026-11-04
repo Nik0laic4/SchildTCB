@@ -615,6 +615,20 @@ is
    -- W7: NVMe storage discovery (ECAM) for the seL4 NetServer.
    Nvme_BAR0   : Word := 0;
 
+   -- H86: what is left of the NIC device-untyped once the NIC frames are
+   -- retyped.  The FS daemon maps its NVMe frames from the same capability,
+   -- so the root task has to remember where the free region starts.
+   Nic_UT_Cap       : Cap_Ref := 0;
+   Nic_UT_PAddr     : Word := 0;
+   Nic_UT_Bits      : Word := 0;
+   Nic_UT_Rem_Start : Word := 0;
+
+   -- H86: first cap slot above the frames the NetServer MMIO window already
+   -- consumed.  The device untyped can span hundreds of frames (QEMU i440fx
+   -- maps the whole 16 MB PCI window), so the FS NVMe frames cannot use a
+   -- fixed slot range below MMIO_Frame_Base.
+   Next_Free_Slot : Cap_Ref := 0;
+
    Ecam_VAddr : constant Word := 16#0080_0000#;  -- root-VSpace vaddr (8 MiB, 2 MiB aligned)
 
    function MMIO_Read32 (Addr : Word) return Word
@@ -943,98 +957,16 @@ is
          if R /= 0 then Put_String ("[S8.2] MMIO map FAIL"); Put_Hex (R); Put_String (ASCII.CR & ASCII.LF); return 2; end if;
       end loop;
 
-      -- 8. W7: map the NVMe BAR0 (if discovered) into the NetServer VSpace.
-      --     On QEMU i440fx (no ECAM) Nvme_BAR0 = 0 and this is skipped; on the
-      --     T580 the NVMe lives in its own device-untyped region (like the NIC).
-      if Nvme_BAR0 > 0 then
-         declare
-            Nvme_Dev_UT  : Cap_Ref := 0;
-            Nvme_Offset  : Word := 0;
-            Nvme_Pages   : constant Word := 8;          -- 32 KB (BAR0 is 8 KB)
-            Nvme_VAddr   : constant Word := 16#620000#; -- next page after the NIC 32-page window
-            Nvme_Created : Word := 0;
-            Nvme_Slot    : Cap_Ref := Slot_Cur;         -- continue after the NIC frames
-            procedure Nvme_Set_Mmio (Base : Word)
-              with Import, Convention => C, External_Name => "schild_nvme_set_mmio";
-         begin
-            -- Case A: the NVMe shares the NIC's device-untyped (QEMU i440fx:
-            -- both in the PCI MMIO window).  The NIC retype left a remaining
-            -- untyped in Dev_UT starting at UT_PAddr + Total_Frames*0x1000.
-            declare
-               Rem_Start : constant Word := UT_PAddr + Total_Frames * 16#1000#;
-               Rem_End   : constant Word := UT_PAddr + Shift_Left (Word (1), Natural (UT_Size_Bits));
-            begin
-               if Nvme_BAR0 >= Rem_Start and then Nvme_BAR0 < Rem_End then
-                  Nvme_Dev_UT := Dev_UT;
-                  Nvme_Offset := (Nvme_BAR0 - Rem_Start) / 16#1000#;
-               end if;
-            end;
+      -- H86: remember the NIC untyped leftovers for the FS daemon's NVMe map.
+      Nic_UT_Cap       := Dev_UT;
+      Nic_UT_PAddr     := UT_PAddr;
+      Nic_UT_Bits      := UT_Size_Bits;
+      Nic_UT_Rem_Start := UT_PAddr + Total_Frames * 16#1000#;
+      Next_Free_Slot   := Slot_Cur;
 
-            -- Case B: a separate device-untyped (T580: NIC and NVMe in distinct
-            -- PCI windows).
-            if Nvme_Dev_UT = 0 then
-               for Idx in 1 .. N_UNTYPED loop
-                  if BI.all.Untyped_List (Idx).Size_Bits > 0
-                    and then BI.all.Untyped_List (Idx).Is_Device = 1
-                  then
-                     declare
-                        NP : constant Word := BI.all.Untyped_List (Idx).PAddr;
-                        NB : constant Word := Word (BI.all.Untyped_List (Idx).Size_Bits);
-                     begin
-                        if NB < 64 then
-                           declare
-                              Sz : constant Word := Shift_Left (Word (1), Natural (NB));
-                           begin
-                              if NP <= Nvme_BAR0 and then Nvme_BAR0 < NP + Sz then
-                                 Nvme_Dev_UT := BI.all.Untyped_Start + Word (Idx - 1);
-                                 Nvme_Offset := (Nvme_BAR0 - NP) / 16#1000#;
-                                 exit;
-                              end if;
-                           end;
-                        end if;
-                     end;
-                  end if;
-               end loop;
-            end if;
-
-            if Nvme_Dev_UT = 0 then
-               Put_String ("[W7] NVMe: no device-untyped for BAR0 (skip)" & ASCII.CR & ASCII.LF);
-            else
-               while Nvme_Created < Nvme_Offset + Nvme_Pages loop
-                  declare
-                     Chunk : constant Word := Word'Min (Fan_Out, Nvme_Offset + Nvme_Pages - Nvme_Created);
-                  begin
-                     R := Retype_Object (Nvme_Dev_UT, Object_Frame, 12, CNode_Slot, 0, Nvme_Slot, Chunk);
-                     if R /= 0 then
-                        Put_String ("[W7] NVMe retype FAIL"); Put_Hex (R); Put_String (ASCII.CR & ASCII.LF);
-                        exit;
-                     end if;
-                     Nvme_Created := Nvme_Created + Chunk;
-                     Nvme_Slot    := Nvme_Slot + Chunk;
-                  end;
-               end loop;
-
-               if Nvme_Created >= Nvme_Offset + Nvme_Pages then
-                  declare
-                     Nvme_Base : constant Cap_Ref := Slot_Cur;  -- first NVMe frame slot
-                  begin
-                     for J in 0 .. Nvme_Pages - 1 loop
-                        R := Page_Map (Nvme_Base + Nvme_Offset + Word (J), PML4_Slot,
-                                       Nvme_VAddr + Word (J) * 16#1000#);
-                        if R /= 0 then
-                           Put_String ("[W7] NVMe map FAIL"); Put_Hex (R); Put_String (ASCII.CR & ASCII.LF);
-                           exit;
-                        end if;
-                     end loop;
-                     Slot_Cur := Nvme_Slot;   -- advance past the NVMe frames
-                     Nvme_Set_Mmio (Nvme_VAddr);  -- tell the NetServer the MMIO base
-                     Put_String ("[W7] NVMe BAR0 mapped @0x"); Put_Hex (Nvme_VAddr);
-                     Put_String (ASCII.CR & ASCII.LF);
-                  end;
-               end if;
-            end if;
-         end;
-      end if;
+      -- H86: the NVMe BAR0 is no longer mapped into the NetServer VSpace.
+      -- Launch_FS_Daemon -> Map_Nvme_Into_FS maps it into the FS daemon and
+      -- makes that daemon the single owner of the controller.
 
       Put_String ("[S8.2] NetServer VSpace ready (image+IPC+MMIO)" & ASCII.CR & ASCII.LF);
       return 0;
@@ -1474,6 +1406,108 @@ is
     end Init_Mls_Rings;
 
    -- Audit H65/H86 Stage 1: FS daemon in separate PML4 (NetServer pattern).
+   -- H86: map the NVMe BAR0 into the FS daemon VSpace (ownership migration).
+   -- The NetServer used to map and initialize NVMe; two Init_MMIO on one
+   -- controller is a race.  Here the frames are retyped from the same
+   -- device-untyped the NIC used (continuing after the NIC frames) and mapped
+   -- at 0x620000 inside the FS daemon PML4.  Returns 0 when the controller is
+   -- absent or mapped, 1 on a hard failure.
+   function Map_Nvme_Into_FS (PML4 : Cap_Ref; Frames_Base : Cap_Ref) return Word is
+      BI         : constant BI_Access := Get_BootInfo;
+      Dev_UT     : Cap_Ref := 0;
+      Off_Frames : Word := 0;
+      Rem_Start  : Word := 0;
+      Pages      : constant Word := 8;             -- 32 KB (BAR0 is 8 KB)
+      VAddr      : constant Word := 16#620000#;
+      Created    : Word := 0;
+      Start      : constant Cap_Ref :=
+        (if Next_Free_Slot /= 0 then Next_Free_Slot else Frames_Base);
+      Slot       : Cap_Ref := Start;
+      R          : Word;
+      procedure Nvme_Set_Mmio (Base : Word)
+        with Import, Convention => C, External_Name => "schild_nvme_set_mmio";
+   begin
+      if Nvme_BAR0 = 0 then
+         Put_String ("[FS] NVMe: no BAR0 (storage disabled)" & ASCII.CR & ASCII.LF);
+         return 0;
+      end if;
+
+      -- Case A: same device-untyped as the NIC (QEMU i440fx style), continuing
+      -- after the NIC frames the root task already retyped.
+      if Nic_UT_Cap /= 0 and then Nic_UT_Bits < 64 then
+         declare
+            UT_End : constant Word :=
+              Nic_UT_PAddr + Shift_Left (Word (1), Natural (Nic_UT_Bits));
+         begin
+            if Nvme_BAR0 >= Nic_UT_Rem_Start and then Nvme_BAR0 < UT_End then
+               Dev_UT    := Nic_UT_Cap;
+               Rem_Start := Nic_UT_Rem_Start;
+            end if;
+         end;
+      end if;
+
+      -- Case B: a separate device-untyped (T580: NIC and NVMe in distinct
+      -- PCI windows).  Nothing was retyped from it yet, so it starts at PAddr.
+      if Dev_UT = 0 then
+         for Idx in 1 .. N_UNTYPED loop
+            if BI.all.Untyped_List (Idx).Size_Bits > 0
+              and then BI.all.Untyped_List (Idx).Size_Bits < 64
+              and then BI.all.Untyped_List (Idx).Is_Device = 1
+            then
+               declare
+                  NP : constant Word := BI.all.Untyped_List (Idx).PAddr;
+                  NB : constant Word := Word (BI.all.Untyped_List (Idx).Size_Bits);
+                  Sz : constant Word := Shift_Left (Word (1), Natural (NB));
+               begin
+                  if NP <= Nvme_BAR0 and then Nvme_BAR0 < NP + Sz then
+                     Dev_UT    := BI.all.Untyped_Start + Word (Idx - 1);
+                     Rem_Start := NP;
+                     exit;
+                  end if;
+               end;
+            end if;
+         end loop;
+      end if;
+
+      if Dev_UT = 0 then
+         Put_String ("[FS] NVMe: no device-untyped (storage disabled)" & ASCII.CR & ASCII.LF);
+         return 0;
+      end if;
+
+      Off_Frames := (Nvme_BAR0 - Rem_Start) / 16#1000#;
+      while Created < Off_Frames + Pages loop
+         declare
+            Chunk : constant Word := Word'Min (256, Off_Frames + Pages - Created);
+         begin
+            R := Retype_Object (Dev_UT, Object_Frame, 12, CNode_Slot, 0, Slot, Chunk);
+            if R /= 0 then
+               Put_String ("[FS] NVMe retype FAIL"); Put_Hex (R);
+               Put_String (ASCII.CR & ASCII.LF);
+               return 1;
+            end if;
+            Created := Created + Chunk;
+            Slot    := Slot + Chunk;
+         end;
+      end loop;
+
+      Next_Free_Slot := Slot;
+
+      for J in 0 .. Pages - 1 loop
+         R := Page_Map (Start + Off_Frames + Word (J), PML4,
+                        VAddr + Word (J) * 16#1000#);
+         if R /= 0 then
+            Put_String ("[FS] NVMe map FAIL"); Put_Hex (R);
+            Put_String (ASCII.CR & ASCII.LF);
+            return 1;
+         end if;
+      end loop;
+
+      Nvme_Set_Mmio (VAddr);
+      Put_String ("[FS] NVMe BAR0 mapped @0x"); Put_Hex (VAddr);
+      Put_String (ASCII.CR & ASCII.LF);
+      return 0;
+   end Map_Nvme_Into_FS;
+
    function Launch_FS_Daemon return Word is
       BI : constant BI_Access := Get_BootInfo;
       Min_Size_Bits : constant Word := 20;
@@ -1593,6 +1627,15 @@ is
       R := Page_Table_Map (FS_PT_Lo_Slot, FS_PML4_Slot, 16#400000#);
       if R /= 0 then Put_String ("[FS] PTLoMap FAIL" & ASCII.CR & ASCII.LF); return 2; end if;
 
+      -- H86: the NVMe BAR0 lives at 0x620000, outside the image PT, so the
+      -- FS VSpace needs its own page table for the 0x600000 window.
+      Put_String ("[FS] retype PT_Mmio@4171... ");
+      R := Retype_Object (UT_CN, Object_PageTable, 0, CNode_Slot, 0, FS_PT_Mmio_Slot, 1);
+      Put_Hex (R); Put_String (ASCII.CR & ASCII.LF);
+      if R /= 0 then return 2; end if;
+      R := Page_Table_Map (FS_PT_Mmio_Slot, FS_PML4_Slot, 16#600000#);
+      if R /= 0 then Put_String ("[FS] PTMmioMap FAIL" & ASCII.CR & ASCII.LF); return 2; end if;
+
       -- Mint + map user image frames into FS PML4 (shared with root, same as Net).
       Frame := BI.all.User_Image_Frames_Start;
       VAddr := 16#400000#;
@@ -1611,6 +1654,13 @@ is
       -- Map IPC frame @ 0x530000 (above image, above Net's 0x510000, shared @ 0x520000).
       R := Page_Map (FS_IPC_Slot, FS_PML4_Slot, FS_IPC_VAddr);
       if R /= 0 then Put_String ("[FS] IpcMap FAIL" & ASCII.CR & ASCII.LF); return 2; end if;
+
+      -- H86: NVMe ownership moves to the FS daemon.  The MMIO window must be
+      -- in its VSpace before Fs_Init runs (op=0 Call below).
+      if Map_Nvme_Into_FS (FS_PML4_Slot, FS_Nvme_Frame_Base) /= 0 then
+         Put_String ("[FS] NVMe mapping FAILED" & ASCII.CR & ASCII.LF);
+         return 3;
+      end if;
 
       -- Block D: CSpace mints (EP, badged fault, Reply).
       Put_String ("[FS] mint fs_ep... ");

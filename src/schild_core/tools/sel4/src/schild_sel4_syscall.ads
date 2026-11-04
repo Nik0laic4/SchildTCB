@@ -425,7 +425,8 @@ is
 
    -- Audit H65/H86 Stage 1: FS daemon (SchildFS + NVMe) in Ring 3.
    -- Own CSpace/TCB/endpoint/SC/Reply, separate PML4 (NetServer pattern).
-   -- Slots +44..+50 (MLS rings use +34..+43, free from +44).
+   -- Slots +64..+75: above the MLS ring objects (+34..+53), so a future daemon
+   -- cannot repeat the v0.19 collision (`Slot #4140 non-empty`).
    FS_EP_Slot          : constant Cap_Ref := Slot_Base + 64;  -- 4160
    FS_TCB_Slot         : constant Cap_Ref := Slot_Base + 65;  -- 4161
    FS_IPC_Slot         : constant Cap_Ref := Slot_Base + 66;  -- 4162
@@ -437,10 +438,16 @@ is
    FS_PDPT_Slot        : constant Cap_Ref := Slot_Base + 72;  -- 4168
    FS_PD_Slot          : constant Cap_Ref := Slot_Base + 73;  -- 4169
    FS_PT_Lo_Slot       : constant Cap_Ref := Slot_Base + 74;  -- 4170
-   -- FS image frames live above Net image (Net starts +128, ~60 frames;
-   -- +256 = 4352 leaves a 66-slot gap, no collision with Net or MMIO_Frame_Base).
-   -- FS image frames live above Net image (Net starts +128, ~60 frames).
+   -- H86: PT for the MMIO window at 0x600000 (NVMe BAR0 @ 0x620000).
+   FS_PT_Mmio_Slot     : constant Cap_Ref := Slot_Base + 75;  -- 4171
+   -- FS image frames live above the Net image (Net starts +128; the image is
+   -- ~98 frames today).  +256 = 4352 keeps a gap to MMIO_Frame_Base (+512).
    FS_Image_Frame_Base : constant Cap_Ref := Slot_Base + 256;  -- 4352
+   -- H86: fallback base for the NVMe BAR0 frame caps in the FS daemon VSpace.
+   -- In practice the root task continues from the dynamic Next_Free_Slot above
+   -- the NIC MMIO frames: the BAR0 can sit hundreds of frames into the shared
+   -- device-untyped, so a fixed window between +256 and +512 is too small.
+   FS_Nvme_Frame_Base  : constant Cap_Ref := Slot_Base + 1024;  -- fallback
 
    function Launch_FS_Daemon return Word
      with Global => null;

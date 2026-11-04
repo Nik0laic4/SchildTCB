@@ -11,12 +11,8 @@ package Schild_Net_Server with SPARK_Mode => Off is
    function Net_Init return Interfaces.Unsigned_32;
    pragma Export (C, Net_Init, "schild_net_init");
 
-   -- W7: initialize the NVMe storage (Init_MMIO at the pre-mapped base set by
-   -- the Root Task; 0 = storage disabled).  Returns 0 on success, non-zero on
-   -- failure.
-   function Net_Nvme_Init return Interfaces.Unsigned_32;
-   pragma Export (C, Net_Nvme_Init, "schild_nvme_init");
-
+   -- H86: NVMe initialization is no longer exported here.  The FS daemon
+   -- owns the controller (Schild_Fs_Server.Fs_Init, "schild_fs_init").
    -- Poll RX once.  Returns 0 (no packet) or 1 (packet received).
    function Net_Poll return Interfaces.Unsigned_32;
    pragma Export (C, Net_Poll, "schild_net_poll");

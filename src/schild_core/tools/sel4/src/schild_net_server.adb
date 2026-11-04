@@ -3,8 +3,6 @@ with System;
 with Interfaces;
 with Schild_E1000e;
 with Schild_Net_Stack;
-with Schild_Nvme;
-with Schild_Schild_Fs;
 with Schild_Audit_Logger; use Schild_Audit_Logger;
 with Schild_Config_Daemon; use Schild_Config_Daemon;
 
@@ -25,75 +23,13 @@ package body Schild_Net_Server with SPARK_Mode => Off is
          return 1;
       end if;
       Schild_Net_Stack.Init;
-      -- W7: initialize the NVMe storage (no-op if the Root Task mapped none).
-      if Net_Nvme_Init /= 0 then
-         return 2;
-      end if;
+      -- H86: NVMe is owned by the FS daemon now.  NetServer no longer maps the
+      -- BAR0 and never calls Init_MMIO (two inits on one controller race).
       return 0;
    end Net_Init;
 
-   function C_Nvme_Get_Mmio return Unsigned_64;
-   pragma Import (C, C_Nvme_Get_Mmio, "schild_nvme_get_mmio");
-
    procedure C_Putln (Addr : System.Address; Len : Integer);
    pragma Import (C, C_Putln, "schild_uart_putln");
-
-   function Net_Nvme_Init return Unsigned_32 is
-      MMIO_Base : Unsigned_64;
-      FS_OK  : Boolean;
-      F      : Schild_Schild_Fs.File_Info;
-      OK     : Boolean;
-      Buf    : Schild_Schild_Fs.Unsigned_8_Array (0 .. 31);
-      Len    : Unsigned_32;
-      Msg_FS1 : constant String := "[NVFS] Init OK";
-      Msg_FS2 : constant String := "[NVFS] test.txt ready";
-      Msg_FS3 : constant String := "[NVFS] Write OK";
-      Msg_FS4 : constant String := "[NVFS] Read-back VERIFY OK";
-   begin
-      MMIO_Base := C_Nvme_Get_Mmio;
-      if MMIO_Base = 0 then
-         return 0;  -- storage disabled (no NVMe mapped by the Root Task)
-      end if;
-      Schild_Nvme.Init_MMIO (MMIO_Base);
-      if not Schild_Nvme.Is_Ready then
-         return 1;
-      end if;
-
-      -- SchildFS write-path test (Create -> Open -> Write -> Read -> Verify).
-      Schild_Schild_Fs.Init (FS_OK);
-      if FS_OK then
-         C_Putln (Msg_FS1'Address, Msg_FS1'Length);
-         -- Audit H77: open first, create only if missing. Prevents per-boot
-         -- duplicate test.txt files that fill the FS and mask H74.
-         Schild_Schild_Fs.Open ("test.txt", F, OK);
-         if not OK then
-            Schild_Schild_Fs.Create_File ("test.txt", 512, OK);
-         end if;
-         if OK then
-            C_Putln (Msg_FS2'Address, Msg_FS2'Length);
-            Schild_Schild_Fs.Open ("test.txt", F, OK);
-            if OK then
-               declare
-                  Data : constant Schild_Schild_Fs.Unsigned_8_Array (0 .. 511) :=
-                    (0=>78,1=>101,2=>118,3=>97,4=>79,5=>83,
-                     6=>32,7=>119,8=>114,9=>105,10=>116,11=>101,
-                     12=>115,13=>116,14=>33,15=>10, others=> 0);
-               begin
-                  Schild_Schild_Fs.Write_File (F, Data, OK);
-                  if OK then
-                     C_Putln (Msg_FS3'Address, Msg_FS3'Length);
-                     F.Curr_Off := 0;
-                     Schild_Schild_Fs.Read (F, Buf, Len, OK);
-                     if OK and then Len >= 2 and then Buf (0) = 78 and then Buf (1) = 101 then
-                        C_Putln (Msg_FS4'Address, Msg_FS4'Length);
-                     end if;
-                  end if;
-               end;
-            end if;
-         end if;
-      end if;
-      return 0;
-   end Net_Nvme_Init;
 
    function Net_Poll return Unsigned_32 is
    begin
