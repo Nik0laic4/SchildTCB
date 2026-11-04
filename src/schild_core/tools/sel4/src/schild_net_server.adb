@@ -3,6 +3,7 @@ with System;
 with Interfaces;
 with Schild_E1000e;
 with Schild_Net_Stack;
+with Schild_Http_Server;
 with Schild_Audit_Logger; use Schild_Audit_Logger;
 with Schild_Config_Daemon; use Schild_Config_Daemon;
 
@@ -22,9 +23,11 @@ package body Schild_Net_Server with SPARK_Mode => Off is
       if not Schild_E1000e.Is_Ready then
          return 1;
       end if;
+      -- H86/H91: NVMe belongs to the FS daemon, so this process has no local
+      -- filesystem inside its VSpace.  Static HTTP requests must not reach the
+      -- FS body (it would read the unmapped BAR0 at 0x620000) and answer 503.
+      Schild_Http_Server.Set_Local_FS (False);
       Schild_Net_Stack.Init;
-      -- H86: NVMe is owned by the FS daemon now.  NetServer no longer maps the
-      -- BAR0 and never calls Init_MMIO (two inits on one controller race).
       return 0;
    end Net_Init;
 

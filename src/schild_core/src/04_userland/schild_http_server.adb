@@ -14,6 +14,17 @@ package body Schild_Http_Server with SPARK_Mode => Off is
    procedure C_Putln (Addr : System.Address; Len : Integer);
    pragma Import (C, C_Putln, "schild_uart_putln");
 
+   -- Audit H91: True in the standalone kernel (NVMe + SchildFS live in the same
+   -- address space).  False in the seL4 NetServer, where the FS daemon owns the
+   -- controller: the FS body would read 0x620000 in a VSpace that never mapped
+   -- it, so the request handler must not call it at all.
+   Local_FS : Boolean := True;
+
+   procedure Set_Local_FS (Enabled : Boolean) is
+   begin
+      Local_FS := Enabled;
+   end Set_Local_FS;
+
    -- Stage 9: network debug observability — C-bridge into the audit log.
    -- The real renderer lives in the NetServer runtime; the standalone kernel
    -- links a no-op stub, so the core build footprint stays at 182 objects.
@@ -51,6 +62,12 @@ package body Schild_Http_Server with SPARK_Mode => Off is
         & "Connection: close" & ASCII.CR & ASCII.LF
         & "Content-Length: 16" & ASCII.CR & ASCII.LF & ASCII.CR & ASCII.LF
         & "414 URI Too Long";
+      -- Audit H91: no local FS in this process (NVMe owned by the FS daemon).
+      Http_503 : constant String := "HTTP/1.0 503 Service Unavailable" & ASCII.CR & ASCII.LF
+        & "Content-Type: text/plain" & ASCII.CR & ASCII.LF
+        & "Connection: close" & ASCII.CR & ASCII.LF
+        & "Content-Length: 35" & ASCII.CR & ASCII.LF & ASCII.CR & ASCII.LF
+        & "503 static file service unavailable";
       Index_Html : constant String := "<html><body style='font-family:monospace'>"
         & "<h1>Schild TCB</h1>"
         & "<p>High-assurance research prototype (Ada/SPARK + seL4).</p>"
@@ -138,6 +155,16 @@ package body Schild_Http_Server with SPARK_Mode => Off is
          Schild_Http_Core.Write_U32_Dec (Reply_Buf, Idx, Unsigned_32 (Index_Html'Length));
          Schild_Http_Core.Write_Str (Reply_Buf, Idx, ASCII.CR & ASCII.LF & ASCII.CR & ASCII.LF);
          Schild_Http_Core.Write_Str (Reply_Buf, Idx, Index_Html);
+         Reply_Len := Unsigned_16 (Idx - Reply_Buf'First);
+         Success := True;
+         return;
+      end if;
+
+      -- Audit H91: the FS body is only usable when this process owns NVMe.
+      -- In the seL4 NetServer it does not, and touching SchildFS would fault on
+      -- the unmapped BAR0.  Answer 503 instead of lying with a 404 or crashing.
+      if not Local_FS then
+         Schild_Http_Core.Write_Str (Reply_Buf, Idx, Http_503);
          Reply_Len := Unsigned_16 (Idx - Reply_Buf'First);
          Success := True;
          return;
