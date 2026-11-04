@@ -1677,6 +1677,15 @@ is
          return 3;
       end if;
 
+      -- H92: map the shared DMA frame into the FS VSpace at 0x52A000, so the
+      -- Fs_* handlers can exchange name/bytes with the root task through the
+      -- same frame NetServer uses (access is serialized by the root task).
+      R := CNode_Mint (CNode_Slot, FS_Shared_Frame_Copy_Slot, Root_CNode_Depth,
+                       CNode_Slot, Shared_Frame_Slot, Root_CNode_Depth, 16#F#, 0);
+      if R /= 0 then Put_String ("[FS] SharedMint FAIL" & ASCII.CR & ASCII.LF); return 2; end if;
+      R := Page_Map (FS_Shared_Frame_Copy_Slot, FS_PML4_Slot, 16#52A000#);
+      if R /= 0 then Put_String ("[FS] SharedMap FAIL" & ASCII.CR & ASCII.LF); return 2; end if;
+
       -- Block D: CSpace mints (EP, badged fault, Reply).
       Put_String ("[FS] mint fs_ep... ");
       R := CNode_Mint (FS_CSpace_Slot, FS_EP_Cn, FS_CSpace_Bits,

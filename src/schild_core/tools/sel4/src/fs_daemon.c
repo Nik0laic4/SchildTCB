@@ -1,19 +1,19 @@
-/* Schild TCB — FS Daemon thread (audit H65/H86 Stage 1).
+/* Schild TCB — FS Daemon thread (audit H65/H86/H93).
  *
- * Stage 1 scope: thread live + Recv loop. All ops return EBADMSG.
- * Stage 2 will add dispatch to Ada exports (schild_fs_*).
- * Stage 3 will add NVMe ownership migration from NetServer (H86).
+ * Stage 1: thread live + Recv loop.  Stage 2 (H86): NVMe ownership moved here.
+ * Stage 3 (this file): full op dispatch to the Ada FS server (schild_fs_*).
  *
  * IPC buffer: dedicated 4KB frame at 0x530000 (set by Root Task).
- * MR layout (Stage 2+): MR[0]=op, MR[1..3]=args
+ * MR layout: MR[0]=op, MR[1..3]=args; Reply MR[0]=status (0=ok), MR[1..3]=result.
  *   op 0 = Init, 1 = Open, 2 = Read, 3 = Write, 4 = Create, 5 = Append,
- *   6 = Get_Entry, 7 = Is_Mounted, 8 = Is_Read_Only, 99 = fault injection (test)
- * Reply MR[0] = status (0=ok), MR[1..3] = result
+ *   6 = Get_Entry, 7 = Is_Mounted, 8 = Is_Read_Only, 99 = fault injection (test).
+ * Large data (name, bytes, dir entry) via the shared frame @ 0x52A000.
  */
 #include "ipc_limits.h"
 
 typedef unsigned long long u64;
 typedef          long long i64;
+typedef unsigned int       u32;
 extern i64 schild_sel4_recv(u64 src, u64 reply);
 extern i64 schild_sel4_replyrecv(u64 src, u64 info, u64 reply);
 extern i64 schild_sel4_reply_only(u64 reply, u64 info);
@@ -23,8 +23,16 @@ extern volatile u64 schild_recv_mr[4];
 extern volatile u64 schild_reply_mr[4];
 extern volatile u64 fs_daemon_alive_flag;
 
-/* Audit H86: Ada export of Schild_Fs_Server.Fs_Init (nvme + SchildFS mount). */
-extern long long schild_fs_init(void);
+/* Ada exports (Schild_Fs_Server, Convention C).  out-params are pointers. */
+extern u32 schild_fs_init(void);
+extern u32 schild_fs_open(u32 name_len, u32* handle, u32* size);
+extern u32 schild_fs_read(u32 handle, u32 offset, u32 len, u32* actual);
+extern u32 schild_fs_write(u32 handle, u32 offset, u32 len, u32* new_off);
+extern u32 schild_fs_create(u32 name_len, u32 size, u32* handle);
+extern u32 schild_fs_append(u32 name_len, u32 len, u32* new_size);
+extern u32 schild_fs_get_entry(u32 index);
+extern u32 schild_fs_is_mounted(void);
+extern u32 schild_fs_is_read_only(void);
 
 _Static_assert(sizeof(schild_recv_mr) == SCHILD_IPC_MR_BYTES,  "recv MR window must be 32 bytes");
 _Static_assert(sizeof(schild_reply_mr) == SCHILD_IPC_MR_BYTES, "reply MR window must be 32 bytes");
@@ -46,26 +54,72 @@ void fs_daemon_main(void) {
 
     for (;;) {
         u64 op = schild_recv_mr[0];
-        u64 result = SCHILD_EBADMSG;   /* Stage 1: all ops EBADMSG */
+        u64 a  = schild_recv_mr[1];
+        u64 b  = schild_recv_mr[2];
+        u64 c  = schild_recv_mr[3];
+        u64 result  = SCHILD_EBADMSG;
+        u64 result1 = 0;
         u64 result2 = 0;
+        u64 result3 = 0;
         int fault_after_reply = 0;
 
-        if (op == 0) {
-            /* Audit H86: the FS daemon is the single NVMe owner.  Init runs
-             * here (NVMe MMIO was mapped into this VSpace by the root task),
-             * and its status is what the root task's Call(init) receives. */
+        switch (op) {
+        case 0:  /* Init: NVMe + SchildFS mount (single owner, H86). */
             result = (u64) schild_fs_init();
-        } else if (op == 99) {
-            /* Crash-containment test: reply first, then fault on unmapped
-             * 0xFFFFF000 so seL4 delivers a #PF to the FS fault endpoint. */
+            break;
+        case 1: {  /* Open: name_len (name in shared), -> handle, size */
+            u32 h = 0, s = 0;
+            result = (u64) schild_fs_open((u32)a, &h, &s);
+            result1 = h; result2 = s;
+            break;
+        }
+        case 2: {  /* Read: handle, offset, len -> actual_len (bytes in shared) */
+            u32 act = 0;
+            result = (u64) schild_fs_read((u32)a, (u32)b, (u32)c, &act);
+            result1 = act;
+            break;
+        }
+        case 3: {  /* Write: handle, offset, len (bytes in shared) -> new_offset */
+            u32 no = 0;
+            result = (u64) schild_fs_write((u32)a, (u32)b, (u32)c, &no);
+            result1 = no;
+            break;
+        }
+        case 4: {  /* Create: name_len (name in shared), size -> handle */
+            u32 h = 0;
+            result = (u64) schild_fs_create((u32)a, (u32)b, &h);
+            result1 = h;
+            break;
+        }
+        case 5: {  /* Append: name_len (name in shared), len (bytes in shared) -> new_size */
+            u32 ns = 0;
+            result = (u64) schild_fs_append((u32)a, (u32)b, &ns);
+            result1 = ns;
+            break;
+        }
+        case 6:  /* Get_Entry: index -> status (Dir_Entry in shared) */
+            result = (u64) schild_fs_get_entry((u32)a);
+            break;
+        case 7:  /* Is_Mounted -> status */
+            result = (u64) schild_fs_is_mounted();
+            break;
+        case 8:  /* Is_Read_Only -> status (0 = writable) */
+            result = (u64) schild_fs_is_read_only();
+            break;
+        case 99: /* Crash-containment test: reply first, then fault on unmapped
+                  * 0xFFFFF000 so seL4 delivers a #PF to the FS fault endpoint. */
             result = 0;
             fault_after_reply = 1;
+            break;
+        default:
+            result = SCHILD_EBADMSG;
+            break;
         }
 
         schild_reply_mr[0] = result;
-        schild_reply_mr[1] = result2;
-        schild_reply_mr[2] = 0;
-        schild_reply_mr[3] = 0;
+        schild_reply_mr[1] = result1;
+        schild_reply_mr[2] = result2;
+        schild_reply_mr[3] = result3;
 
         if (fault_after_reply) {
             schild_sel4_reply_only(reply, 2ULL);

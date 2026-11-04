@@ -222,6 +222,13 @@ is
           Global => null,
           Pre => Dest > 0;
 
+   -- Call with four message registers (FS IPC contract: MR[0]=op, MR[1..3]=args).
+   function Call_IPC4 (Dest : Cap_Ref; MR0 : Word; MR1 : Word; MR2 : Word;
+                       MR3 : Word) return Word
+     with Import, Convention => C, External_Name => "schild_sel4_call4",
+          Global => null,
+          Pre => Dest > 0;
+
    function Read_IPC_MR0 return Word
      with Import, Convention => C, External_Name => "schild_read_ipc_mr0",
           Global => null;
@@ -440,6 +447,11 @@ is
    FS_PT_Lo_Slot       : constant Cap_Ref := Slot_Base + 74;  -- 4170
    -- H86: PT for the MMIO window at 0x600000 (NVMe BAR0 @ 0x620000).
    FS_PT_Mmio_Slot     : constant Cap_Ref := Slot_Base + 75;  -- 4171
+   -- H92: third copy of the shared DMA frame, mapped into the FS VSpace @
+   -- 0x52A000 so Fs_Open/Read/Write/Append can exchange name/bytes with the
+   -- root task.  Access is serialized by the single-threaded root task, so the
+   -- three VSpaces never touch the frame concurrently.
+   FS_Shared_Frame_Copy_Slot : constant Cap_Ref := Slot_Base + 76;  -- 4172
    -- FS image frames live above the Net image (Net starts +128; the image is
    -- ~98 frames today).  +256 = 4352 keeps a gap to MMIO_Frame_Base (+512).
    FS_Image_Frame_Base : constant Cap_Ref := Slot_Base + 256;  -- 4352

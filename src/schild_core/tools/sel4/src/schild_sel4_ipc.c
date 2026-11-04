@@ -346,6 +346,46 @@ u64 schild_read_ipc_mr1(void) {
     return schild_call_mr[1];
 }
 
+/* Read reply MR[2] / MR[3] after a Call (captured in R9 / R15). */
+u64 schild_read_ipc_mr2(void) {
+    return schild_call_mr[2];
+}
+u64 schild_read_ipc_mr3(void) {
+    return schild_call_mr[3];
+}
+
+/* Call with four message registers (FS IPC contract: MR[0]=op, MR[1..3]=args).
+ * Same register dance as schild_sel4_call, length=4. */
+i64 schild_sel4_call4(u64 dest, u64 mr0, u64 mr1, u64 mr2, u64 mr3) {
+    i64 r;
+    volatile u64 *b = (volatile u64*)schild_ipc_buf_addr;
+    b[1] = mr0;
+    b[2] = mr1;
+    b[3] = mr2;
+    b[4] = mr3;
+    register u64 _mr0 asm("r10") = mr0;
+    register u64 _mr1 asm("r8")  = mr1;
+    register u64 _mr2 asm("r9")  = mr2;
+    register u64 _mr3 asm("r15") = mr3;
+    u64 info = 4ULL;  /* length=4 */
+    __asm__ volatile(
+        "movq %%rbx,%%r12\n\t"
+        "movq %%rsp,%%rbx\n\t"
+        "movq $-1,%%rdx\n\t"
+        "syscall\n\t"
+        "movq %%rbx,%%rsp\n\t"
+        "movq %%r10,schild_call_mr+0(%%rip)\n\t"
+        "movq %%r8, schild_call_mr+8(%%rip)\n\t"
+        "movq %%r9, schild_call_mr+16(%%rip)\n\t"
+        "movq %%r15,schild_call_mr+24(%%rip)\n\t"
+        "movq %%r12,%%rbx"
+        : "=S"(r)
+        : "D"(dest), "S"(info),
+          "r"(_mr0), "r"(_mr1), "r"(_mr2), "r"(_mr3)
+        : "rdx","rcx","r11","r12","memory");
+    return r;
+}
+
 /* Read recv MR[0] captured by the Wait/Recv stub (e.g. the SC badge carried in
  * a timeout fault: seL4_Fault_Timeout puts the SC badge in MR[0]). */
 extern volatile u64 schild_recv_mr[4];

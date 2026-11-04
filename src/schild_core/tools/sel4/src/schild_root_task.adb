@@ -467,6 +467,27 @@ begin
       end if;
    end;
 
+   -- Stage 3 (H65/H82): FS dispatch smoke test.  op=7 (Is_Mounted) exercises the
+   -- fs_daemon.c dispatch -> Schild_Fs_Server.Fs_Is_Mounted round-trip; a reply
+   -- of St_Ok (0) proves the FS daemon serves ops beyond Init, and that the
+   -- shared frame / VSpace plumbing for large-data ops is in place.
+   if FS_EP_Slot > 0 then
+      declare
+         R : Word := Schild_Sel4_Syscall.Call_IPC (FS_EP_Slot, 7, 0);
+         M : Word := Schild_Sel4_Syscall.Read_IPC_MR0;
+      begin
+         if M = 0 then
+            Put_Str ("[FS] Is_Mounted: OK" & ASCII.CR & ASCII.LF);
+         else
+            Put_Str ("[FS] Is_Mounted: NOT mounted (status=");
+            Put_Hex (M);
+            Put_Str (", replyinfo=");
+            Put_Hex (R);
+            Put_Str (")" & ASCII.CR & ASCII.LF);
+         end if;
+      end;
+   end if;
+
    -- P1 (R10): IPC ping-pong benchmark — Call/Reply round-trip against the
    -- NetServer (op=4 = bench noop), timed with RDTSC. Probes the seL4
    -- Fastpath: round-trip cycles should drop when KernelFastpath=ON.

@@ -110,6 +110,7 @@ if [ "$SEL4_PRIMARY" = "1" ]; then
     "[HM] MLS server fault -> STOP"
     "[TIMEOUT] Caught budget overrun"
     "[FS] daemon: OK"
+    "[FS] Is_Mounted: OK"
     "[NVME] Init OK — queues ready"
     "[NVFS] Read-back VERIFY OK"
     "==== Root Task ready ===="
