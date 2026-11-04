@@ -106,6 +106,7 @@ if [ "$SEL4_PRIMARY" = "1" ]; then
     "[CONTAINMENT] MLS server contained"
     "[FAULT] Caught Config fault"
     "[CONTAINMENT] Config Daemon contained"
+    "[CONTAINMENT] FS daemon contained"
     "[HM] MLS server fault -> STOP"
     "[TIMEOUT] Caught budget overrun"
     "[FS] daemon: OK"

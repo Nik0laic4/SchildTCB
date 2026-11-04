@@ -24,6 +24,9 @@ package body Schild_Launch_Model with SPARK_Mode => On is
          when Config_Daemon =>
             S.Cfg_Launched := True;
             S.Cfg_Fault_EP := Fault_Slot;
+         when FS_Daemon =>
+            S.FS_Launched := True;
+            S.FS_Fault_EP := Fault_Slot;
       end case;
       S.Launched_Count := S.Launched_Count + 1;
    end Launch;

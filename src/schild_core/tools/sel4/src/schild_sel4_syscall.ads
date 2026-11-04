@@ -128,7 +128,7 @@ is
      with Global => null;
 
    -- Health Monitoring domains (ARINC 653 "fault -> action").
-   type HM_Domain is (HM_NetServer, HM_MLS, HM_Config_Daemon);
+   type HM_Domain is (HM_NetServer, HM_MLS, HM_Config_Daemon, HM_FS_Daemon);
 
    -- Restart the given faulted domain (TCBWriteRegisters + TCBResume).
    procedure Health_Monitor (Domain : HM_Domain)

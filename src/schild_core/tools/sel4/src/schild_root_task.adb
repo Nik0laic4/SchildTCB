@@ -31,6 +31,8 @@ procedure Schild_Root_Task with SPARK_Mode => On is
    MLS_Fault_Slot    : Schild_Sel4_Syscall.Cap_Ref := Schild_Sel4_Syscall.MLS_Fault_Slot;
    Config_EP_Slot    : Schild_Sel4_Syscall.Cap_Ref := Schild_Sel4_Syscall.Config_EP_Slot;
    Config_Fault_Slot : Schild_Sel4_Syscall.Cap_Ref := Schild_Sel4_Syscall.Config_Fault_Slot;
+   -- H93: FS daemon endpoint (fault arrives on Fault_Slot = Root_Fault_EP, badge 0xE3).
+   FS_EP_Slot        : Schild_Sel4_Syscall.Cap_Ref := Schild_Sel4_Syscall.FS_EP_Slot;
    -- B.6: shared timeout-fault endpoint (budget overrun -> seL4_Fault_Timeout).
    Timeout_EP_Slot   : Schild_Sel4_Syscall.Cap_Ref := Schild_Sel4_Syscall.Timeout_EP_Slot;
 begin
@@ -574,6 +576,27 @@ begin
       Schild_Sel4_Syscall.Health_Monitor (Schild_Sel4_Syscall.HM_Config_Daemon);
       Put_Str ("[CONTAINMENT] Config Daemon contained" & ASCII.CR & ASCII.LF);
    end;
+
+   -- H93: crash-containment for the FS daemon.  Its fault endpoint is a mint of
+   -- the root fault endpoint (badge 0xE3), so the #PF from op=99 is caught on
+   -- the same Wait as the NetServer fault (badge 0xE2) — the badge disambiguates.
+   if Fault_Slot > 0 then
+      Put_Str ("[CONTAINMENT] injecting fault into FS daemon (op=99)..." & ASCII.CR & ASCII.LF);
+      declare
+         R : Word := Schild_Sel4_Syscall.Call_IPC (FS_EP_Slot, 99, 0);
+      begin
+         null;
+      end;
+      declare
+         Badge : Word := Schild_Sel4_Syscall.Wait (Fault_Slot);
+      begin
+         Put_Str (ASCII.CR & ASCII.LF & "[FAULT] Caught FS fault — badge=0x");
+         Put_Hex (Badge);
+         Put_Str (" — restarting" & ASCII.CR & ASCII.LF);
+         Schild_Sel4_Syscall.Health_Monitor (Schild_Sel4_Syscall.HM_FS_Daemon);
+         Put_Str ("[CONTAINMENT] FS daemon contained" & ASCII.CR & ASCII.LF);
+      end;
+   end if;
 
    -- B.6: timeout-fault test.  Inject op=98 into the Config Daemon: it replies
    -- then spins to exhaust its sporadic scheduling-context budget; the kernel

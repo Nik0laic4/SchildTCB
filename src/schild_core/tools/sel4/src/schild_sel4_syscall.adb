@@ -59,6 +59,9 @@ is
    Cfg_TCB_Cap : Cap_Ref := 0;
    Cfg_Entry    : Word := 0;
    Cfg_Stack    : Word := 0;
+   FS_TCB_Cap   : Cap_Ref := 0;
+   FS_Entry     : Word := 0;
+   FS_Stack     : Word := 0;
 
    -- ARINC 653 Health Monitoring: 3-level fault model.  The escalation
    -- decision logic (process RESTART -> partition STOP -> module IDLE) is
@@ -91,6 +94,10 @@ is
             TCB := Cfg_TCB_Cap; Ent := Cfg_Entry; Stk := Cfg_Stack;
             M := Schild_HM_Model.HM_Config_Daemon;
             Put_String ("Config Daemon");
+         when HM_FS_Daemon =>
+            TCB := FS_TCB_Cap; Ent := FS_Entry; Stk := FS_Stack;
+            M := Schild_HM_Model.HM_FS_Daemon;
+            Put_String ("FS daemon");
       end case;
 
       -- Escalation decision is delegated to the SPARK-proved state machine.
@@ -1724,6 +1731,14 @@ is
       Put_String ("[FS] alive flag: "); Put_Hex (Alive); Put_String (ASCII.CR & ASCII.LF);
 
       if Alive = 16#01# then
+         -- H93: remember FS daemon TCB/entry/stack for Health Monitoring, and
+         -- record the launch in the two SPARK-proved models (HM + launch).
+         FS_TCB_Cap := FS_TCB_Slot;
+         FS_Entry    := FsDaemon_Entry_Addr;
+         FS_Stack    := FsDaemon_Stack_Addr;
+         Schild_HM_Model.Launch (HM_St, Schild_HM_Model.HM_FS_Daemon);
+         Schild_Launch_Model.Launch
+           (Launch_St, Schild_Launch_Model.FS_Daemon, Natural (FS_Fault_Root_Slot));
          Put_String ("[FS] daemon: OK" & ASCII.CR & ASCII.LF);
          return 0;
       else
