@@ -148,6 +148,14 @@ is
    MLS_Period_Us       : constant Word := 2_000;  -- round-robin
    Config_Budget_Us    : constant Word := 1_000;  -- config: smallest slice
    Config_Period_Us    : constant Word := 100_000;  -- sporadic (1% CPU) -> B.6 timeout
+   -- H90: the FS daemon drives NVMe by busy-wait polling (Fs_Init blocks in
+   -- Read_Block loops), so it must run round-robin (budget == period).  A
+   -- sporadic slice (5000/10000 = 50% CPU, the PRE_H86_CHECK mitigation) hangs
+   -- the mount on QEMU: the pre-empted poll never observes the completion, so
+   -- Call(init) never returns.  The real mitigation — a timeout on the
+   -- Persist Call in the root task — belongs to Stage 3 (H90 stays open).
+   FS_Budget_Us        : constant Word := 5_000;
+   FS_Period_Us        : constant Word := 5_000;
 
    -- Shared timeout-fault endpoint (B.6): each domain's TCB points here; when a
    -- sporadic budget is exhausted the kernel delivers a seL4_Fault_Timeout
@@ -1684,7 +1692,7 @@ is
 
       R := Setup_MCS_Thread (BI.all.SchedControl_Start, UT_SC, UT_REPLY,
                              FS_SC_Slot, FS_Reply_Slot, FS_TCB_Slot,
-                             NetServer_Budget_Us, NetServer_Period_Us, 4);
+                             FS_Budget_Us, FS_Period_Us, 4);
       if R /= 0 then Put_String ("[FS] Setup_MCS FAIL" & ASCII.CR & ASCII.LF); return 2; end if;
 
       Put_String ("[FS] mint reply... ");
