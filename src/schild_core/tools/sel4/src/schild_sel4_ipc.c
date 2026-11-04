@@ -393,6 +393,14 @@ u64 schild_read_recv_mr0(void) {
     return schild_recv_mr[0];
 }
 
+/* Root-side FS Append (Stage 3 / H82): Call(fs_ep, op=5, name_len, len).  The
+ * root task already placed the snapshot bytes into the shared frame at offset 0.
+ * Returns 1 iff the FS daemon replied St_Ok (0). */
+u64 schild_fs_append_ipc(u64 fs_ep, u64 name_len, u64 len) {
+    (void) schild_sel4_call4(fs_ep, 5ULL, name_len, len, 0ULL);
+    return (schild_call_mr[0] == 0ULL) ? 1ULL : 0ULL;
+}
+
 /* ─── Stage 8.3: e1000e IRQ via Notification ───────────────────────────── */
 
 /* IRQControl_GetIOAPIC (X86IRQIssueIRQHandlerIOAPIC, label=57, MCS):

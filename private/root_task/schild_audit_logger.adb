@@ -1,7 +1,7 @@
 -- Copyright (C) 2026 Alexander Irganov
 -- SPDX-License-Identifier: GPL-2.0-only
 
-with Schild_Schild_Fs;
+with System;
 
 package body Schild_Audit_Logger
   with SPARK_Mode => On
@@ -102,17 +102,28 @@ is
       Logger.Min_Severity := Min_Severity;
    end Initialize;
 
-   -- Persist the buffered audit trail to SchildFS ("audit.log"). Non-destructive
-   -- text snapshot (index-based read, does not advance Tail) so the live ring
-   -- stays intact for /debug. Survives a power loss thanks to SchildFS CRC.
+   -- Persist the buffered audit trail to SchildFS via the FS daemon (IPC).
+   -- Non-destructive text snapshot (index-based read, does not advance Tail).
+   -- The snapshot is written into the shared DMA frame and the FS daemon's
+   -- Append op writes it to audit.log.  Survives power loss (SchildFS CRC).
    procedure Persist_Audit_Log (Logger : in out Audit_Logger;
+                                FS_EP  : Unsigned_64;
                                 Persisted : out Boolean) with SPARK_Mode => Off is
-      use Schild_Schild_Fs;
-      Buf : Unsigned_8_Array (0 .. 8191) := (others => 0);
+      type Byte_Buf is array (Natural range <>) of Unsigned_8;
+      Buf : Byte_Buf (0 .. 8191) := (others => 0);
       Pos : Integer := 0;
-      F   : File_Info;
-      S   : Boolean;
       N   : Natural := Buffered_Events (Logger);
+      Len : Unsigned_32 := 0;
+
+      -- Copy the snapshot into the shared frame @ 0x52A000 (offset 0).
+      procedure Shared_Copy_To (Src : System.Address; Len : Unsigned_32);
+      pragma Import (C, Shared_Copy_To, "schild_shared_copy_to");
+
+      -- Root-side IPC: Call(fs_ep, op=Append, name_len=0, len) and report
+      -- success (reply status == St_Ok).  "audit.log" is the FS daemon's fixed
+      -- append target for now (H72 generic-name path deferred).
+      function C_FS_Append (FS_EP : Unsigned_64; Name_Len : Unsigned_32; Len : Unsigned_32) return Unsigned_32;
+      pragma Import (C, C_FS_Append, "schild_fs_append_ipc");
 
       procedure Put_Ch (C : Character) is
       begin
@@ -138,17 +149,6 @@ is
       end Put_U64;
    begin
       Persisted := False;
-      if not Is_Mounted then
-         Init (S);
-         if not S then return; end if;
-      end if;
-      Open ("audit.log", F, S);
-      if not S then
-         Create_File ("audit.log", 8192, S);
-         if not S then return; end if;
-         Open ("audit.log", F, S);
-         if not S then return; end if;
-      end if;
       Put_S ("audit: total="); Put_U64 (Logger.Event_Count);
       Put_S (" buffered="); Put_U64 (Unsigned_64 (N));
       Put_S (" overflows="); Put_U64 (Logger.Overflows);
@@ -168,8 +168,12 @@ is
          end;
       end loop;
       if Pos > 0 then
-         Write_File (F, Buf (0 .. Pos - 1), S);
-         Persisted := S;
+         -- H82/H72: the shared frame is 4 KB, so one Append transfers at most
+         -- 4096 bytes.  Full 8 KB capture is chunked append (H72, deferred).
+         Len := Unsigned_32 (Pos);
+         if Len > 4096 then Len := 4096; end if;
+         Shared_Copy_To (Buf (0)'Address, Len);
+         Persisted := (C_FS_Append (FS_EP, 0, Len) = 1);
       end if;
    end Persist_Audit_Log;
 

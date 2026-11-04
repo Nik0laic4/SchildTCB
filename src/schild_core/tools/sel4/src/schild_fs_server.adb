@@ -201,10 +201,33 @@ package body Schild_Fs_Server with SPARK_Mode => Off is
      (Name_Len : Unsigned_32; Len : Unsigned_32;
       New_Size : out Unsigned_32) return Unsigned_32
    is
-      pragma Unreferenced (Name_Len, Len);
+      pragma Unreferenced (Name_Len);
+      Buf : Schild_Schild_Fs.Unsigned_8_Array (0 .. 4095) := (others => 0);
+      F   : Schild_Schild_Fs.File_Info;
+      Ok  : Boolean;
+      L   : constant Unsigned_32 := (if Len > 4096 then 4096 else Len);
    begin
       New_Size := 0;
-      return St_Io_Error;
+      if not Initialized then return St_Not_Mounted; end if;
+      if Schild_Schild_Fs.Is_Read_Only then return St_Read_Only; end if;
+      -- H82: the audit log is the fixed append target for now (generic
+      -- name-in-shared is deferred with H72).  Snapshot semantics: open the
+      -- pre-allocated file and overwrite from offset 0; Write_File is bounded
+      -- by File.Size, so the file must already exist or be created here.
+      Schild_Schild_Fs.Open ("audit.log", F, Ok);
+      if not Ok then
+         Schild_Schild_Fs.Create_File ("audit.log", 8192, Ok);
+         if not Ok then return St_No_Space; end if;
+         Schild_Schild_Fs.Open ("audit.log", F, Ok);
+         if not Ok then return St_Io_Error; end if;
+      end if;
+      if L > 0 then
+         Shared_Copy_From (Buf (0)'Address, L);
+         Schild_Schild_Fs.Write_File (F, Buf (0 .. Integer (L) - 1), Ok);
+         if not Ok then return St_Io_Error; end if;
+      end if;
+      New_Size := L;
+      return St_Ok;
    end Fs_Append;
 
    function Fs_Get_Entry (Index : Unsigned_32) return Unsigned_32 is

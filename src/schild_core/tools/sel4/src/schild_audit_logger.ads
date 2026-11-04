@@ -68,10 +68,12 @@ is
    with
      Post => Logger.Event_Count = 0 and Logger.Overflows = 0;
 
-   -- Persist the buffered audit trail to SchildFS (power-loss survival).
-   -- I/O side effect; non-destructive (does not consume the ring).  Declared
+   -- Persist the buffered audit trail to SchildFS via the FS daemon (IPC).
+   -- FS_EP is the root task's capability to the FS daemon endpoint.  I/O side
+   -- effect; non-destructive (does not consume the ring).  Declared
    -- Global => null so it is callable from SPARK_Mode => On orchestration.
    procedure Persist_Audit_Log (Logger : in out Audit_Logger;
+                                FS_EP  : Unsigned_64;
                                 Persisted : out Boolean)
    with Global => null;
 

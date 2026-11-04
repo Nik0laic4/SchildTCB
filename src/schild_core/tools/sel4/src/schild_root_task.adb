@@ -35,6 +35,8 @@ procedure Schild_Root_Task with SPARK_Mode => On is
    FS_EP_Slot        : Schild_Sel4_Syscall.Cap_Ref := Schild_Sel4_Syscall.FS_EP_Slot;
    -- B.6: shared timeout-fault endpoint (budget overrun -> seL4_Fault_Timeout).
    Timeout_EP_Slot   : Schild_Sel4_Syscall.Cap_Ref := Schild_Sel4_Syscall.Timeout_EP_Slot;
+   -- H82: audit logger hoisted so Persist can run after the FS daemon launches.
+   AL : Audit_Logger;
 begin
    Get_BootInfo_Copy (BI, Unsigned_64 (BootInfo'Size / System.Storage_Unit));
    Put_Str (ASCII.CR & ASCII.LF);
@@ -243,7 +245,6 @@ begin
     -- == Stage 7.2: MLS Policy + Audit Logger ==
     declare
        MLS  : MLS_Daemon;
-       AL   : Audit_Logger;
     begin
        Initialize (MLS);
        Initialize (AL, Warning);  -- log Warning and above
@@ -305,18 +306,6 @@ begin
        Put_Str ("[S7.2] Audit: "); Put_Dec (AL.Event_Count);
        Put_Str (" events, "); Put_Dec (Unsigned_64 (Buffered_Events (AL)));
        Put_Str (" buffered" & ASCII.CR & ASCII.LF);
-
-       -- P1 (R9): persist the audit trail to SchildFS so it survives power loss.
-       declare
-          P : Boolean;
-       begin
-          Persist_Audit_Log (AL, P);
-          if P then
-             Put_Str ("[S7.2] Audit persisted to SchildFS (audit.log)" & ASCII.CR & ASCII.LF);
-          else
-             Put_Str ("[S7.2] Audit persistence unavailable (FS/NVMe not ready)" & ASCII.CR & ASCII.LF);
-          end if;
-       end;
     end;
 
    -- Stage 6: Fault handler init (FIRST — sets up IPC buffer for everyone)
@@ -484,6 +473,23 @@ begin
             Put_Str (", replyinfo=");
             Put_Hex (R);
             Put_Str (")" & ASCII.CR & ASCII.LF);
+         end if;
+      end;
+   end if;
+
+   -- H82: persist the audit trail now that the FS daemon owns NVMe and is
+   -- mounted (it ran at Stage 7.2 before storage was ready — that is exactly
+   -- why the old direct call silently failed).  Persist writes the snapshot
+   -- into the shared frame and the FS daemon appends it to audit.log.
+   if FS_EP_Slot > 0 then
+      declare
+         P : Boolean;
+      begin
+         Persist_Audit_Log (AL, Unsigned_64 (FS_EP_Slot), P);
+         if P then
+            Put_Str ("[S7.2] Audit persisted to SchildFS (audit.log)" & ASCII.CR & ASCII.LF);
+         else
+            Put_Str ("[S7.2] Audit persistence unavailable (FS daemon)" & ASCII.CR & ASCII.LF);
          end if;
       end;
    end if;
