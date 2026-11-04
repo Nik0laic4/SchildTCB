@@ -43,7 +43,14 @@ is
       Role_Static_Server,   --  Static file serving.
       Role_User_Worker,     --  User-space worker.
       Role_DB_Proxy,        --  Database proxy.
-      Role_DB_Engine);      --  Database engine.
+      Role_DB_Engine,       --  Database engine.
+      --  Audit H88: the FS daemon owns NVMe and holds the audit log, so it is
+      --  classified at the highest level, like the audit sink.  Consequence
+      --  (Bell-LaPadula): Internal clients may read from it (read-down), but
+      --  may not write to it (write-up is refused) — user-file writes need a
+      --  separate path or per-object levels.  The level is declared here; the
+      --  IPC gate that enforces it still does not exist (H88 open).
+      Role_FS_Server);
 
    --  Maps each server role to its MLS clearance level.
    type Role_Level_Map is array (Server_Role) of Security_Level;
@@ -62,7 +69,11 @@ is
       Role_Static_Server   => Level_Public,
       Role_User_Worker     => Level_Internal,
       Role_DB_Proxy        => Level_Confidential,
-      Role_DB_Engine       => Level_Secret);
+      Role_DB_Engine       => Level_Secret,
+      --  H88: FS daemon (NVMe + SchildFS + audit.log) — same clearance as the
+      --  audit sink.  Root task (Top_Secret) reads down; user workers (Internal)
+      --  may read, cannot write up.
+      Role_FS_Server       => Level_Top_Secret);
 
    -- ============================================================
    --  Bell-LaPadula access rules.
