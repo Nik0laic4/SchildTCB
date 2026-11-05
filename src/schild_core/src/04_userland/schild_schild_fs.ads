@@ -22,6 +22,7 @@ package Schild_Schild_Fs with SPARK_Mode => Off is
       Checksum     : Unsigned_32 := 0;   -- CRC32 over bytes 0..15 (header)
       Dir_Checksum : Unsigned_32 := 0;   -- CRC32 over the root-dir block
       Generation   : Unsigned_32 := 0;   -- monotonic commit counter (A/B)
+      Next_Free_LBA : Unsigned_32 := 0;  -- audit H74: persisted allocator state
    end record
      with Size => 512 * 8;  -- must fit in one 512-byte block
 
@@ -33,7 +34,8 @@ package Schild_Schild_Fs with SPARK_Mode => Off is
       Root_Entries at 12 range 0 .. 31;
       Checksum     at 16 range 0 .. 31;
       Dir_Checksum at 20 range 0 .. 31;
-      Generation   at 24 range 0 .. 31;
+      Generation    at 24 range 0 .. 31;
+      Next_Free_LBA at 28 range 0 .. 31;
    end record;
 
    -- Directory entry (32 bytes, 16 per 512-byte block)

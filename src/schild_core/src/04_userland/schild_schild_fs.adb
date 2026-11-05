@@ -83,6 +83,10 @@ package body Schild_Schild_Fs with SPARK_Mode => Off is
       SB.Generation := Unsigned_32 (Raw (24)) or Shift_Left (Unsigned_32 (Raw (25)), 8)
         or Shift_Left (Unsigned_32 (Raw (26)), 16)
         or Shift_Left (Unsigned_32 (Raw (27)), 24);
+      -- Audit H74: persist and restore allocator state across reboot.
+      SB.Next_Free_LBA := Unsigned_32 (Raw (28)) or Shift_Left (Unsigned_32 (Raw (29)), 8)
+        or Shift_Left (Unsigned_32 (Raw (30)), 16)
+        or Shift_Left (Unsigned_32 (Raw (31)), 24);
    end Bytes_To_Superblock;
 
    procedure Bytes_To_Dir_Entry
@@ -110,45 +114,110 @@ package body Schild_Schild_Fs with SPARK_Mode => Off is
         or Shift_Left (Unsigned_32 (Raw (Base + 31)), 24);
    end Bytes_To_Dir_Entry;
 
+   -- Audit H79: Next_Free_LBA and Write_Block_512 are used inside Init
+   -- (fresh-format path and persisted allocator state). Ada requires
+   -- declaration-before-use for variables; forward decl for procedures.
+   Next_Free_LBA : Unsigned_32 := FS_BASE_LBA + 4;
+
+   procedure Write_Block_512 (LBA : Unsigned_64; Data : Schild_Nvme.Block_Buf;
+                              Success : out Boolean);
+
+   -- Audit H75: forward declaration so Init (defined before the helper)
+   -- can format a fresh device. The body lives in the WRITE SUPPORT section.
+   procedure Superblock_To_Bytes (SB : Superblock; Raw : out Schild_Nvme.Block_Buf);
+
    procedure Init (Success : out Boolean) is
       Msg_Mount : constant String := "[NVFS] Mounting filesystem...";
       Msg_SB_CRC : constant String := "[NVFS] Superblock checksum mismatch";
       Msg_Dir_CRC : constant String := "[NVFS] Directory checksum mismatch";
       Msg_OK    : constant String := "[NVFS] Mounted OK";
+      Msg_Fresh : constant String := "[NVFS] Fresh device formatted";
       Buf : Schild_Nvme.Block_Buf;
       SB_A, SB_B, Chosen : Superblock;
       Have_A, Have_B : Boolean := False;
+      SB_A_Magic_OK, SB_B_Magic_OK : Boolean := False;
    begin
       Success := False;
+      -- Audit H76: reset read-only state at the start of Init, so a torn-write
+      -- read-only condition does not persist across a clean remount.
+      Strict_Read_Only := False;
+      Mounted := False;
       if not Schild_Nvme.Is_Ready then return; end if;
       C_Putln (Msg_Mount'Address, Msg_Mount'Length);
 
-      --  A/B superblock selection: a slot is valid when its magic and header
-      --  CRC match. Pick the valid slot with the higher generation — a torn
-      --  (invalid-CRC) primary rolls back to the backup (torn-write recovery).
       Read_Block_512 (Unsigned_64 (Super_Primary_LBA), Buf, Success);
       if Success then
          Bytes_To_Superblock (Buf, SB_A);
-         if SB_A.Magic = NVFS_Magic and then CRC32 (Buf, 16) = SB_A.Checksum then
-            Have_A := True;
+         if SB_A.Magic = NVFS_Magic then
+            SB_A_Magic_OK := True;
+            if CRC32 (Buf, 16) = SB_A.Checksum then
+               Have_A := True;
+            end if;
          end if;
       end if;
 
       Read_Block_512 (Unsigned_64 (Super_Backup_LBA), Buf, Success);
       if Success then
          Bytes_To_Superblock (Buf, SB_B);
-         if SB_B.Magic = NVFS_Magic and then CRC32 (Buf, 16) = SB_B.Checksum then
-            Have_B := True;
+         if SB_B.Magic = NVFS_Magic then
+            SB_B_Magic_OK := True;
+            if CRC32 (Buf, 16) = SB_B.Checksum then
+               Have_B := True;
+            end if;
          end if;
       end if;
 
       if not Have_A and not Have_B then
-         C_Putln (Msg_SB_CRC'Address, Msg_SB_CRC'Length);
-         C_Putln (Msg_RO'Address, Msg_RO'Length);
-         Strict_Read_Only := True;
-         Success := False;
-         return;
-      elsif Have_A and (not Have_B or else SB_A.Generation >= SB_B.Generation) then
+         if SB_A_Magic_OK or SB_B_Magic_OK then
+            -- Torn write: FS signature present but both slots corrupt.
+            -- Do NOT format (data may be recoverable). Force read-only.
+            C_Putln (Msg_SB_CRC'Address, Msg_SB_CRC'Length);
+            C_Putln (Msg_RO'Address, Msg_RO'Length);
+            Strict_Read_Only := True;
+            Success := False;
+            return;
+         else
+            -- Audit H75: fresh device (no SchildFS signature). Format it.
+            declare
+               SB_Fresh : Superblock := (
+                  Magic => NVFS_Magic, Version => 1, Block_Size => 512,
+                  Root_Dir_LBA => Dir_Primary_LBA, Root_Entries => 0,
+                  Checksum => 0, Dir_Checksum => 0, Generation => 1,
+                  Next_Free_LBA => FS_BASE_LBA + 4);
+               SB_Buf : Schild_Nvme.Block_Buf;
+               Dir_Buf : Schild_Nvme.Block_Buf := (others => 0);
+               W_OK : Boolean;
+            begin
+               Schild_Nvme.Fill_Buffer (Dir_Buf);
+               Schild_Nvme.Write_Block (Unsigned_64 (Dir_Primary_LBA), W_OK);
+               if not W_OK then return; end if;
+               Schild_Nvme.Fill_Buffer (Dir_Buf);
+               Schild_Nvme.Write_Block (Unsigned_64 (Dir_Backup_LBA), W_OK);
+               if not W_OK then return; end if;
+               SB_Fresh.Dir_Checksum := CRC32 (Dir_Buf, 512);
+               Superblock_To_Bytes (SB_Fresh, SB_Buf);
+               SB_Fresh.Checksum := CRC32 (SB_Buf, 16);
+               Superblock_To_Bytes (SB_Fresh, SB_Buf);
+               Schild_Nvme.Fill_Buffer (SB_Buf);
+               Schild_Nvme.Write_Block (Unsigned_64 (Super_Primary_LBA), W_OK);
+               if not W_OK then return; end if;
+               Schild_Nvme.Fill_Buffer (SB_Buf);
+               Schild_Nvme.Write_Block (Unsigned_64 (Super_Backup_LBA), W_OK);
+               if not W_OK then return; end if;
+               Active_Super_LBA := Super_Primary_LBA;
+               Active_Dir_LBA := Dir_Primary_LBA;
+               Current_Generation := 1;
+               Entry_Count := 0;
+               Next_Free_LBA := FS_BASE_LBA + 4;
+               Mounted := True;
+               Success := True;
+               C_Putln (Msg_Fresh'Address, Msg_Fresh'Length);
+               return;
+            end;
+         end if;
+      end if;
+
+      if Have_A and (not Have_B or else SB_A.Generation >= SB_B.Generation) then
          Chosen := SB_A;
          Active_Super_LBA := Super_Primary_LBA;
       else
@@ -158,11 +227,15 @@ package body Schild_Schild_Fs with SPARK_Mode => Off is
       Current_Generation := Chosen.Generation;
       Active_Dir_LBA := Chosen.Root_Dir_LBA;
 
+      -- Audit H74: restore Next_Free_LBA from the persisted superblock. A
+      -- pre-H74 superblock has 0 here; the fallback below recomputes it from
+      -- the root-directory allocations after the loop.
+      Next_Free_LBA := Chosen.Next_Free_LBA;
+
       Entry_Count := Chosen.Root_Entries;
       if Entry_Count > 16 then Entry_Count := 16; end if;
       Read_Block_512 (Unsigned_64 (Chosen.Root_Dir_LBA), Buf, Success);
       if not Success then return; end if;
-      -- Verify the root-directory block CRC (detect a torn directory write).
       if CRC32 (Buf, 512) /= Chosen.Dir_Checksum then
          C_Putln (Msg_Dir_CRC'Address, Msg_Dir_CRC'Length);
          C_Putln (Msg_RO'Address, Msg_RO'Length);
@@ -172,6 +245,24 @@ package body Schild_Schild_Fs with SPARK_Mode => Off is
       for I in 0 .. Integer (Entry_Count) - 1 loop
          Bytes_To_Dir_Entry (Buf, I * 32, Root_Dir (I));
       end loop;
+
+      -- Audit H74 fallback: if the persisted Next_Free_LBA is invalid (legacy
+      -- superblock without the field, or a corrupted-but-CRC-valid value),
+      -- recompute it from the largest allocation in the root directory.
+      if Next_Free_LBA < FS_BASE_LBA + 4 then
+         Next_Free_LBA := FS_BASE_LBA + 4;
+         for I in 0 .. Integer (Entry_Count) - 1 loop
+            declare
+               Ent_End : constant Unsigned_32 :=
+                 Root_Dir (I).Start_LBA + (Root_Dir (I).Size + 511) / 512;
+            begin
+               if Ent_End > Next_Free_LBA then
+                  Next_Free_LBA := Ent_End;
+               end if;
+            end;
+         end loop;
+      end if;
+
       Mounted := True;
       C_Putln (Msg_OK'Address, Msg_OK'Length);
    end Init;
@@ -188,6 +279,9 @@ package body Schild_Schild_Fs with SPARK_Mode => Off is
    begin
       Success := False; File.Valid := False;
       if not Mounted then return; end if;
+      -- Audit H42: Ent.Name is String (1 .. 24). Name must be 1-based;
+      -- a sliced Name (Name'First /= 1) would index Ent.Name OOB.
+      if Name'First /= 1 then return; end if;
       for I in 0 .. Integer (Entry_Count) - 1 loop
          Match := True;
          declare
@@ -228,6 +322,9 @@ package body Schild_Schild_Fs with SPARK_Mode => Off is
       Read_OK   : Boolean;
    begin
       Len := 0; Success := False;
+      -- Audit H43: the copy loop indexes Buf by 0-based Copied; reject
+      -- non-0-based Buf to prevent OOB.
+      if Buf'First /= 0 then return; end if;
       if not File.Valid or File.Curr_Off >= File.Size then return; end if;
       Remaining := File.Size - File.Curr_Off;
       if Buf_Size < Remaining then To_Read := Buf_Size;
@@ -252,12 +349,6 @@ package body Schild_Schild_Fs with SPARK_Mode => Off is
 
    -- Stage 7.8: WRITE SUPPORT
 
-   procedure Write_Block_512 (LBA : Unsigned_64; Data : Schild_Nvme.Block_Buf;
-                              Success : out Boolean) is
-   begin
-      Schild_Nvme.Fill_Buffer (Data);
-      Schild_Nvme.Write_Block (LBA, Success);
-   end Write_Block_512;
 
    procedure Superblock_To_Bytes (SB : Superblock; Raw : out Schild_Nvme.Block_Buf) is
    begin
@@ -288,7 +379,19 @@ package body Schild_Schild_Fs with SPARK_Mode => Off is
       Raw (25) := Unsigned_8 (Shift_Right (SB.Generation, 8) and 255);
       Raw (26) := Unsigned_8 (Shift_Right (SB.Generation, 16) and 255);
       Raw (27) := Unsigned_8 (Shift_Right (SB.Generation, 24) and 255);
+      -- Audit H74: persist Next_Free_LBA (bytes 28..31).
+      Raw (28) := Unsigned_8 (SB.Next_Free_LBA and 255);
+      Raw (29) := Unsigned_8 (Shift_Right (SB.Next_Free_LBA, 8) and 255);
+      Raw (30) := Unsigned_8 (Shift_Right (SB.Next_Free_LBA, 16) and 255);
+      Raw (31) := Unsigned_8 (Shift_Right (SB.Next_Free_LBA, 24) and 255);
    end Superblock_To_Bytes;
+
+   procedure Write_Block_512 (LBA : Unsigned_64; Data : Schild_Nvme.Block_Buf;
+                              Success : out Boolean) is
+   begin
+      Schild_Nvme.Fill_Buffer (Data);
+      Schild_Nvme.Write_Block (LBA, Success);
+   end Write_Block_512;
 
    procedure Dir_Entry_To_Bytes (Ent : Dir_Entry; Raw : out Schild_Nvme.Block_Buf;
                                  Off : Integer) is
@@ -307,8 +410,6 @@ package body Schild_Schild_Fs with SPARK_Mode => Off is
       Raw (Off + 30) := Unsigned_8 (Shift_Right (Ent.Size, 16) and 255);
       Raw (Off + 31) := Unsigned_8 (Shift_Right (Ent.Size, 24) and 255);
    end Dir_Entry_To_Bytes;
-
-   Next_Free_LBA : Unsigned_32 := FS_BASE_LBA + 4;
 
    procedure Create_File (Name : in String; Size : in Unsigned_32;
                           Success : out Boolean) is
@@ -348,7 +449,8 @@ package body Schild_Schild_Fs with SPARK_Mode => Off is
                                   Block_Size => 512, Root_Dir_LBA => Dir_Primary_LBA,
                                   Root_Entries => Entry_Count,
                                   Checksum => 0, Dir_Checksum => 0,
-                                  Generation => Current_Generation + 1);
+                                  Generation => Current_Generation + 1,
+                                  Next_Free_LBA => Next_Free_LBA + (Size + 511) / 512);
          Dir_CRC : Unsigned_32;
          OK : Boolean;
       begin
@@ -393,6 +495,9 @@ package body Schild_Schild_Fs with SPARK_Mode => Off is
       Success := False;
       if Strict_Read_Only then return; end if;
       if not File.Valid then return; end if;
+      -- Audit H52: copy loop indexes Data by 0-based D_Pos; reject
+      -- non-0-based Data to prevent OOB.
+      if Data'First /= 0 then return; end if;
       if Wr_Pos + Unsigned_32 (Data'Length) > File.Size then return; end if;
       while D_Pos < Unsigned_32 (Data'Length) loop
          LBA_Off := File.Start_LBA + (Wr_Pos / 512);

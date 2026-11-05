@@ -21,7 +21,7 @@
 
 package Schild_HM_Model with SPARK_Mode => On is
 
-   type HM_Domain is (HM_NetServer, HM_MLS, HM_Config_Daemon);
+   type HM_Domain is (HM_NetServer, HM_MLS, HM_Config_Daemon, HM_FS_Daemon);
 
    -- Consecutive transient faults tolerated before escalation from process
    -- level (RESTART) to partition level (STOP).
@@ -31,6 +31,7 @@ package Schild_HM_Model with SPARK_Mode => On is
       Net : Natural := 0;
       MLS : Natural := 0;
       Cfg : Natural := 0;
+      FS  : Natural := 0;
    end record;
 
    type HM_State is record
@@ -38,9 +39,11 @@ package Schild_HM_Model with SPARK_Mode => On is
       Net_Stopped  : Boolean := False;
       MLS_Stopped  : Boolean := False;
       Cfg_Stopped  : Boolean := False;
+      FS_Stopped   : Boolean := False;
       Net_Launched : Boolean := False;
       MLS_Launched : Boolean := False;
       Cfg_Launched : Boolean := False;
+      FS_Launched  : Boolean := False;
    end record;
 
    -- Health-monitor action the caller must perform for a reported fault.
@@ -50,21 +53,24 @@ package Schild_HM_Model with SPARK_Mode => On is
      (case Domain is
         when HM_NetServer     => State.Counts.Net,
         when HM_MLS           => State.Counts.MLS,
-        when HM_Config_Daemon => State.Counts.Cfg)
+        when HM_Config_Daemon => State.Counts.Cfg,
+        when HM_FS_Daemon     => State.Counts.FS)
    with Global => null;
 
    function Stopped (State : HM_State; Domain : HM_Domain) return Boolean is
      (case Domain is
         when HM_NetServer     => State.Net_Stopped,
         when HM_MLS           => State.MLS_Stopped,
-        when HM_Config_Daemon => State.Cfg_Stopped)
+        when HM_Config_Daemon => State.Cfg_Stopped,
+        when HM_FS_Daemon     => State.FS_Stopped)
    with Global => null;
 
    function Launched (State : HM_State; Domain : HM_Domain) return Boolean is
      (case Domain is
         when HM_NetServer     => State.Net_Launched,
         when HM_MLS           => State.MLS_Launched,
-        when HM_Config_Daemon => State.Cfg_Launched)
+        when HM_Config_Daemon => State.Cfg_Launched,
+        when HM_FS_Daemon     => State.FS_Launched)
    with Global => null;
 
    function All_Stopped (State : HM_State) return Boolean is

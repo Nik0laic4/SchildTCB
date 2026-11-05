@@ -31,8 +31,12 @@ procedure Schild_Root_Task with SPARK_Mode => On is
    MLS_Fault_Slot    : Schild_Sel4_Syscall.Cap_Ref := Schild_Sel4_Syscall.MLS_Fault_Slot;
    Config_EP_Slot    : Schild_Sel4_Syscall.Cap_Ref := Schild_Sel4_Syscall.Config_EP_Slot;
    Config_Fault_Slot : Schild_Sel4_Syscall.Cap_Ref := Schild_Sel4_Syscall.Config_Fault_Slot;
+   -- H93: FS daemon endpoint (fault arrives on Fault_Slot = Root_Fault_EP, badge 0xE3).
+   FS_EP_Slot        : Schild_Sel4_Syscall.Cap_Ref := Schild_Sel4_Syscall.FS_EP_Slot;
    -- B.6: shared timeout-fault endpoint (budget overrun -> seL4_Fault_Timeout).
    Timeout_EP_Slot   : Schild_Sel4_Syscall.Cap_Ref := Schild_Sel4_Syscall.Timeout_EP_Slot;
+   -- H82: audit logger hoisted so Persist can run after the FS daemon launches.
+   AL : Audit_Logger;
 begin
    Get_BootInfo_Copy (BI, Unsigned_64 (BootInfo'Size / System.Storage_Unit));
    Put_Str (ASCII.CR & ASCII.LF);
@@ -241,7 +245,6 @@ begin
     -- == Stage 7.2: MLS Policy + Audit Logger ==
     declare
        MLS  : MLS_Daemon;
-       AL   : Audit_Logger;
     begin
        Initialize (MLS);
        Initialize (AL, Warning);  -- log Warning and above
@@ -303,10 +306,6 @@ begin
        Put_Str ("[S7.2] Audit: "); Put_Dec (AL.Event_Count);
        Put_Str (" events, "); Put_Dec (Unsigned_64 (Buffered_Events (AL)));
        Put_Str (" buffered" & ASCII.CR & ASCII.LF);
-
-       -- P1 (R9): persist the audit trail to SchildFS so it survives power loss.
-       Persist_Audit_Log (AL);
-       Put_Str ("[S7.2] Audit persisted to SchildFS (audit.log)" & ASCII.CR & ASCII.LF);
     end;
 
    -- Stage 6: Fault handler init (FIRST — sets up IPC buffer for everyone)
@@ -444,6 +443,57 @@ begin
       end if;
    end;
 
+   -- Audit H65/H86 Stage 1: FS daemon launch (own PML4, Recv loop, alive check).
+   declare
+      FS_R : Word := Schild_Sel4_Syscall.Launch_FS_Daemon;
+   begin
+      if FS_R = 0 then
+         Put_Str ("[FS] daemon: OK" & ASCII.CR & ASCII.LF);
+      else
+         Put_Str ("[FS] daemon: FAILED (code=");
+         Put_Dec (FS_R);
+         Put_Str (")" & ASCII.CR & ASCII.LF);
+      end if;
+   end;
+
+   -- Stage 3 (H65/H82): FS dispatch smoke test.  op=7 (Is_Mounted) exercises the
+   -- fs_daemon.c dispatch -> Schild_Fs_Server.Fs_Is_Mounted round-trip; a reply
+   -- of St_Ok (0) proves the FS daemon serves ops beyond Init, and that the
+   -- shared frame / VSpace plumbing for large-data ops is in place.
+   if FS_EP_Slot > 0 then
+      declare
+         R : Word := Schild_Sel4_Syscall.Call_IPC (FS_EP_Slot, 7, 0);
+         M : Word := Schild_Sel4_Syscall.Read_IPC_MR0;
+      begin
+         if M = 0 then
+            Put_Str ("[FS] Is_Mounted: OK" & ASCII.CR & ASCII.LF);
+         else
+            Put_Str ("[FS] Is_Mounted: NOT mounted (status=");
+            Put_Hex (M);
+            Put_Str (", replyinfo=");
+            Put_Hex (R);
+            Put_Str (")" & ASCII.CR & ASCII.LF);
+         end if;
+      end;
+   end if;
+
+   -- H82: persist the audit trail now that the FS daemon owns NVMe and is
+   -- mounted (it ran at Stage 7.2 before storage was ready — that is exactly
+   -- why the old direct call silently failed).  Persist writes the snapshot
+   -- into the shared frame and the FS daemon appends it to audit.log.
+   if FS_EP_Slot > 0 then
+      declare
+         P : Boolean;
+      begin
+         Persist_Audit_Log (AL, Unsigned_64 (FS_EP_Slot), P);
+         if P then
+            Put_Str ("[S7.2] Audit persisted to SchildFS (audit.log)" & ASCII.CR & ASCII.LF);
+         else
+            Put_Str ("[S7.2] Audit persistence unavailable (FS daemon)" & ASCII.CR & ASCII.LF);
+         end if;
+      end;
+   end if;
+
    -- P1 (R10): IPC ping-pong benchmark — Call/Reply round-trip against the
    -- NetServer (op=4 = bench noop), timed with RDTSC. Probes the seL4
    -- Fastpath: round-trip cycles should drop when KernelFastpath=ON.
@@ -553,6 +603,27 @@ begin
       Schild_Sel4_Syscall.Health_Monitor (Schild_Sel4_Syscall.HM_Config_Daemon);
       Put_Str ("[CONTAINMENT] Config Daemon contained" & ASCII.CR & ASCII.LF);
    end;
+
+   -- H93: crash-containment for the FS daemon.  Its fault endpoint is a mint of
+   -- the root fault endpoint (badge 0xE3), so the #PF from op=99 is caught on
+   -- the same Wait as the NetServer fault (badge 0xE2) — the badge disambiguates.
+   if Fault_Slot > 0 then
+      Put_Str ("[CONTAINMENT] injecting fault into FS daemon (op=99)..." & ASCII.CR & ASCII.LF);
+      declare
+         R : Word := Schild_Sel4_Syscall.Call_IPC (FS_EP_Slot, 99, 0);
+      begin
+         null;
+      end;
+      declare
+         Badge : Word := Schild_Sel4_Syscall.Wait (Fault_Slot);
+      begin
+         Put_Str (ASCII.CR & ASCII.LF & "[FAULT] Caught FS fault — badge=0x");
+         Put_Hex (Badge);
+         Put_Str (" — restarting" & ASCII.CR & ASCII.LF);
+         Schild_Sel4_Syscall.Health_Monitor (Schild_Sel4_Syscall.HM_FS_Daemon);
+         Put_Str ("[CONTAINMENT] FS daemon contained" & ASCII.CR & ASCII.LF);
+      end;
+   end if;
 
    -- B.6: timeout-fault test.  Inject op=98 into the Config Daemon: it replies
    -- then spins to exhaust its sporadic scheduling-context budget; the kernel

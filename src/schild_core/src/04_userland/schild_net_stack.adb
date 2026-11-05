@@ -269,6 +269,22 @@ package body Schild_Net_Stack with SPARK_Mode => Off is
                C_Putln (M'Address, M'Length);
             end;
             if Http_OK then
+               -- Audit H33/H36: Build_Tcp_Reply Pre (Reply_Buf'Length >=
+               -- Payload'Length + 20) and Build_Ipv4_Frame Pre (Frame_Buf'Length
+               -- >= Payload'Length + 34) are not enforced at this Off caller.
+               -- Tcp_Out = 1501 bytes, Http_Frame = 1501 bytes. Safe bound:
+               --   20 + Http_Len <= 1501           -> Http_Len <= 1481
+               --   34 + (20 + Http_Len) <= 1501    -> Http_Len <= 1447
+               -- Minimum is 1447. Reject oversize responses to prevent OOB.
+               if Integer (Http_Len) > 1447 then
+                  declare
+                     M : constant String := "[HTTP] oversize response rejected";
+                  begin
+                     C_Putln (M'Address, M'Length);
+                  end;
+                  -- Do not transmit; connection will time out on the peer side.
+                  -- A proper 413 response is a future task (audit H40).
+               else
                Schild_Tcp_Handler.Build_Tcp_Reply (Tcp_Table (Conn_Idx),
                  Schild_Tcp_Handler.Flag_PSH or Schild_Tcp_Handler.Flag_ACK,
                  Tcp_Table (Conn_Idx).Our_Seq, Tcp_Table (Conn_Idx).Client_Seq,
@@ -303,6 +319,7 @@ package body Schild_Net_Stack with SPARK_Mode => Off is
                      C_Putln (M'Address, M'Length);
                   end;
                end if;
+               end if;  -- Audit H33/H36: close oversize guard
             else
                declare
                   M : constant String := "[HTTP] req FAILED";

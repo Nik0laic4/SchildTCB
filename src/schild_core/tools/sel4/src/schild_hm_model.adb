@@ -9,6 +9,7 @@ package body Schild_HM_Model with SPARK_Mode => On is
          when HM_NetServer     => State.Net_Launched := True;
          when HM_MLS           => State.MLS_Launched := True;
          when HM_Config_Daemon => State.Cfg_Launched := True;
+         when HM_FS_Daemon     => State.FS_Launched := True;
       end case;
    end Launch;
 
@@ -31,6 +32,10 @@ package body Schild_HM_Model with SPARK_Mode => On is
             State.Counts.Cfg := State.Counts.Cfg + 1;
             State.Cfg_Stopped := State.Cfg_Stopped
               or else State.Counts.Cfg > Max_Restarts;
+         when HM_FS_Daemon =>
+            State.Counts.FS := State.Counts.FS + 1;
+            State.FS_Stopped := State.FS_Stopped
+              or else State.Counts.FS > Max_Restarts;
       end case;
 
       if All_Stopped (State) then

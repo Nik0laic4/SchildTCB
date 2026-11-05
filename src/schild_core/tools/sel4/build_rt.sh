@@ -100,9 +100,11 @@ for spec in \
      ../../src/04_userland/schild_arp_handler \
      ../../src/04_userland/schild_ipv4_handler \
      ../../src/04_userland/schild_tcp_handler \
+     ../../src/04_userland/schild_http_core \
      ../../src/04_userland/schild_http_server \
      ../../src/04_userland/schild_schild_fs \
-     ../../src/04_userland/schild_net_stack; do
+     ../../src/04_userland/schild_net_stack \
+     src/schild_fs_server; do
     b="$(basename "$spec")"
     if ! "$TOOL/gcc" -c --RTS="$(pwd)/../../bare_runtime" -gnat2022 -gnatwa -gnato -gnatVa -g -O0 "${PREFIX_MAP_ADA[@]}" \
         $DRV_INC -o "$OBJ/${b}.o" "${spec}.adb" 2>&1; then
@@ -130,6 +132,7 @@ done
 "$TOOL/as" --64 -o "$OBJ/mls_server.o" src/mls_server.S
 "$TOOL/as" --64 -o "$OBJ/config_daemon.o" src/config_daemon.S
 "$TOOL/as" --64 -o "$OBJ/netserver.o" src/netserver.S
+"$TOOL/as" --64 -o "$OBJ/fs_daemon.o" src/fs_daemon.S
 
 # C compilation (MLS server thread)
 "$TOOL/gcc" -m64 -nostdlib -nostdinc -fno-builtin -std=gnu11 \
@@ -145,6 +148,10 @@ done
 "$TOOL/gcc" -m64 -nostdlib -nostdinc -fno-builtin -std=gnu11 \
     -fno-stack-protector -mno-red-zone -ffreestanding -mgeneral-regs-only "${PREFIX_MAP_C[@]}" \
     -c -o "$OBJ/netserver_c.o" src/netserver.c 2>&1
+
+"$TOOL/gcc" -m64 -nostdlib -nostdinc -fno-builtin -std=gnu11 \
+    -fno-stack-protector -mno-red-zone -ffreestanding -mgeneral-regs-only "${PREFIX_MAP_C[@]}" \
+    -c -o "$OBJ/fs_daemon_c.o" src/fs_daemon.c 2>&1
 
 # Link
 "$TOOL/ld" -T src/rt_linker.ld -o root_task.elf \
@@ -168,9 +175,11 @@ done
     "$OBJ/schild_arp_handler.o" \
     "$OBJ/schild_ipv4_handler.o" \
     "$OBJ/schild_tcp_handler.o" \
+    "$OBJ/schild_http_core.o" \
     "$OBJ/schild_http_server.o" \
     "$OBJ/schild_schild_fs.o" \
     "$OBJ/schild_net_stack.o" \
+    "$OBJ/schild_fs_server.o" \
     "$OBJ/schild_net_config.o" \
     "$OBJ/schild_sel4_syscalls.o" \
     "$OBJ/mls_server.o" \
@@ -179,6 +188,8 @@ done
     "$OBJ/config_daemon_c.o" \
     "$OBJ/netserver.o" \
     "$OBJ/netserver_c.o" \
+    "$OBJ/fs_daemon.o" \
+    "$OBJ/fs_daemon_c.o" \
     "$OBJ/message_info.o" \
     "$OBJ/schild_sel4_ipc.o" \
     "$OBJ/schild_net_runtime.o" 2>&1

@@ -25,7 +25,7 @@
 package Schild_Launch_Model with SPARK_Mode => On is
 
    -- The three seL4 partitions orchestrated by the root task.
-   type Domain is (NetServer, MLS, Config_Daemon);
+   type Domain is (NetServer, MLS, Config_Daemon, FS_Daemon);
 
    -- One-shot launch bookkeeping.  Fault_EP(D) is the per-domain fault-endpoint
    -- slot (0 = not yet assigned); Timeout_EP is the shared timeout endpoint.
@@ -33,9 +33,11 @@ package Schild_Launch_Model with SPARK_Mode => On is
       Net_Launched   : Boolean := False;
       MLS_Launched   : Boolean := False;
       Cfg_Launched   : Boolean := False;
+      FS_Launched    : Boolean := False;
       Net_Fault_EP   : Natural := 0;
       MLS_Fault_EP   : Natural := 0;
       Cfg_Fault_EP   : Natural := 0;
+      FS_Fault_EP    : Natural := 0;
       Timeout_EP     : Natural := 0;   -- shared timeout-fault endpoint slot
       Launched_Count : Natural := 0;
    end record;
@@ -44,14 +46,16 @@ package Schild_Launch_Model with SPARK_Mode => On is
      (case D is
         when NetServer     => S.Net_Launched,
         when MLS           => S.MLS_Launched,
-        when Config_Daemon => S.Cfg_Launched)
+        when Config_Daemon => S.Cfg_Launched,
+        when FS_Daemon     => S.FS_Launched)
    with Global => null;
 
    function Fault_EP (S : Launch_State; D : Domain) return Natural is
      (case D is
         when NetServer     => S.Net_Fault_EP,
         when MLS           => S.MLS_Fault_EP,
-        when Config_Daemon => S.Cfg_Fault_EP)
+        when Config_Daemon => S.Cfg_Fault_EP,
+        when FS_Daemon     => S.FS_Fault_EP)
    with Global => null;
 
    function All_Launched (S : Launch_State) return Boolean is
@@ -63,7 +67,7 @@ package Schild_Launch_Model with SPARK_Mode => On is
    --   * fault-endpoint slots of distinct launched domains are pairwise
    --     distinct (no misrouting);
    --   * Launched_Count is exactly the number of launched domains (so it is
-   --     always <= 3, which also bounds the +1 in Launch);
+   --     always <= 4, which also bounds the +1 in Launch);
    --   * once any domain is launched, the shared timeout endpoint is bound.
    function Valid_State (S : Launch_State) return Boolean is
      ((for all D in Domain => (Fault_EP (S, D) > 0) = Launched (S, D))
@@ -77,6 +81,7 @@ package Schild_Launch_Model with SPARK_Mode => On is
         (if S.Net_Launched then 1 else 0)
         + (if S.MLS_Launched then 1 else 0)
         + (if S.Cfg_Launched then 1 else 0)
+        + (if S.FS_Launched then 1 else 0)
       and then
       (if S.Launched_Count > 0 then S.Timeout_EP > 0))
    with Global => null;

@@ -1,7 +1,7 @@
 # Schild TCB — Threat Model
 
-**Version:** v1.0.0-pre (working draft)
-**Date:** 2026-10-31
+**Version:** v1.1.0-audit (§12 supersedes conflicts in §3-§11 until inline merge)
+**Date:** 2026-11-03
 **Owner:** Ирганов А.Н.
 **Status:** living document. Aligned with [`ASSURANCE.md`](ASSURANCE.md) (trust model),
 [`SECURITY.md`](SECURITY.md) (per-component claims), [`ARCHITECTURE.md`](ARCHITECTURE.md)
@@ -251,4 +251,191 @@ This document is the **input** to the contract-strengthening phase. The method:
 - [`security/CVE-2026-SCHILD-01.md`](security/CVE-2026-SCHILD-01.md), [`security/CVE-2026-SCHILD-02.md`](security/CVE-2026-SCHILD-02.md) — past audit findings (all fixed).
 
 
+
+
+---
+
+## 12. Corrections from audit v0.4 (2026-11-03) — supersedes conflicts in §3-§11
+
+> **Status of this section.** Appended by external security audit (registry:
+> `START/AUDIT_REGISTRY.md`). Corrections marked C-§N amend §N. Until §3-§11
+> are inlined, this section is normative where it conflicts. This addendum
+> makes THREAT_MODEL v1.1.0-audit.
+
+### 12.1 Corrections to §3 (Adversary model)
+
+**C-§3.1 P4 vs AS4.** P4 (local build/deploy access) and AS4 (boot chain
+not attacker-controlled) are incompatible. AS4 applies to P1-P3 only. Against
+P4, boot integrity and update integrity are **not claimed** (§8.4 already
+acknowledges this, but §5 AS4 read alone was misleading).
+
+### 12.2 Corrections to §4 (Trust boundaries)
+
+**C-§4 TB3.** TB3 is enforced by architecture (with-clause discipline), not
+mechanically. One with-clause linking a Tier B body into Tier A passes the
+proof silently. This is a process control, not a mechanical check. Tier B
+spec, on which Tier A depends, are part of the TCB and are listed in §9
+(corrected, AS7). Mechanical guard is a build check (nm on Tier A binary,
+fail on any Tier B symbol) — audit H4.
+
+**C-§4 TB4 (Pi 4).** On Raspberry Pi 4 (bcm2711) there is no SMMU, and GENET
+is an additional DMA master. P3 (malicious/compromised peripheral) is strictly
+worse on Pi 4 than on x86_64. Pi 4 is not in current TCB scope; DMA analysis
+for Pi 4 is a separate profile (§6 corrected).
+
+### 12.3 Corrections to §5 (Assumptions)
+
+**C-§5 AS4.** Scope clarified: applies to P1-P3, void against P4.
+
+**AS6 — syscall seam (new).** `Schild_Sel4_Syscall` body is
+`SPARK_Mode => Off` (1475 lines, audit C10), plus C shims
+(`schild_sel4_ipc.c`, `schild_sel4_syscalls.S`, `message_info.c`). Trusted,
+not proven. Maps Ada contracts to seL4 ABI. A bug here lets a domain escape
+CSpace/VSpace. Per §3.2 (AI-axis), AS6 is **assumed exploitable**; under P2
+the containment story fails unless AS6 holds.
+
+**AS7 — spec Tier B (new).** Tier A depends on spec (contracts) of Tier B
+services it calls. Those spec are trusted axioms, listed in §9 (corrected).
+A compromised Tier B body (P2) may violate its own spec, in which case
+Tier A's proof does not carry to the running system.
+
+### 12.4 Corrections to §6 (Out of scope)
+
+**C-§6 Pi 4.** Remove "Raspberry Pi 4 has no SMMU" as justification for
+out-of-scope DMA. Replace with: "Pi 4 is not in current TCB scope. When Pi 4
+enters scope, DMA isolation must be re-analyzed; absence of SMMU means P3 is
+strictly worse than x86_64, not that DMA is out of scope."
+
+### 12.5 Corrections to §7 (Threat → mechanism → check)
+
+**C-§7 T1.** T1 module-level proven: `Parse_Tcp`/`Parse_Udp`/`Parse_Arp`/
+`Parse_Ipv4`/`Validate_Tcp_Checksum` and `schild_http_core` are L4-proved.
+Response builder (`Write_Str`, `Write_U32_Dec`) is proved (W11.3). Request
+handler `Handle_Request` (`schild_http_server.adb`, Off) is **not** proved:
+contains a runtime guard for request path (5..1024), but the response path
+had an unguarded Pre violation (audit C23, patched 2026-11-03). T1 as written
+is accurate for parsers, not for the handler.
+
+**C-§7 T5.** MCS CPU budgets address CPU starvation but **not** IPC message
+flood. A high-frequency P2 sender can starve the root task's IPC budget at low
+CPU cost. Not covered by T5 as written (residual R15).
+
+**C-§7 T8.** Split:
+- **T8a** — Tier B C shims (`net_test.c`, `sel4_mmio.c` in Ring 3 domains):
+  memory-unsafe, containment works (Ring 3 crash, core survives).
+- **T8b** — ring-0 trusted C (`runtime_stubs.c`, `interrupt_handlers.c`,
+  `hw_io.c`, `boot.S`): memory-unsafe, **containment does not work**. A bug
+  here panics the kernel or gives Ring 0 execution. Trusted (§9), assumed
+  exploitable under AI-axis. Larger residual than T8 originally written.
+
+**T10 — DDE/GENET drivers (new).** When DDE-imported drivers or the GENET
+driver enter the tree, they are Tier B (Ring 3, containment). Spec of the
+driver service is trusted (AS7). Tier A must be independent of the driver
+body — enforced by TB3 process control plus a build nm-check (audit H4).
+
+**T11 — Watchdog DoS amplifier (new).** Watchdog is last-resort recovery,
+not a substitute for containment. If P1 can trigger a NetServer hang that
+trips the watchdog, P1 gets a reboot on demand. Requirement: watchdog trigger
+gated by policy in root task, rate-limited, and must NOT fire for contained
+faults (contained fault is handled by fault endpoint; watchdog is only for
+unresponsive-but-not-faulted states).
+
+**T12 — Health check through Tier B (new).** `Health_Status`
+(Network_Up, MLS_Valid) is read from Tier B services. A compromised Tier B
+returns fake "healthy"; `Commit_If_Healthy` commits; lockout never fires;
+availability protection against a persistently bad slot is bypassed. Tier A
+claim (boot reliability) dependent on Tier B truthfulness. Audit C9.
+
+**T13 — Shared DMA frame cross-trust (new).** The 4 KB shared frame at
+`0x520000` is mapped into both root task and NetServer. If root task reads
+data written by NetServer (RX log path currently does) and NetServer is
+compromised (P2), root task trusts fake data. Design rule: root task writes
+for TX (safe), reads for RX-log only with explicit trust acknowledgment, or
+moves RX log to structured IPC. Audit C8.
+
+### 12.6 Corrections to §8 (Residual risks)
+
+Additional residuals:
+
+**R9 — Ring-0 C, no containment.** `runtime_stubs.c`,
+`interrupt_handlers.c`, `hw_io.c`, `boot.S` are ring-0 trusted, memory-unsafe,
+runtime-tested only. A bug here is not contained. Under AI-axis (assumed
+exploitable), largest single residual after DMA.
+
+**R10 — Syscall seam Off (1475 lines).** `Schild_Sel4_Syscall` body Off.
+Bug here lets a domain escape CSpace/VSpace. Both Ada body and C shims are
+trusted, not proven.
+
+**R11 — Spec Tier B trusted.** See AS7. Tier A proof carries only if Tier B
+spec are honored by Tier B bodies; under P2 they may not be.
+
+**R12 — Boot counter / health through Tier B.** See T12, T13. Tier A claims
+of boot reliability depend on Tier B truthfulness.
+
+**R13 — Pi 4 DMA (when platform enters scope).** No SMMU. P3 strictly worse.
+Separate analysis required before claiming Pi 4 as TCB platform.
+
+**R14 — HTTP response path (audit C23, patched 2026-11-03).** Guard added
+in `Handle_Request`. Verify on next regression: undersized `Reply_Buf`
+returns `Success=False` without OOB.
+
+**R15 — IPC flood (audit H2).** MCS budgets do not gate IPC frequency.
+Liveness under P2 IPC flood is open.
+
+### 12.7 Corrections to §9 (Trusted list)
+
+Expand to include:
+
+- **Upstream seL4** — as before.
+- **Local patches** — `patches/seL4-smap.patch`,
+  `seL4-object-zeroing.patch`, `seL4-framebuffer*.patch` (x3),
+  `seL4-max-num-drhu.patch`, `seL4-bootinfo-8k-untyped.patch`.
+  Each modifies verified kernel; reviewed but not re-proven. **AS8**: if any
+  patch introduces a defect, the transferred guarantee is void.
+- **Syscall seam** — `Schild_Sel4_Syscall` body (1475 lines Off), C shims.
+  AS6 above.
+- **Spec Tier B** — contracts of Tier B services called from Tier A. AS7 above.
+- **Ring-0 trusted C** — `runtime_stubs.c`, `interrupt_handlers.c`,
+  `hw_io.c`, `boot.S`. Runtime-tested only.
+
+Each is trusted, not proven. §10's "if seam cannot be proven, record here" —
+these are the records.
+
+### 12.8 Corrections to §10 (Methodology)
+
+**C-§10 anti-vacuity.** gnatprove's vacuity check catches **unreachable Pre**,
+not **tautological Post**. `Post => True` (or equivalent) is not caught by the
+tool; it is caught by human review. Historical example: W11.1 removed
+`Post => (Is_Chain_Valid = constant True)` from `schild_audit_chainer` — that
+vacuity passed all gates until manual review. §10 item 4 ("Post => True is
+rejected") must state: rejected by human review, not by gnatprove.
+
+### 12.9 Reference to audit registry
+
+Ongoing findings tracked in `START/AUDIT_REGISTRY.md`. As of v0.4, findings
+in C1, C3, C8, C9, C10, H1, H2, H3, H5, C22 are here recorded as acknowledged
+residuals or assumptions, not as code bugs. They remain open in the registry
+with status "documented in TM §12" until either (a) code mitigates or
+(b) inline integration into §3-§11.
+
+
+### 12.10 FS hardening + threat model refinement (audit v0.7, 2026-11-03)
+
+**Source:** developer notes + audit cross-check. Half of these were already in §12; the rest are new.
+
+**C-§3.2 AI-axis (concretize).** Split T1 into T1a (single malformed packet, parser memory safety — proven) and T1b (fuzzing-for-race, sequence of legitimate packets targeting connection state / parser state interactions). T1b is the AI-agent fuzzing scenario; not proven, contained by NetServer Ring 3 isolation.
+
+**C-§7 T14 (PID reuse).** Moved from §8.8 residual into the threat table as T14. Threat: P2 sends signal or IPC to a PID that was just recycled by an unrelated process. Status: **deferred to v0.2.0** (design in progress: monotonic PID or reuse delay; capability-based identity preferred long-term). Tracked in audit registry as M1.
+
+**C-§7 T15 (FS metadata tamper, HMAC key placement).** The FS metadata is protected by CRC32 (integrity, not authenticity). P3 (malicious NVMe via DMA) or P4 (write access to disk) can tamper and recompute CRC32. Moving to HMAC-SHA256 requires answering: where does the key live? (a) NetServer (Tier B) — P2 can read it; HMAC protects only against P3. (b) Root task (Tier A) — FS must migrate to Tier A or verify HMAC over IPC per block. (c) Hardware key store — not available (no TPM, no HWRoT). Until decided, FS metadata tamper remains accepted residual (R18). Audit H61.
+
+**C-§8 R16 (signed boot without HWRoT).** P4 with write access to the disk can recompute SHA-256. Without TPM/HWRoT there is no defence. Accepted architectural risk. Boot counter lockout (W9.1) limits availability damage from bad slots, not integrity from malicious P4. This was already stated in §8.4; explicitly restated here as accepted.
+
+**C-§8 R17 (path traversal — architectural mitigation).** `SchildFS.Open` searches by name in a flat `Root_Dir (0..15)` table; there is no hierarchy. `GET /../../etc/passwd` yields a name that matches nothing → 404. Architecturally closed, not mathematically proven. If the FS ever gains directory hierarchy, re-analyze. Audit H20 → CLOSED (architectural).
+
+**C-§8 R18 (FS metadata tamper).** See T15. CRC32 detects corruption, not tampering. Accepted until HMAC key placement is decided.
+
+**C-§9 (patches scope).** Clarify §9's local patches: they do NOT touch the capability model or the scheduler. They DO touch object lifecycle (`seL4-object-zeroing.patch`, security-relevant: uninit memory disclosure) and kernel memory layout (`seL4-bootinfo-8k-untyped.patch`). AS8 applies: if `object-zeroing` or `bootinfo-8k` introduces a defect, kernel memory disclosure is possible; containment depends on seL4's capability model remaining intact (which patches do not touch). Audit H10 remains open, but its scope is narrowed: patches affect object lifecycle and memory layout, not capability model or scheduler.
+
+**C-§9 AS6 refinement.** `Schild_Sel4_Syscall` body is Off (1475 lines). The syscall seam is the largest single trusted component. Mitigations in queue (audit C4): memory-safe C shim, fuzzing of ABI mapping, formal ABI specification. Not fixed in v0.1.0.
 

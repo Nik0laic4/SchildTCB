@@ -346,11 +346,59 @@ u64 schild_read_ipc_mr1(void) {
     return schild_call_mr[1];
 }
 
+/* Read reply MR[2] / MR[3] after a Call (captured in R9 / R15). */
+u64 schild_read_ipc_mr2(void) {
+    return schild_call_mr[2];
+}
+u64 schild_read_ipc_mr3(void) {
+    return schild_call_mr[3];
+}
+
+/* Call with four message registers (FS IPC contract: MR[0]=op, MR[1..3]=args).
+ * Same register dance as schild_sel4_call, length=4. */
+i64 schild_sel4_call4(u64 dest, u64 mr0, u64 mr1, u64 mr2, u64 mr3) {
+    i64 r;
+    volatile u64 *b = (volatile u64*)schild_ipc_buf_addr;
+    b[1] = mr0;
+    b[2] = mr1;
+    b[3] = mr2;
+    b[4] = mr3;
+    register u64 _mr0 asm("r10") = mr0;
+    register u64 _mr1 asm("r8")  = mr1;
+    register u64 _mr2 asm("r9")  = mr2;
+    register u64 _mr3 asm("r15") = mr3;
+    u64 info = 4ULL;  /* length=4 */
+    __asm__ volatile(
+        "movq %%rbx,%%r12\n\t"
+        "movq %%rsp,%%rbx\n\t"
+        "movq $-1,%%rdx\n\t"
+        "syscall\n\t"
+        "movq %%rbx,%%rsp\n\t"
+        "movq %%r10,schild_call_mr+0(%%rip)\n\t"
+        "movq %%r8, schild_call_mr+8(%%rip)\n\t"
+        "movq %%r9, schild_call_mr+16(%%rip)\n\t"
+        "movq %%r15,schild_call_mr+24(%%rip)\n\t"
+        "movq %%r12,%%rbx"
+        : "=S"(r)
+        : "D"(dest), "S"(info),
+          "r"(_mr0), "r"(_mr1), "r"(_mr2), "r"(_mr3)
+        : "rdx","rcx","r11","r12","memory");
+    return r;
+}
+
 /* Read recv MR[0] captured by the Wait/Recv stub (e.g. the SC badge carried in
  * a timeout fault: seL4_Fault_Timeout puts the SC badge in MR[0]). */
 extern volatile u64 schild_recv_mr[4];
 u64 schild_read_recv_mr0(void) {
     return schild_recv_mr[0];
+}
+
+/* Root-side FS Append (Stage 3 / H82): Call(fs_ep, op=5, name_len, len).  The
+ * root task already placed the snapshot bytes into the shared frame at offset 0.
+ * Returns 1 iff the FS daemon replied St_Ok (0). */
+u64 schild_fs_append_ipc(u64 fs_ep, u64 name_len, u64 len) {
+    (void) schild_sel4_call4(fs_ep, 5ULL, name_len, len, 0ULL);
+    return (schild_call_mr[0] == 0ULL) ? 1ULL : 0ULL;
 }
 
 /* ─── Stage 8.3: e1000e IRQ via Notification ───────────────────────────── */
@@ -456,3 +504,18 @@ u64 schild_rdtsc(void) {
     return ((u64)hi << 32) | lo;
 }
 
+
+/* === FS Daemon (audit H65/H86 Stage 1) ===
+ * Entry/stack/alive_flag от fs_daemon.S; setters из Launch_FS_Daemon (ADB).
+ * Getter schild_get_fs_alive для alive check после TCBResume + Yield. */
+extern void  fs_daemon_entry(void);
+extern char  fs_daemon_stack_top[];
+extern u64   fs_daemon_alive_flag;
+extern volatile u64 fs_endpoint_cptr;
+extern volatile u64 fs_reply_cptr;
+
+u64 schild_fs_daemon_entry_addr(void) { return (u64)(void*)fs_daemon_entry; }
+u64 schild_fs_daemon_stack_addr(void) { return (u64)fs_daemon_stack_top; }
+void schild_set_fs_endpoint(u64 ep)   { fs_endpoint_cptr = ep; }
+void schild_set_fs_reply(u64 rpl)     { fs_reply_cptr = rpl; }
+u64  schild_get_fs_alive(void)        { return fs_daemon_alive_flag; }
