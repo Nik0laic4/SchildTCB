@@ -99,7 +99,7 @@ KERNEL_MCS=ON scripts/build_sel4_kernel.sh
 # 2) Build the seL4 primary image (MCS kernel + Ada root task → sel4_primary.iso)
 SEL4_PRIMARY=1 ./build.sh
 
-# 3) Validate in QEMU (20 markers)
+# 3) Validate in QEMU (23 markers)
 SKIP_BUILD=1 SEL4_PRIMARY=1 ./scripts/run_tests.sh
 ```
 

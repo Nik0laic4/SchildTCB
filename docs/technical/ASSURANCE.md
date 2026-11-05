@@ -62,7 +62,7 @@ TCB** and must be isolated (Phase 3).
 | Claim | Mechanical check | Result (2026-08-16) |
 |-------|------------------|---------------------|
 | Tier-A modules have no unproved VCs | `bash scripts/prove_kernel.sh` | `not-proved: 0` (130 proved / 56 skipped, 186 total — 2026-11-01) |
-| Level-4 root-task daemons prove (8) | `bash scripts/verify.sh` | "all verification conditions proved" (`not-proved: 0`) |
+| Level-4 root-task proof units prove (8: 1 daemon + 7 libraries/models) | `bash scripts/verify.sh` | "all verification conditions proved" (`not-proved: 0`) |
 | Kernel builds clean | `SCHILD_PROFILE=public ./build.sh` | 182 objects, 0 errors |
 | Boot chain works | `SKIP_BUILD=1 SEL4_PRIMARY=0 bash scripts/run_tests.sh` | PASS (Long Mode → e1000e → SMP → MLS → :80) |
 | Network stack serves HTTP | QEMU + ThinkPad T580 | end-to-end (ARP → IPv4 → TCP → HTTP) |

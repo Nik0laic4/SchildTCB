@@ -47,6 +47,8 @@ with an Ada/SPARK user-space environment (MLS policy formally verified; drivers 
 │  ├────────────────────────────────────────────────────┤  │
 │  │ NetServer Thread (netserver.c + Ada, net_ep)        │  │
 │  │  └─ e1000e + TCP/IP (MMIO @ 0x600000, DMA physics)  │  │
+│  │ FS Daemon Thread (fs_daemon.c + fs_server.adb)      │  │
+│  │  └─ NVMe + SchildFS (own PML4, BAR0 @ 0x620000)     │  │
 │  ├────────────────────────────────────────────────────┤  │
 │  │ Schild TCB Kernel (186 Ada modules, bare-metal)     │  │
 │  │  ├─ 01_hardware: HAL, MMU, APIC, NVMe, e1000e      │  │
@@ -271,7 +273,7 @@ Total RAM: 510 MB
 | 8 | ICMP Handler | `Raw_Len in 8..65507` | ✅ |
 | 9 | Mount Manager | `Point.Ctx_Id = Target` | ✅ |
 
-**MLS Bell-LaPadula policy: 0 unproved (gnatprove). Root-task orchestration (W4): `schild_root_task.adb` `SPARK_Mode => On` (76 checks); `Schild_Launch_Model` / `Schild_HM_Model` (Level 4). Storage isolation (W7): NVMe + SchildFS run in the Ring 3 NetServer (`[NVFS] Read-back VERIFY OK`, QEMU 20/20). HW/driver/crypto: `SPARK_Mode => Off`.**
+**MLS Bell-LaPadula policy: 0 unproved (gnatprove). Root-task orchestration (W4): `schild_root_task.adb` `SPARK_Mode => On` (76 checks); `Schild_Launch_Model` / `Schild_HM_Model` (Level 4). Storage isolation (H86): NVMe + SchildFS run in the Ring 3 FS daemon (own PML4/CSpace, `[NVFS] Read-back VERIFY OK`, QEMU 23/23). HW/driver/crypto: `SPARK_Mode => Off`.**
 
 ---
 

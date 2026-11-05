@@ -10,9 +10,9 @@
 - **Fault handler is an ENDPOINT** set via `TCBSetSpace` (MCS, label 11). Fault
   endpoints: root/NetServer=500 (NetServer badged 0xE2, minted into root CSpace
   214), MLS=199, Config=526. Crash-containment (`op=99`, reply then fault on
-  unmapped `0xFFFFF000`) is demonstrated for **all three** domains, with the
+  unmapped `0xFFFFF000`) is demonstrated for **all four** domains (MLS, Config, NetServer, FS daemon), with the
   root task catching the fault via **blocking `Wait`** and restarting via
-  `Health_Monitor`. Markers enforced by `run_tests.sh` (18 markers).
+  `Health_Monitor`. Markers enforced by `run_tests.sh` (23 markers).
 - **`sel4_primary.iso` boots on the T580** (32 GB) as of 2026-10-04 (framebuffer
   console); the seL4 NetServer drives the real I219-V via ECAM+MSI (W2). See
   `CHANGELOG.md` / `ROADMAP.md` for the canonical current state.

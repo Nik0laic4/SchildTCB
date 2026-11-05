@@ -142,7 +142,7 @@ SMAP is safe. SMEP and CR0.WP also remain active.
 ### Security status
 
 > **Historical snapshot (2026-08-09)** — актуальный статус выше в таблицах
-> (`verify.gpr` доказывает 8 демонов; CVE-2026-SCHILD-02 = 4 fixed + 1 noted).
+> (`verify.gpr` доказывает 8 proof units (1 daemon + 7 библиотек/моделей); CVE-2026-SCHILD-02 = 4 fixed + 1 noted).
 
 - ✅ MLS Bell-LaPadula: 8/8 tests
 - ✅ SPARK Level 4 (verify.gpr): MLS policy + 3 daemons, 0 unproved

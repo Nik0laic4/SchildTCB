@@ -64,7 +64,7 @@ Firewall: blocklist портов + лимитер (`schild_firewall`, `schild_ne
 | Tier | Компоненты | Claim | Механизм |
 |------|-----------|-------|----------|
 | **A** | MLS policy, capability model, process table, firewall verdicts | формально доказано | `prove_kernel.sh` / `verify.sh` (0 unproved VCs) |
-| **B** | e1000e, NVMe, сетевой стек | скомпрометированная периферия не доходит до A | containment (NetServer в Ring 3) |
+| **B** | e1000e, NVMe, сетевой стек | скомпрометированная периферия не доходит до A | containment (NetServer + FS daemon в Ring 3) |
 | **C** | packet-filter crypto, полные правила firewall | явно помечено «scaffold», не заявлено | комментарий + `ROADMAP.md` |
 
 **Честное ограничение:** DMA-изоляции нет (нет IOMMU на целевой T580-конфигурации,
@@ -81,7 +81,7 @@ Firewall: blocklist портов + лимитер (`schild_firewall`, `schild_ne
 ## 7. Критерий приёмки
 
 1. `bash scripts/prove_kernel.sh` → `not-proved: 0`; `bash scripts/verify.sh` → passed.
-2. QEMU: `run_tests.sh` — 20 (seL4) / 6 (standalone) маркеров.
+2. QEMU: `run_tests.sh` — 23 (seL4) / 6 (standalone) маркеров.
 3. Ручная демонстрация UC-1/UC-4: запрос с WAN к `Static_Server` проходит; к
    `HTTP_Gateway` — отклоняется (no read up).
 
