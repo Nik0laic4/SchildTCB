@@ -28,3 +28,6 @@ __pycache__/
 
 # Publication drafts (kept locally until ready for the repo)
 docs/ARTICLE.md
+
+# Agent working docs (session handoff, rules, audit registry) — kept local, not for master
+START/
