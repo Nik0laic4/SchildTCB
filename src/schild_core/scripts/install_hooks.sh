@@ -18,7 +18,7 @@ COMMIT_MSG='#!/usr/bin/env bash
 set -euo pipefail
 REPO_ROOT="$(git rev-parse --show-toplevel)"
 cd "$REPO_ROOT"
-bash src/schild_core/scripts/escalation_check.sh "$1" || { echo ""; echo "[commit-msg] Add Approved-by: human to commit message, or revert Tier A."; exit 1; }'
+bash src/schild_core/scripts/escalation_check.sh "$1"'
 
 printf '%s\n' "$PRE_COMMIT" > .git/hooks/pre-commit
 printf '%s\n' "$COMMIT_MSG" > .git/hooks/commit-msg
