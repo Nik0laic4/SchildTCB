@@ -168,12 +168,27 @@ is
          end;
       end loop;
       if Pos > 0 then
-         -- H82/H72: the shared frame is 4 KB, so one Append transfers at most
-         -- 4096 bytes.  Full 8 KB capture is chunked append (H72, deferred).
-         Len := Unsigned_32 (Pos);
-         if Len > 4096 then Len := 4096; end if;
-         Shared_Copy_To (Buf (0)'Address, Len);
-         Persisted := (C_FS_Append (FS_EP, 0, Len) = 1);
+         -- H72: chunked append. The shared frame is 4 KB, so an 8 KB snapshot
+         -- is transferred in up-to-4096-byte chunks, each appended in order.
+         declare
+            Sent   : Integer := 0;
+            Ok_All : Boolean := True;
+         begin
+            while Sent < Pos loop
+               declare
+                  Chunk : constant Integer := Integer'Min (4096, Pos - Sent);
+               begin
+                  Len := Unsigned_32 (Chunk);
+                  Shared_Copy_To (Buf (Sent)'Address, Len);
+                  if C_FS_Append (FS_EP, 0, Len) /= 1 then
+                     Ok_All := False;
+                     exit;
+                  end if;
+                  Sent := Sent + Chunk;
+               end;
+            end loop;
+            Persisted := Ok_All;
+         end;
       end if;
    end Persist_Audit_Log;
 

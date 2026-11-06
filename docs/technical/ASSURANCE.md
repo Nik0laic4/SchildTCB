@@ -54,8 +54,13 @@ tier-A guarantees. It splits into two honest halves:
 - `boot.S` — 32-bit entry, identity paging, long-mode hand-off
 - `runtime_stubs.c`, `interrupt_handlers.c`, `hw_io.c` — C runtime, IDT, MMIO
 
-Everything else — NVMe / e1000e / ARP / IPv4 / TCP / HTTP — is **outside the
-TCB** and must be isolated (Phase 3).
+Everything else is **outside the TCB** and must be isolated (Phase 3): the
+drivers and daemons run in their own **Tier B** protection domains —
+**NetServer** (e1000e + TCP/IP) and **FS daemon** (SchildFS + NVMe, since H86).
+The FS daemon is Tier B, **not** part of the Verified TCB: `Schild_Schild_Fs` /
+`Schild_Nvme` bodies are `SPARK_Mode => Off` and *contained* by seL4 (own
+PML4/CSpace, NVMe BAR0 @0x620000), and `Persist_Audit_Log` reaches it over IPC
+(`fs_ep`, op=5 Append) — never a direct tier-A→tier-B body call (H65).
 
 ### 2.2 Verified claims (frozen)
 

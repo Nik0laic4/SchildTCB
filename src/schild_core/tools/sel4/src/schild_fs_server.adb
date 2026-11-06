@@ -210,23 +210,22 @@ package body Schild_Fs_Server with SPARK_Mode => Off is
       New_Size := 0;
       if not Initialized then return St_Not_Mounted; end if;
       if Schild_Schild_Fs.Is_Read_Only then return St_Read_Only; end if;
-      -- H82: the audit log is the fixed append target for now (generic
-      -- name-in-shared is deferred with H72).  Snapshot semantics: open the
-      -- pre-allocated file and overwrite from offset 0; Write_File is bounded
-      -- by File.Size, so the file must already exist or be created here.
+      -- H72: append, not snapshot. Create empty (Size 0) on first boot; the
+      -- file grows via Write_File extend. Append position = current Size.
       Schild_Schild_Fs.Open ("audit.log", F, Ok);
       if not Ok then
-         Schild_Schild_Fs.Create_File ("audit.log", 8192, Ok);
+         Schild_Schild_Fs.Create_File ("audit.log", 0, Ok);
          if not Ok then return St_No_Space; end if;
          Schild_Schild_Fs.Open ("audit.log", F, Ok);
          if not Ok then return St_Io_Error; end if;
       end if;
+      F.Curr_Off := F.Size;
       if L > 0 then
          Shared_Copy_From (Buf (0)'Address, L);
          Schild_Schild_Fs.Write_File (F, Buf (0 .. Integer (L) - 1), Ok);
          if not Ok then return St_Io_Error; end if;
       end if;
-      New_Size := L;
+      New_Size := F.Size;
       return St_Ok;
    end Fs_Append;
 

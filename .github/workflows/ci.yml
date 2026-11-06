@@ -62,6 +62,12 @@ jobs:
           cd src/schild_core
           bash scripts/verify.sh
 
+      # H89: prove the full (private) daemon bodies, not just the public stubs.
+      - name: SPARK verify private (full daemon bodies, Level 4)
+        run: |
+          cd src/schild_core
+          bash scripts/verify_private.sh
+
   # Manual-only: the full 186-module SPARK Level-4 proof takes tens of minutes,
   # so it is NOT run on every push. Trigger: Actions -> CI -> Run workflow.
   prove-full:
@@ -101,4 +107,61 @@ jobs:
         with:
           name: proof-report
           path: src/schild_core/obj/proof/report.txt
+          if-no-files-found: warn
+
+  # H68b: full seL4 build + QEMU run (manual, ~20-30 min). Closes the gap where
+  # CI only built bare-metal and the seL4 runtime was never exercised.
+  sel4-full:
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Install system dependencies (qemu, cmake, ninja, grub)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y qemu-system-x86 cmake ninja-build python3 \
+            grub-pc-bin grub-common xorriso mtools
+
+      - name: Install Alire
+        run: |
+          mkdir -p "$HOME/.local/bin"
+          curl -fsSL -o alr.zip https://github.com/alire-project/alire/releases/download/v2.1.1/alr-2.1.1-bin-x86_64-linux.zip
+          unzip -o alr.zip -d alr-dist
+          ALR_BIN="$(find alr-dist -name alr -type f | head -1)"
+          cp "$ALR_BIN" "$HOME/.local/bin/alr"
+          chmod +x "$HOME/.local/bin/alr"
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+          "$HOME/.local/bin/alr" --version
+
+      - name: Install Ada/SPARK toolchain
+        run: |
+          alr -n toolchain --select gnat_native=14.2.1
+          alr -n toolchain --select gprbuild=22.0.1
+          echo "$HOME/.alire/bin" >> "$GITHUB_PATH"
+
+      - name: Build seL4 kernel (MCS, PRINTING)
+        run: |
+          cd src/schild_core
+          KERNEL_MCS=ON bash scripts/build_sel4_kernel.sh
+
+      - name: Build seL4 primary image (kernel + Ada root task)
+        run: |
+          cd src/schild_core
+          SEL4_PRIMARY=1 ./build.sh
+
+      - name: Run QEMU smoke tests (seL4 primary)
+        env:
+          QEMU_TIMEOUT: "120"
+        run: |
+          cd src/schild_core
+          SKIP_BUILD=1 SEL4_PRIMARY=1 bash scripts/run_tests.sh
+
+      - name: Upload serial log
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: sel4-serial-log
+          path: /tmp/schild_serial.*.log
           if-no-files-found: warn

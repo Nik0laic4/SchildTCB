@@ -498,7 +498,11 @@ package body Schild_Schild_Fs with SPARK_Mode => Off is
       -- Audit H52: copy loop indexes Data by 0-based D_Pos; reject
       -- non-0-based Data to prevent OOB.
       if Data'First /= 0 then return; end if;
-      if Wr_Pos + Unsigned_32 (Data'Length) > File.Size then return; end if;
+      -- H72: allow extend. Guard the GPT-gap bound, not File.Size — appending
+      -- to a file (audit.log) is allowed to grow it.
+      if File.Start_LBA + (Wr_Pos + Unsigned_32 (Data'Length) + 511) / 512 > FS_END_LBA then
+         return;
+      end if;
       while D_Pos < Unsigned_32 (Data'Length) loop
          LBA_Off := File.Start_LBA + (Wr_Pos / 512);
          Byte_Off := Wr_Pos rem 512;
@@ -520,6 +524,51 @@ package body Schild_Schild_Fs with SPARK_Mode => Off is
             D_Pos := D_Pos + To_Write;
          end;
       end loop;
+      -- H72: if the write grew the file, persist the new Size (dir entry) and
+      -- the allocator watermark (Next_Free_LBA) with the same commit discipline
+      -- as Create_File.
+      if Wr_Pos > File.Size then
+         declare
+            Dir_Buf : Schild_Nvme.Block_Buf := (others => 0);
+            SB_Buf  : Schild_Nvme.Block_Buf;
+            New_End : constant Unsigned_32 := File.Start_LBA + (Wr_Pos + 511) / 512;
+            SB      : Superblock := (Magic => NVFS_Magic, Version => 1,
+                                     Block_Size => 512, Root_Dir_LBA => Dir_Primary_LBA,
+                                     Root_Entries => Entry_Count,
+                                     Checksum => 0, Dir_Checksum => 0,
+                                     Generation => Current_Generation + 1,
+                                     Next_Free_LBA => (if New_End > Next_Free_LBA
+                                                       then New_End else Next_Free_LBA));
+            Dir_CRC : Unsigned_32;
+            OK : Boolean;
+         begin
+            for I in 0 .. Integer (Entry_Count) - 1 loop
+               if Root_Dir (I).Start_LBA = File.Start_LBA then
+                  Root_Dir (I).Size := Wr_Pos;
+                  exit;
+               end if;
+            end loop;
+            for I in 0 .. Integer (Entry_Count) - 1 loop
+               Dir_Entry_To_Bytes (Root_Dir (I), Dir_Buf, I * 32);
+            end loop;
+            Dir_CRC := CRC32 (Dir_Buf, 512);
+            SB.Dir_Checksum := Dir_CRC;
+            SB.Root_Dir_LBA := (if Active_Dir_LBA = Dir_Primary_LBA
+                                then Dir_Backup_LBA else Dir_Primary_LBA);
+            Superblock_To_Bytes (SB, SB_Buf);
+            SB.Checksum := CRC32 (SB_Buf, 16);
+            Superblock_To_Bytes (SB, SB_Buf);
+            Write_Block_512 (Unsigned_64 (SB.Root_Dir_LBA), Dir_Buf, OK);
+            Write_Block_512 (Unsigned_64 (if Active_Super_LBA = Super_Primary_LBA
+                                          then Super_Backup_LBA
+                                          else Super_Primary_LBA), SB_Buf, OK);
+            Active_Dir_LBA := SB.Root_Dir_LBA;
+            Active_Super_LBA := (if Active_Super_LBA = Super_Primary_LBA
+                                 then Super_Backup_LBA else Super_Primary_LBA);
+            Current_Generation := SB.Generation;
+            File.Size := Wr_Pos;
+         end;
+      end if;
       File.Curr_Off := Wr_Pos;
       Success := True;
    end Write_File;
