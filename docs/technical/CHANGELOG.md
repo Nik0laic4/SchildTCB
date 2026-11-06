@@ -6,6 +6,65 @@
 > *pending* or *target* have not yet been validated. Formal-verification
 > coverage is stated per-module, never as an aggregate percentage.
 
+## v0.30 (2026-11-04) — Stage 3 part 2: audit persistence via IPC (H65/H82 CLOSED)
+
+**Validated: `Persist_Audit_Log` now reaches SchildFS through the FS daemon over IPC (`fs_ep`, op=5 Append) instead of a direct Tier-A→Tier-B body call. The FS body no longer executes in the root-task VSpace — the golden rule is restored (H65). Private profile logs `[S7.2] Audit persisted to SchildFS (audit.log)`; public profile honestly reports `... unavailable` (H70 stub).**
+
+- `schild_audit_logger.ads/.adb` (+ `private/root_task/schild_audit_logger.adb`): `Persist_Audit_Log` takes `FS_EP`; snapshot → `Shared_Copy_To` → `C_FS_Append` (Call4 op=5).
+- `schild_fs_server.adb`: `Fs_Append` implemented — open/create `audit.log`, write snapshot at offset 0, return `new_size`.
+- `schild_sel4_ipc.c`: `schild_fs_append_ipc` (Call4 op=5, success iff `St_Ok`).
+- `schild_root_task.adb`: `Persist` relocated after `Launch_FS_Daemon` + smoke.
+- 2-boot on one NVMe image: boot2 `Mounted OK` + `persisted` — FS state survives reboot. verify.sh + verify_private.sh PASS; run_tests 23/23 both profiles.
+- Remains open: H72 (snapshot, not append; 4 KB frame caps one Append), H88 (enforcement), H90 (timeout on Call), H89 (claim).
+
+## v0.29 (2026-11-04) — Stage 3 part 1: FS daemon dispatch + shared frame (H92 CLOSED)
+
+**Validated: the FS daemon dispatches ops 0–8 (Init/Open/Read/Write/Create/Append/Get_Entry/Is_Mounted/Is_Read_Only) plus the fault-injection op 99 to Ada exports; the shared DMA frame is mapped into the FS VSpace. Smoke `Call(fs_ep,7)` → `[FS] Is_Mounted: OK`.**
+
+- `fs_daemon.c`: switch op 0..8 + 99 → `schild_fs_*` exports.
+- `schild_sel4_syscall.ads/.adb`: `Call_IPC4` (4 MR) + `FS_Shared_Frame_Copy_Slot` (+76); mint + map shared frame into FS VSpace @0x52A000.
+- `schild_sel4_ipc.c`: `schild_sel4_call4` + `read_ipc_mr2/mr3`.
+- `schild_root_task.adb` + `run_tests.sh`: smoke marker `[FS] Is_Mounted: OK`.
+- Gates: bare 182/0; seL4 public/private `Done` (no `[RT] ERROR`); verify PASS; run_tests 23/23 both; build lists PASS.
+
+## v0.28 (2026-11-04) — H90: FS daemon MCS budget constants
+
+**Validated: dedicated `FS_Budget_Us`/`FS_Period_Us` (5000/5000 round-robin) for the FS daemon. Sporadic (budget < period) is rejected empirically: 5000/10000 hangs the NVMe mount (busy-wait polling is preempted mid-DMA; `Call(init)` never returns). Round-robin is the only working mode with the polling driver; real mitigation is a timeout on the Persist Call (Stage 3+).**
+
+## v0.27 (2026-11-04) — H93 CLOSED: FS daemon containment + HM/launch models
+
+**Validated: the FS daemon is a fourth domain in the SPARK `schild_hm_model`/`schild_launch_model`; fault injection (`Call_IPC(fs_ep,99)`) is caught (`badge 0xE3`) and the daemon restarted → `[CONTAINMENT] FS daemon contained`.**
+
+- `schild_hm_model.ads/.adb` (SPARK On): `HM_FS_Daemon`, `FS_Stopped`/`FS_Launched`, case branches.
+- `schild_launch_model.ads/.adb` (SPARK On): `FS_Daemon`; `Valid_State` now 4 domains.
+- `schild_sel4_syscall.ads/.adb` + `schild_root_task.adb`: `FS_TCB_Cap`/`FS_Entry`/`FS_Stack`, `Health_Monitor` branch, containment test.
+- verify.sh all proved (4 domains); run_tests 22/22 both profiles.
+
+## v0.26 (2026-11-04) — H88 partial: FS daemon in the MLS policy
+
+**Validated: the FS daemon is registered as `Role_FS_Server` with `Default_Policy = Level_Top_Secret` (audit sink — it owns NVMe + `audit.log`). Enforcement is still absent: `Mls_Authorize_Op` remains only in `mls_server.c`; IPC carries no level.**
+
+- `schild_server_security_policy.ads`: `Role_FS_Server` + `Top_Secret`; BL consequence documented (Internal cannot write up → user-file writes need a separate path).
+- Status: H88 partial — classification done, enforcement (IPC gate) pending Stage 3+.
+
+## v0.25 (2026-11-04) — H91 CLOSED: NetServer answers 503 on static files
+
+**Validated: after H86 the NetServer VSpace no longer maps NVMe, so the HTTP static-file path would page-fault; `Handle_Request` now returns `HTTP/1.0 503` instead of touching SchildFS when `Local_FS` is disabled.**
+
+- `schild_http_server.ads/.adb`: `Set_Local_FS`; `Local_FS := True` by default; 503 branch when `not Local_FS`.
+- `schild_net_server.adb`: `Net_Init` sets `Set_Local_FS(False)`.
+- Standalone kernel keeps `True` (local-FS static still works).
+- Coverage gap (N13): `run_tests.sh` boots with no network peer, so the HTTP path is not exercised in gates.
+
+## v0.23 (2026-11-04) — H86 CLOSED: NVMe ownership moves to the FS daemon
+
+**Validated: the FS daemon is now the single owner of the NVMe controller (MMIO BAR0 @0x620000, own PML4). NetServer loses `Net_Nvme_Init` and its `with Schild_Nvme`/`Schild_Schild_Fs`; `Fs_Init` does Init_MMIO + SchildFS + self-test, emitting `[NVME]`/`[NVFS]` markers.**
+
+- `schild_sel4_syscall.adb`: `Map_Nvme_Into_FS` (retype from the NIC device-untyped + `Next_Free_Slot`), `FS_PT_Mmio_Slot`, map BAR0 @0x620000 into the FS PML4.
+- `schild_net_server.adb/.ads`: `Net_Nvme_Init` (56 lines) removed; `Net_Init` = e1000e + TCP/IP only.
+- `schild_fs_server.adb` / `fs_daemon.c`: `Fs_Init` = Init_MMIO + SchildFS + self-test.
+- Gates: bare 182/0; seL4 public/private `Done` (no `[RT] ERROR`); verify PASS; run_tests 21/21 both; build lists PASS.
+
 ## v1.0.0-pre (2026-11-01) — W11.3: proven HTTP parser core (schild_http_core)
 
 **Validated: the HTTP/1.0 request parser was extracted from the Off `schild_http_server` into a new On package `schild_http_core` and proved at SPARK Level 4 (`not-proved: 0`), then wired back into the server. This resolves the prover limitation (gotcha §4.5) via constrained buffer/pattern types.**

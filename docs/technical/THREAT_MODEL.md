@@ -439,3 +439,19 @@ with status "documented in TM §12" until either (a) code mitigates or
 
 **C-§9 AS6 refinement.** `Schild_Sel4_Syscall` body is Off (1475 lines). The syscall seam is the largest single trusted component. Mitigations in queue (audit C4): memory-safe C shim, fuzzing of ABI mapping, formal ABI specification. Not fixed in v0.1.0.
 
+### 12.11 FS daemon: NVMe ownership + MLS + Persist via IPC (audit v0.23–v0.30, 2026-11-04)
+
+**C-§4/C-§7 — storage moves out of NetServer into a dedicated FS daemon (H86).** The FS daemon is a fourth Ring-3 domain (own PML4 + CSpace, slots +64..+75, NVMe BAR0 @0x620000). NetServer no longer owns NVMe — one controller, one owner; the previous two-`Init_MMIO` race is impossible. The FS daemon is **Tier B** (like NetServer): `Schild_Schild_Fs` + `Schild_Nvme` bodies are `Off`, isolated by process, not by proof.
+
+**C-§4 golden rule — restored (H65 CLOSED).** `Persist_Audit_Log` now reaches SchildFS via IPC (`fs_ep`, op=5 Append), not a direct Tier-A→Tier-B body call. The FS body executes in the FS-daemon VSpace, never in the root-task VSpace. Residual: shared image RW (H87) still lets an OOB write from any daemon corrupt the shared `.bss` — unchanged from NetServer; ELF loader deferred to v0.3.0.
+
+**C-§7 T16 (MLS classification of FS daemon, H88).** `Role_FS_Server = Top_Secret` (audit sink: owns NVMe + `audit.log`). Enforcement is **partial**: `Mls_Authorize_Op` runs only in `mls_server.c`; IPC carries no level, so read-up/write-down between daemons is held by discipline, not by a gate. `Top_Secret` reading down is BL-permitted; Internal writing up is not — user-file writes need a separate path (or per-object levels). H88 remains open (enforcement = Stage 3+).
+
+**C-§7 shared DMA frame (H92).** The shared frame @0x52A000 is now mapped into three VSpaces (root, NetServer, FS daemon). Access is serialized by the single-threaded root task (one Call at a time); there is no concurrent access today. If daemons ever run concurrently against the frame, move to disjoint offsets or separate frames.
+
+**C-§7 containment (H93).** The FS daemon is a fourth domain in `schild_hm_model`/`schild_launch_model`; fault injection (op=99) → restart → `[CONTAINMENT] FS daemon contained`, proven in SPARK (4 domains).
+
+**C-§7 HTTP→FS regression (H91).** After H86 the NetServer VSpace no longer maps NVMe; the HTTP static path now returns `503` (`Set_Local_FS(False)`) instead of page-faulting. Serving static files via `fs_ep` is a follow-up (H91 (a)).
+
+**C-§7 MCS budget (H90).** The FS daemon runs round-robin 5000/5000. Sporadic (budget < period) **hangs the NVMe mount** (busy-wait polling is preempted mid-DMA; `Call(init)` never returns). Mitigation deferred: timeout on the Persist Call (Stage 3+).
+
