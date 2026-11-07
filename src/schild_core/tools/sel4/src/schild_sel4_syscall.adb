@@ -142,8 +142,8 @@ is
    -- (budget == period, round-robin) or blocked until the next period
    -- (budget < period, sporadic — used by the B.6 timeout path).
    -- =========================================================================
-   NetServer_Budget_Us : constant Word := 5_000;  -- network: largest slice
-   NetServer_Period_Us : constant Word := 5_000;  -- round-robin
+   NetServer_Budget_Us : constant Word := 50_000;  -- network: largest slice
+   NetServer_Period_Us : constant Word := 50_000;  -- round-robin
    MLS_Budget_Us       : constant Word := 2_000;  -- security decisions
    MLS_Period_Us       : constant Word := 2_000;  -- round-robin
    Config_Budget_Us    : constant Word := 1_000;  -- config: smallest slice
