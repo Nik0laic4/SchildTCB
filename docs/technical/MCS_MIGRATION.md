@@ -114,7 +114,7 @@ seL4_TCB_SetSchedParams(tcb, schedcontext, priority, mcp);
   `SchedControl_Start/End` (MCS-сдвиг `untyped` на 16 байт).
 - **Шаг 4** — `schild_sel4_syscall.adb`: для каждого потока создаются SC
   (`size_bits=7`, >= `seL4_MinSchedContextBits`) и Reply-объект, затем
-  `SchedControl_ConfigureFlags` (budget=period=5000 мкс) + `SchedContext_Bind`.
+  `SchedControl_ConfigureFlags` (budget=period=5000 мкс; NetServer позже 50000 — CHANGELOG v0.35) + `SchedContext_Bind`.
   Fault-обработчик ставится через **TCBSetSpace (MCS, label 11)** — в MCS
   fault_ep резолвится в CSpace вызывающего и копируется в TCB, поэтому для
   NetServer badged-копия (0xE2) минтится в **root**-CSpace (slot 214), а не в

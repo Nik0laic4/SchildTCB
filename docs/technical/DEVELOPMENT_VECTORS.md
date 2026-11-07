@@ -132,7 +132,7 @@ Qubes-подобной изоляции рабочей среды.
 | P1 | **H87 CLOSED** — ELF loader, каждый daemon в своём VSpace | Без него VMM в shared image = OOB в общий `.bss` всех daemons | open |
 | P2 | **Блок 3 CLOSED** — AS6 (syscall seam), C1 (ring-0 C) | VMM — новый Tier B компонент, зависит от стабильного seam | open |
 | P3 | **Точка С** — Assurance Case готов | VMM — новая поверхность, добавлять до фиксации baseline нельзя | open |
-| P4 | **H61 решён или официально out of scope** | Merkle tree audit (§4.2.6) — продолжение H61; без решения H61 весь пункт 3 откладывается | open (deferred) |
+| P4 | **H61 решён или официально out of scope** | Merkle tree audit (§4.2.6) — продолжение H61; без решения H61 весь пункт 3 откладывается | ✅ решён (H61 HMAC-SHA256, ключ детерминированный; RNG → Блок 3) |
 | P5 | **TPM/secure element проверить** (T580 fTPM, Pi 4 нет) | Remote attestation (§4.2.7) без HWRoT = measured boot, не attestation | не проверено |
 
 Если хотя бы P1/P3 не закрыты — вектор не начинать. P4/P5 влияют на 2 из 7 пунктов (можно начать с остальных).
@@ -194,11 +194,11 @@ Qubes-подобной изоляции рабочей среды.
 - **Валидатор:** Tier A (SPARK On, если на Ada), проверяет schema перед применением.
 
 #### 4.2.6. Merkle tree / HMAC audit log
-Продолжение H61 (HMAC на superblock, отложен).
+Продолжение H61 (HMAC на superblock — решён в v0.34; ключ детерминированный, RDRAND → Блок 3).
 - **Что даёт:** proof-of-inclusion (доказать, что событие X было в логе, не отдавая весь лог). Tamper-evident: подмена блока ломает корень.
 - **Ограничение:** без HWRoT (TPM) это **detect, не prevent**. P4 с физическим доступом подменяет весь лог + пересчитывает корень. Merkle tree помогает только если root hash сохранён в write-once область (NVMe write-once, или boot counter region).
 - **Формулировка в claim:** «tamper-evident при условии доверенного root hash; без HWRoT — integrity, не attestation».
-- **Зависимость:** H61 (HMAC key placement) решён или out of scope.
+- **Зависимость:** H61 (HMAC key placement) — ✅ решён (Tier B, ключ в superblock; защита от P3, не от P2).
 
 #### 4.2.7. Measured boot (опционально remote attestation с TPM)
 - **Measured boot:** хэши доменов в boot counter region (write-once). Проверяются при следующем boot. **Detect, не attest.**

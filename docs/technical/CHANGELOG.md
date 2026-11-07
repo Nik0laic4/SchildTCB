@@ -6,6 +6,13 @@
 > *pending* or *target* have not yet been validated. Formal-verification
 > coverage is stated per-module, never as an aggregate percentage.
 
+## v0.35 (2026-11-07) — fix: NetServer MCS budget 5000→50000 us (run_tests 8/23)
+
+**Validated: the P1(R10) IPC benchmark (11000 Call/Reply round-trips, op=4) exhausted the NetServer's 5 ms round-robin scheduling-context slice; the interrupted ReplyRecv occasionally lost the reply and the root task hung on Call_IPC (run_tests 8–12/23). A 50 ms slice absorbs the benchmark without budget exhaustion.**
+
+- `schild_sel4_syscall.adb`: `NetServer_Budget_Us/Period_Us` 5_000 → 50_000.
+- Result: 23/23 in 4 of 5 clean public runs (was ~1 of 7). The residual 8/23 is the pre-existing QEMU boot-timeout flake (present on the H63 baseline too; benign — retry resolves).
+
 ## v0.34 (2026-11-07) — H61: HMAC-SHA256 on SchildFS superblock (+ FS-daemon stack alignment fix)
 
 **Validated: the superblock carries an HMAC-SHA256 (`Hmac_Key`/`Hmac_Tag` @448/480, `NVFS_Version` 2→3) verified on mount and refreshed on every metadata commit. Root cause of the long-standing HMAC hang in the FS daemon found and fixed: a misaligned thread stack.**
@@ -15,7 +22,7 @@
 - `schild_schild_fs.adb`: `Compute_SB_HMAC` (HMAC-SHA256 over bytes 0..447), HMAC verify on mount (tamper → strict read-only), HMAC refresh on `Create_File`/`Write_File` extend.
 - Key derivation is **deterministic** for now; RDRAND (`Schild_Rng_Manager`/`Schild_Random_Core`) deferred to Block 3 — merely linking those modules perturbs the shared ELF layout (H87 size-sensitivity).
 - `tools/sel4/build_rt.sh`: `03_crypto` in `DRV_INC`.
-- Gates: bare 183; seL4 public/private `Done`; verify.sh PASS; check_build_lists PASS; run_tests 23/23 achievable (8/23 is a pre-existing QEMU boot-timing flake — confirmed identical on the H63 baseline).
+- Gates: bare 183; seL4 public/private `Done`; verify.sh PASS; check_build_lists PASS; run_tests 23/23 achievable (8/23 had two causes — see v0.35: the IPC-benchmark slice exhaustion (fixed) and a residual pre-existing boot-timeout flake, confirmed on the H63 baseline).
 
 ## v0.33 (2026-11-07) — H63: Schild_Fs_Core SPARK On (provable on-disk parsing)
 
@@ -36,7 +43,7 @@
 - `mkschildfs.py`: writes Version=2 + `Next_Free_LBA` + `Block_Bitmap`.
 - Gates: 5/5 + check_build_lists PASS; multi-boot append PASS (audit.log 197→394).
 - Scope note: the bitmap is currently a used-block record (allocation stays monotonic `Next_Free_LBA`); a free-block allocator arrives with delete/truncate (H62/H73).
-- **H61 (HMAC-SHA256) deferred** — `HMAC_SHA256` hangs in the seL4 FS daemon (bare_runtime foreign thread); root cause under investigation (see START/HANDOFF.md «Следующая сессия»).
+- **H61 (HMAC-SHA256) deferred** — `HMAC_SHA256` hangs in the seL4 FS daemon (bare_runtime foreign thread); root cause under investigation (see START/HANDOFF.md «Следующая сессия»). **→ resolved in v0.34.**
 
 ## v0.31 (2026-11-06) — H72 audit-log append + ASSURANCE §2.1 + CI (H89/H68b)
 
