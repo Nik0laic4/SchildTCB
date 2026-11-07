@@ -6,7 +6,17 @@
 > *pending* or *target* have not yet been validated. Formal-verification
 > coverage is stated per-module, never as an aggregate percentage.
 
-## v0.32 (2026-11-06) — H60: block bitmap + zeroing + format-version migration *(uncommitted)*
+## v0.33 (2026-11-07) — H63: Schild_Fs_Core SPARK On (provable on-disk parsing)
+
+**Validated: the pure on-disk parsing logic (superblock/dir decode, CRC32, serialization) is extracted into `Schild_Fs_Core` with SPARK_Mode => On and proved memory-safe against the untrusted DMA input (P3 / T15). `Schild_Schild_Fs` is now the stateful I/O layer on top.**
+
+- `schild_fs_core.ads/.adb` (new): `Block_Buf` (0..511), `Superblock`, `Dir_Entry`, `CRC32`, `Bytes_To_Superblock`, `Superblock_To_Bytes`, `Bytes_To_Dir_Entry`, `Dir_Entry_To_Bytes` — with Pre/Post contracts, proved at Level 4 (0 not-proved).
+- `schild_schild_fs.ads/.adb`: on-disk types + parsers moved out; the stateful layer `with Schild_Fs_Core` and converts `Schild_Nvme.Block_Buf` ↔ `Schild_Fs_Core.Block_Buf` at the NVMe boundary.
+- `schild_fs_server.adb`: `Dir_Entry` now via `Schild_Fs_Core`.
+- `tools/sel4/build_rt.sh`: `schild_fs_core` added to compile + link lists.
+- Gates: bare 183 objects; seL4 public/private `Done` (no `[RT] ERROR`); verify.sh PASS; run_tests 23/23 both; check_build_lists PASS.
+
+## v0.32 (2026-11-06) — H60: block bitmap + zeroing + format-version migration
 
 **Validated: the superblock carries a `Block_Bitmap` (offset 32) and `NVFS_Version` is bumped 1→2 with auto-reformat of older images. `Create_File` zeroes freshly allocated data blocks and marks them used in the bitmap.**
 
