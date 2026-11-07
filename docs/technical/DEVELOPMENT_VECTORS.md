@@ -96,7 +96,11 @@
 
 ---
 
-## 4. Гипервизор Type-1 (виртуализация поверх seL4)
+## 4. Вектор гипервизора (Type-1) — после Точки С
+
+**Статус:** запланировано, не начато. Предпосылки не выполнены.
+**Точка входа:** после закрытия Блока 3 (H87 ELF loader, AS6, C1) и Точки С (Assurance Case).
+**Не начинать раньше:** VMM в shared image RW = OOB из virtio повреждает `.bss` FS daemon. H87 — жёсткая предпосылка, не опциональная.
 
 ### Цель
 
@@ -120,6 +124,104 @@ Qubes-подобной изоляции рабочей среды.
 - **IPC к хостовым драйверам**: NetServer (сеть), FS Daemon (хранение).
 - **Предпосылки из Б→С**: H87 (ELF loader / code isolation) — обязателен для корректной изоляции
   VM-образов; daemon-архитектура уже даёт нужный IPC-каркас.
+
+### 4.0 Предпосылки (проверить перед стартом)
+
+| # | Предпосылка | Почему обязательна | Статус |
+|---|---|---|---|
+| P1 | **H87 CLOSED** — ELF loader, каждый daemon в своём VSpace | Без него VMM в shared image = OOB в общий `.bss` всех daemons | open |
+| P2 | **Блок 3 CLOSED** — AS6 (syscall seam), C1 (ring-0 C) | VMM — новый Tier B компонент, зависит от стабильного seam | open |
+| P3 | **Точка С** — Assurance Case готов | VMM — новая поверхность, добавлять до фиксации baseline нельзя | open |
+| P4 | **H61 решён или официально out of scope** | Merkle tree audit (§4.2.6) — продолжение H61; без решения H61 весь пункт 3 откладывается | open (deferred) |
+| P5 | **TPM/secure element проверить** (T580 fTPM, Pi 4 нет) | Remote attestation (§4.2.7) без HWRoT = measured boot, не attestation | не проверено |
+
+Если хотя бы P1/P3 не закрыты — вектор не начинать. P4/P5 влияют на 2 из 7 пунктов (можно начать с остальных).
+
+### 4.1 Компоненты (по приоритету)
+
+**Порядок:** 7 → 5 → 1 → 4 → 2 → 3 → 6. Каждый пункт — отдельный Tier B домен или расширение существующего.
+
+| # | Компонент | Tier | Приоритет | Оценка | Предпосылки |
+|---|---|---|---|---|---|
+| 7 | **Guest awareness (SMBIOS/DT)** | B | первый (S) | S | нет |
+| 5 | **stdout via virtio-console → Console daemon** | B | второй (S-M) | S-M | нет |
+| 1 | **VMM (Rust или Ada)** | B | третий (L) | L | P1, P2 |
+| 4 | **MCS Dashboard** | B | четвёртый (M) | M | VMM работает, manual accounting |
+| 2 | **YAML Capability Manager** | A + B | пятый (M-L) | M-L | валидатор — Tier A, SPARK On |
+| 3 | **Merkle tree / HMAC audit log** | B | шестой (M) | M | H61 решён |
+| 6 | **Measured boot (опц. TPM quote)** | — | седьмой (M/L) | M/L | TPM есть |
+
+### 4.2 Детали по компонентам
+
+#### 4.2.1. Guest awareness (SMBIOS/DMI на x86, DT на ARM)
+Гость получает имя «Schild TCB», версию, capabilities. Не security feature — UX и интеграция. Гость может адаптировать поведение.
+- **Риск:** нет (информация публичная).
+- **Реализация:** QEMU virtio-mmio dtb или SMBIOS-таблица в VMM.
+
+#### 4.2.2. stdout через virtio-console в Console daemon
+Гость пишет в virtio-console → VMM → Console daemon (Ring 3, свой audit.log).
+- **Риск (T18):** гость подделывает формат audit event → подделка лога. Fix: префикс `GUEST:<vmid>:` + валидация (длина, UTF-8, no control chars) в Console daemon.
+- **Риск:** три hop (guest → VMM → Console → FS) — latency. Для отладки приемлемо.
+- **Альтернатива:** прямо в serial (UART) — проще, но не переживает reboot.
+
+#### 4.2.3. VMM (Type-1, Rust или Ada)
+**Rust:**
+- Плюс: borrow checker для virtio (UAF/double-free — классика C-драйверов).
+- Минус: поддержка seL4 x86_64 **MCS** (sched context, reply object, timeout endpoint) — проверить до выбора. Официальные биндинги (`sel4-rust`, `ferros`) сильнее на aarch64.
+- Реализация: `no_std` + `unsafe` только в FFI-слое (sel4 syscalls).
+
+**Ada/SPARK (альтернатива):**
+- Плюс: единый язык с TCB, SPARK On для критичных частей (capability dispatch).
+- Минус: virtio на SPARK — constrained buffers, без указательной арифметики, сложно.
+
+**C (fallback):**
+- Плюс: как NetServer, паттерн проверен.
+- Минус: memory safety нет, containment единственный backstop.
+
+**Решение:** проверить seL4 Rust на x86_64 MCS **до** начала. Если нет — Ada/SPARK (subset) или C+фаззинг. Периферия — только эмуляция virtio (NIC/blk/console); **без PCIe passthrough** (IOMMU заблокирован upstream).
+
+#### 4.2.4. MCS Dashboard
+Показывает CPU usage каждого sched context в реальном времени.
+- **Проблема:** seL4 не даёт «сколько CPU потребил sched context» через API.
+- **Вариант A (manual):** каждый daemon зовёт `Call(root, op=report_budget, used_cycles)` в конце работы. RDTSC. Приблизительно, без изменения kernel.
+- **Вариант B (tracing kernel):** seL4 tracepoints, root task читает trace buffer. **Не verified config** — claim ломается.
+- **Решение:** вариант A. Demo, не security.
+
+#### 4.2.5. YAML Capability Manager
+Декларативная конфигурация доменов вместо Ada-кода.
+- **Валидация — часть TCB (T19):** capability schema: кто может дать что. «FS daemon — единственный, кому можно NVMe», «VMM может получить только virtio-NIC и virtio-blk». Слабая валидация = privilege escalation через YAML.
+- **Парсер:** YAML на Rust (memory-safe) или свой constrained формат (TOML без вложенности). SPARK YAML-парсер — долго, не оправдан.
+- **Валидатор:** Tier A (SPARK On, если на Ada), проверяет schema перед применением.
+
+#### 4.2.6. Merkle tree / HMAC audit log
+Продолжение H61 (HMAC на superblock, отложен).
+- **Что даёт:** proof-of-inclusion (доказать, что событие X было в логе, не отдавая весь лог). Tamper-evident: подмена блока ломает корень.
+- **Ограничение:** без HWRoT (TPM) это **detect, не prevent**. P4 с физическим доступом подменяет весь лог + пересчитывает корень. Merkle tree помогает только если root hash сохранён в write-once область (NVMe write-once, или boot counter region).
+- **Формулировка в claim:** «tamper-evident при условии доверенного root hash; без HWRoT — integrity, не attestation».
+- **Зависимость:** H61 (HMAC key placement) решён или out of scope.
+
+#### 4.2.7. Measured boot (опционально remote attestation с TPM)
+- **Measured boot:** хэши доменов в boot counter region (write-once). Проверяются при следующем boot. **Detect, не attest.**
+- **Remote attestation:** требует TPM quote (удалённая сторона проверяет, что хэши получены от доверенного корня). T580 — проверить fTPM. Pi 4 — нет.
+- **Без HWRoT:** не заявлять как attestation. Записать в THREAT_MODEL §8 как R16 (уже есть).
+
+### 4.3 Threat model updates
+
+Новые строки в THREAT_MODEL.md §12.12 (T17–T20, R19–R20):
+- **T17** VMM compromise (virtio bug) → контроль над гостем, containment защищает ядро. Гость — Tier C (untrusted).
+- **T18** Guest → host log injection (stdout в audit log). Fix: префикс + валидация.
+- **T19** YAML capability escalation. Fix: schema-валидатор (Tier A).
+- **T20** «Attestation» без HWRoT = measured boot, не remote attestation. Не заявлять шире.
+- **R19** VMM в shared image без H87 → OOB в `.bss`. Предпосылка P1.
+- **R20** MCS Dashboard через tracing kernel → не-verified config, claim ломается. Fix: manual accounting.
+
+### 4.4 Что НЕ делать в этом векторе
+
+- Не начинать до H87/Точки С (P1/P3).
+- Не заявлять remote attestation без TPM.
+- Не использовать tracing kernel для MCS Dashboard (claim ломается).
+- Не делать YAML без schema-валидатора (T19).
+- Не выносить VMM в Ring 0 (VMM — Tier B, не TCB).
 
 ### Референсы (брать принципы, адаптировать)
 

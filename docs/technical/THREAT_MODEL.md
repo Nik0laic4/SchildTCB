@@ -427,7 +427,7 @@ with status "documented in TM §12" until either (a) code mitigates or
 
 **C-§7 T14 (PID reuse).** Moved from §8.8 residual into the threat table as T14. Threat: P2 sends signal or IPC to a PID that was just recycled by an unrelated process. Status: **deferred to v0.2.0** (design in progress: monotonic PID or reuse delay; capability-based identity preferred long-term). Tracked in audit registry as M1.
 
-**C-§7 T15 (FS metadata tamper, HMAC key placement).** The FS metadata is protected by CRC32 (integrity, not authenticity). P3 (malicious NVMe via DMA) or P4 (write access to disk) can tamper and recompute CRC32. Moving to HMAC-SHA256 requires answering: where does the key live? (a) NetServer (Tier B) — P2 can read it; HMAC protects only against P3. (b) Root task (Tier A) — FS must migrate to Tier A or verify HMAC over IPC per block. (c) Hardware key store — not available (no TPM, no HWRoT). Until decided, FS metadata tamper remains accepted residual (R18). Audit H61.
+**C-§7 T15 (FS metadata tamper, HMAC key placement).** The FS metadata is protected by CRC32 (integrity, not authenticity). P3 (malicious NVMe via DMA) or P4 (write access to disk) can tamper and recompute CRC32. Moving to HMAC-SHA256 requires answering: where does the key live? (a) NetServer (Tier B) — P2 can read it; HMAC protects only against P3. (b) Root task (Tier A) — FS must migrate to Tier A or verify HMAC over IPC per block. (c) Hardware key store — not available (no TPM, no HWRoT). Until decided, FS metadata tamper remains accepted residual (R18). Audit H61. **Status (2026-11-06):** variant (a) was attempted (HMAC-SHA256 key+tag in the FS daemon) but `HMAC_SHA256` hangs in the seL4 FS daemon (bare_runtime foreign thread; ruled out stack/secondary-stack/range-check/link; KAT passes on host). Deferred pending diagnosis — see START/HANDOFF.md «Следующая сессия».
 
 **C-§8 R16 (signed boot without HWRoT).** P4 with write access to the disk can recompute SHA-256. Without TPM/HWRoT there is no defence. Accepted architectural risk. Boot counter lockout (W9.1) limits availability damage from bad slots, not integrity from malicious P4. This was already stated in §8.4; explicitly restated here as accepted.
 
@@ -454,4 +454,20 @@ with status "documented in TM §12" until either (a) code mitigates or
 **C-§7 HTTP→FS regression (H91).** After H86 the NetServer VSpace no longer maps NVMe; the HTTP static path now returns `503` (`Set_Local_FS(False)`) instead of page-faulting. Serving static files via `fs_ep` is a follow-up (H91 (a)).
 
 **C-§7 MCS budget (H90).** The FS daemon runs round-robin 5000/5000. Sporadic (budget < period) **hangs the NVMe mount** (busy-wait polling is preempted mid-DMA; `Call(init)` never returns). Mitigation deferred: timeout on the Persist Call (Stage 3+).
+
+### 12.12 Hypervisor vector — threat model additions (2026-11-07, planned)
+
+**Status:** planned for after Point C. Preconditions: H87 (ELF loader), Block 3 (AS6, C1), Assurance Case. Do not start before H87 — VMM in shared image RW = OOB into shared `.bss`.
+
+**T17 — VMM compromise (P1/P2).** The VMM is Tier B (Ring 3, own PML4/CSpace). A virtio bug (UAF/double-free in descriptor rings) gives the attacker control of the guest VM, but containment protects the core. The guest inside the VMM is Tier C (untrusted, not in TCB). Residual: VMM code is memory-unsafe until ELF loader + Rust/SPARK.
+
+**T18 — Guest → host log injection (P1 inside guest).** Guest stdout via virtio-console to the host audit log. A malicious guest can forge audit event format (`[PASS]`, `[CONTAINMENT]`). Fix: `GUEST:<vmid>:` prefix + validation (length, UTF-8, no control chars) in Console daemon; guest log is a separate file, never the core audit.log.
+
+**T19 — YAML capability escalation (P4 config author).** Declarative YAML maps to seL4 invocations. Weak validation = privilege escalation ("give VM MMIO on NVMe"). Fix: capability schema (Tier A, SPARK On): FS daemon is the only domain allowed NVMe; VMM gets only virtio-NIC/virtio-blk; MMIO allowlist per role.
+
+**T20 — "Attestation" without HWRoT = measured boot (P4).** Without TPM/secure element, hash measurements are stored in writable NVMe — P4 can replace both hashes and images. Claim must be "measured boot (integrity detect)", not "remote attestation". Remote attestation requires TPM quote (T580 fTPM — verify; Pi 4 — none).
+
+**R19 — VMM shared image (P2, blocker).** Until H87, VMM shares image frames with root task (`.bss` RW). OOB in virtio = corruption of FS daemon/MLS globals. This is why H87 is a hard precondition for the hypervisor vector, not optional.
+
+**R20 — MCS Dashboard via tracing kernel (claim risk).** Reading sched-context usage via seL4 tracepoints requires a non-verified kernel config. Claim "verified seL4" would no longer hold for that build. Use manual accounting (daemon reports cycles via IPC) or accept claim weakening.
 

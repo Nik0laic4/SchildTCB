@@ -6,6 +6,29 @@
 > *pending* or *target* have not yet been validated. Formal-verification
 > coverage is stated per-module, never as an aggregate percentage.
 
+## v0.32 (2026-11-06) — H60: block bitmap + zeroing + format-version migration *(uncommitted)*
+
+**Validated: the superblock carries a `Block_Bitmap` (offset 32) and `NVFS_Version` is bumped 1→2 with auto-reformat of older images. `Create_File` zeroes freshly allocated data blocks and marks them used in the bitmap.**
+
+- `schild_schild_fs.ads`: `NVFS_Version := 2`; `Block_Bitmap : Unsigned_32` in the Superblock (offset 32).
+- `schild_schild_fs.adb`: serialize/parse `Block_Bitmap`; mount accepts only Version=2 (v1 → fresh format, H75 path); `Create_File` zeroes + marks the bitmap; `Write_File` extend marks newly allocated blocks.
+- `mkschildfs.py`: writes Version=2 + `Next_Free_LBA` + `Block_Bitmap`.
+- Gates: 5/5 + check_build_lists PASS; multi-boot append PASS (audit.log 197→394).
+- Scope note: the bitmap is currently a used-block record (allocation stays monotonic `Next_Free_LBA`); a free-block allocator arrives with delete/truncate (H62/H73).
+- **H61 (HMAC-SHA256) deferred** — `HMAC_SHA256` hangs in the seL4 FS daemon (bare_runtime foreign thread); root cause under investigation (see START/HANDOFF.md «Следующая сессия»).
+
+## v0.31 (2026-11-06) — H72 audit-log append + ASSURANCE §2.1 + CI (H89/H68b)
+
+**Validated: `Write_File` grows a file (extend) and `Fs_Append` appends at `File.Size` — the audit log grows across boots instead of being overwritten. The FS daemon is classified Tier B (ASSURANCE §2.1). `verify_private.sh` and a full `SEL4_PRIMARY=1` build now run in CI.**
+
+- `schild_schild_fs.adb`: `Write_File` extend path — grows `File.Size`, updates the dir entry + `Next_Free_LBA`, A/B commit.
+- `schild_fs_server.adb`: `Fs_Append` sets `Curr_Off := File.Size`; `audit.log` created with Size=0.
+- `schild_audit_logger.adb` (private): `Persist_Audit_Log` chunked ≤4096 bytes.
+- `docs/technical/ASSURANCE.md` §2.1: FS daemon = Tier B (not in the Verified TCB).
+- `.github/workflows/ci.yml`: `verify_private.sh` step (H89) + `sel4-full` job (H68b).
+- Dev note (H72): `Last_Persisted_Event_ID` deliberately omitted — `Event_ID` resets each boot and the root task cannot read the superblock across the IPC boundary; append uses `File.Size` as the actual size.
+- Gates: 5/5 + check_build_lists PASS; multi-boot append PASS (audit.log 197→394).
+
 ## v0.30 (2026-11-04) — Stage 3 part 2: audit persistence via IPC (H65/H82 CLOSED)
 
 **Validated: `Persist_Audit_Log` now reaches SchildFS through the FS daemon over IPC (`fs_ep`, op=5 Append) instead of a direct Tier-A→Tier-B body call. The FS body no longer executes in the root-task VSpace — the golden rule is restored (H65). Private profile logs `[S7.2] Audit persisted to SchildFS (audit.log)`; public profile honestly reports `... unavailable` (H70 stub).**
