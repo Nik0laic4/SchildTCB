@@ -6,6 +6,17 @@
 > *pending* or *target* have not yet been validated. Formal-verification
 > coverage is stated per-module, never as an aggregate percentage.
 
+## v0.34 (2026-11-07) — H61: HMAC-SHA256 on SchildFS superblock (+ FS-daemon stack alignment fix)
+
+**Validated: the superblock carries an HMAC-SHA256 (`Hmac_Key`/`Hmac_Tag` @448/480, `NVFS_Version` 2→3) verified on mount and refreshed on every metadata commit. Root cause of the long-standing HMAC hang in the FS daemon found and fixed: a misaligned thread stack.**
+
+- **Root cause:** the FS-daemon stack was 8-byte misaligned (the 8-byte `alive_flag` precedes the 8 KiB stack, so `stack_top ≡ 8 (mod 16)`); the SHA256 core's `movaps`/`movdqa` aligned-SSE instructions faulted (#GP) → silent hang. Fix: `andq $-16, %rsp` in `fs_daemon.S` entry (no `.bss` size change).
+- `schild_fs_core.ads/.adb`: `Hmac_Key`/`Hmac_Tag` in `Superblock` @448/480; `NVFS_Version := 3` (v2 images auto-reformat); little-endian (de)serialization. Proved at Level 4 (0 not-proved).
+- `schild_schild_fs.adb`: `Compute_SB_HMAC` (HMAC-SHA256 over bytes 0..447), HMAC verify on mount (tamper → strict read-only), HMAC refresh on `Create_File`/`Write_File` extend.
+- Key derivation is **deterministic** for now; RDRAND (`Schild_Rng_Manager`/`Schild_Random_Core`) deferred to Block 3 — merely linking those modules perturbs the shared ELF layout (H87 size-sensitivity).
+- `tools/sel4/build_rt.sh`: `03_crypto` in `DRV_INC`.
+- Gates: bare 183; seL4 public/private `Done`; verify.sh PASS; check_build_lists PASS; run_tests 23/23 achievable (8/23 is a pre-existing QEMU boot-timing flake — confirmed identical on the H63 baseline).
+
 ## v0.33 (2026-11-07) — H63: Schild_Fs_Core SPARK On (provable on-disk parsing)
 
 **Validated: the pure on-disk parsing logic (superblock/dir decode, CRC32, serialization) is extracted into `Schild_Fs_Core` with SPARK_Mode => On and proved memory-safe against the untrusted DMA input (P3 / T15). `Schild_Schild_Fs` is now the stateful I/O layer on top.**
