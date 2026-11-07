@@ -4,6 +4,7 @@
 with System;
 with Interfaces; use Interfaces;
 with Schild_Schild_Fs;
+with Schild_Fs_Core;
 with Schild_Nvme;
 
 package body Schild_Fs_Server with SPARK_Mode => Off is
@@ -83,7 +84,7 @@ package body Schild_Fs_Server with SPARK_Mode => Off is
    function Find_By_Start_LBA
      (Handle : Unsigned_32; F : out Schild_Schild_Fs.File_Info) return Boolean
    is
-      Ent  : Schild_Schild_Fs.Dir_Entry;
+      Ent  : Schild_Fs_Core.Dir_Entry;
       Ok   : Boolean;
       Idx  : Unsigned_32 := 0;
    begin
@@ -230,7 +231,7 @@ package body Schild_Fs_Server with SPARK_Mode => Off is
    end Fs_Append;
 
    function Fs_Get_Entry (Index : Unsigned_32) return Unsigned_32 is
-      Ent : Schild_Schild_Fs.Dir_Entry;
+      Ent : Schild_Fs_Core.Dir_Entry;
       Ok  : Boolean;
       Raw : Schild_Schild_Fs.Unsigned_8_Array (0 .. 31) := (others => 0);
    begin

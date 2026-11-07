@@ -1,9 +1,10 @@
 -- Schild TCB SchildFS — Minimal Read-Only Filesystem
 with System; with Interfaces;
 with Schild_Nvme; with Schild_Uart_Driver;
+with Schild_Fs_Core;
 
 package body Schild_Schild_Fs with SPARK_Mode => Off is
-   use Interfaces;
+   use Interfaces; use Schild_Fs_Core;
 
    procedure C_Putln (Addr : System.Address; Len : Integer);
    pragma Import (C, C_Putln, "schild_uart_putln");
@@ -12,21 +13,6 @@ package body Schild_Schild_Fs with SPARK_Mode => Off is
    -- corrupted metadata blocks (superblock header / root directory) so a
    -- power-loss torn write is observed on the next mount instead of being
    -- silently trusted.
-   function CRC32 (Data : Schild_Nvme.Block_Buf; Len : Integer) return Unsigned_32 is
-      Crc : Unsigned_32 := 16#FFFF_FFFF#;
-   begin
-      for I in 0 .. Len - 1 loop
-         Crc := Crc xor Unsigned_32 (Data (I));
-         for J in 1 .. 8 loop
-            if (Crc and 1) = 1 then
-               Crc := Shift_Right (Crc, 1) xor 16#EDB8_8320#;
-            else
-               Crc := Shift_Right (Crc, 1);
-            end if;
-         end loop;
-      end loop;
-      return not Crc;
-   end CRC32;
 
 
    Mounted  : Boolean := False;
@@ -54,70 +40,14 @@ package body Schild_Schild_Fs with SPARK_Mode => Off is
    Active_Dir_LBA     : Unsigned_32 := Dir_Primary_LBA;     -- authoritative slot
    Current_Generation : Unsigned_32 := 0;  -- generation of the active slot
 
-   procedure Read_Block_512 (LBA : Unsigned_64; Buf : out Schild_Nvme.Block_Buf;
+   procedure Read_Block_512 (LBA : Unsigned_64; Buf : out Block_Buf;
                              Success : out Boolean) is
    begin
       Schild_Nvme.Read_Block (LBA, Success);
-      if Success then Buf := Schild_Nvme.Get_Buffer; end if;
+      if Success then Buf := Block_Buf (Schild_Nvme.Get_Buffer); end if;
    end Read_Block_512;
 
-   procedure Bytes_To_Superblock
-     (Raw : in Schild_Nvme.Block_Buf; SB : out Superblock) is
-      use type Unsigned_32;
-   begin
-      SB.Magic := Unsigned_32 (Raw (0)) or Shift_Left (Unsigned_32 (Raw (1)), 8)
-        or Shift_Left (Unsigned_32 (Raw (2)), 16)
-        or Shift_Left (Unsigned_32 (Raw (3)), 24);
-      SB.Version := Unsigned_16 (Raw (4)) or Shift_Left (Unsigned_16 (Raw (5)), 8);
-      SB.Root_Dir_LBA := Unsigned_32 (Raw (8)) or Shift_Left (Unsigned_32 (Raw (9)), 8)
-        or Shift_Left (Unsigned_32 (Raw (10)), 16)
-        or Shift_Left (Unsigned_32 (Raw (11)), 24);
-      SB.Root_Entries := Unsigned_32 (Raw (12)) or Shift_Left (Unsigned_32 (Raw (13)), 8)
-        or Shift_Left (Unsigned_32 (Raw (14)), 16)
-        or Shift_Left (Unsigned_32 (Raw (15)), 24);
-      SB.Checksum := Unsigned_32 (Raw (16)) or Shift_Left (Unsigned_32 (Raw (17)), 8)
-        or Shift_Left (Unsigned_32 (Raw (18)), 16)
-        or Shift_Left (Unsigned_32 (Raw (19)), 24);
-      SB.Dir_Checksum := Unsigned_32 (Raw (20)) or Shift_Left (Unsigned_32 (Raw (21)), 8)
-        or Shift_Left (Unsigned_32 (Raw (22)), 16)
-        or Shift_Left (Unsigned_32 (Raw (23)), 24);
-      SB.Generation := Unsigned_32 (Raw (24)) or Shift_Left (Unsigned_32 (Raw (25)), 8)
-        or Shift_Left (Unsigned_32 (Raw (26)), 16)
-        or Shift_Left (Unsigned_32 (Raw (27)), 24);
-      -- Audit H74: persist and restore allocator state across reboot.
-      SB.Next_Free_LBA := Unsigned_32 (Raw (28)) or Shift_Left (Unsigned_32 (Raw (29)), 8)
-        or Shift_Left (Unsigned_32 (Raw (30)), 16)
-        or Shift_Left (Unsigned_32 (Raw (31)), 24);
-      -- Audit H60: used-block bitmap (bytes 32..35).
-      SB.Block_Bitmap := Unsigned_32 (Raw (32)) or Shift_Left (Unsigned_32 (Raw (33)), 8)
-        or Shift_Left (Unsigned_32 (Raw (34)), 16)
-        or Shift_Left (Unsigned_32 (Raw (35)), 24);
-   end Bytes_To_Superblock;
 
-   procedure Bytes_To_Dir_Entry
-     (Raw : in Schild_Nvme.Block_Buf; Off : in Integer;
-      Ent : out Dir_Entry) is
-      use type Unsigned_32;
-      Base : constant Integer := Off;
-   begin
-      for I in 0 .. 23 loop
-         declare
-            C : constant Unsigned_8 := Raw (Base + I);
-         begin
-            if C in 16#20# .. 16#7E# then
-               Ent.Name (I + 1) := Character'Val (C);
-            else Ent.Name (I + 1) := ' '; end if;
-         end;
-      end loop;
-      Ent.Start_LBA := Unsigned_32 (Raw (Base + 24))
-        or Shift_Left (Unsigned_32 (Raw (Base + 25)), 8)
-        or Shift_Left (Unsigned_32 (Raw (Base + 26)), 16)
-        or Shift_Left (Unsigned_32 (Raw (Base + 27)), 24);
-      Ent.Size := Unsigned_32 (Raw (Base + 28))
-        or Shift_Left (Unsigned_32 (Raw (Base + 29)), 8)
-        or Shift_Left (Unsigned_32 (Raw (Base + 30)), 16)
-        or Shift_Left (Unsigned_32 (Raw (Base + 31)), 24);
-   end Bytes_To_Dir_Entry;
 
    -- Audit H79: Next_Free_LBA and Write_Block_512 are used inside Init
    -- (fresh-format path and persisted allocator state). Ada requires
@@ -125,12 +55,11 @@ package body Schild_Schild_Fs with SPARK_Mode => Off is
    Next_Free_LBA : Unsigned_32 := FS_BASE_LBA + 4;
    Block_Bitmap  : Unsigned_32 := 0;  -- H60: used-block bitmap (data region)
 
-   procedure Write_Block_512 (LBA : Unsigned_64; Data : Schild_Nvme.Block_Buf;
+   procedure Write_Block_512 (LBA : Unsigned_64; Data : Block_Buf;
                               Success : out Boolean);
 
    -- Audit H75: forward declaration so Init (defined before the helper)
    -- can format a fresh device. The body lives in the WRITE SUPPORT section.
-   procedure Superblock_To_Bytes (SB : Superblock; Raw : out Schild_Nvme.Block_Buf);
 
    procedure Init (Success : out Boolean) is
       Msg_Mount : constant String := "[NVFS] Mounting filesystem...";
@@ -138,7 +67,7 @@ package body Schild_Schild_Fs with SPARK_Mode => Off is
       Msg_Dir_CRC : constant String := "[NVFS] Directory checksum mismatch";
       Msg_OK    : constant String := "[NVFS] Mounted OK";
       Msg_Fresh : constant String := "[NVFS] Fresh device formatted";
-      Buf : Schild_Nvme.Block_Buf;
+      Buf : Block_Buf;
       SB_A, SB_B, Chosen : Superblock;
       Have_A, Have_B : Boolean := False;
       SB_A_Magic_OK, SB_B_Magic_OK : Boolean := False;
@@ -190,24 +119,24 @@ package body Schild_Schild_Fs with SPARK_Mode => Off is
                   Root_Dir_LBA => Dir_Primary_LBA, Root_Entries => 0,
                   Checksum => 0, Dir_Checksum => 0, Generation => 1,
                   Next_Free_LBA => FS_BASE_LBA + 4, Block_Bitmap => 0);
-               SB_Buf : Schild_Nvme.Block_Buf;
-               Dir_Buf : Schild_Nvme.Block_Buf := (others => 0);
+               SB_Buf : Block_Buf;
+               Dir_Buf : Block_Buf := (others => 0);
                W_OK : Boolean;
             begin
-               Schild_Nvme.Fill_Buffer (Dir_Buf);
+               Schild_Nvme.Fill_Buffer (Schild_Nvme.Block_Buf (Dir_Buf));
                Schild_Nvme.Write_Block (Unsigned_64 (Dir_Primary_LBA), W_OK);
                if not W_OK then return; end if;
-               Schild_Nvme.Fill_Buffer (Dir_Buf);
+               Schild_Nvme.Fill_Buffer (Schild_Nvme.Block_Buf (Dir_Buf));
                Schild_Nvme.Write_Block (Unsigned_64 (Dir_Backup_LBA), W_OK);
                if not W_OK then return; end if;
                SB_Fresh.Dir_Checksum := CRC32 (Dir_Buf, 512);
                Superblock_To_Bytes (SB_Fresh, SB_Buf);
                SB_Fresh.Checksum := CRC32 (SB_Buf, 16);
                Superblock_To_Bytes (SB_Fresh, SB_Buf);
-               Schild_Nvme.Fill_Buffer (SB_Buf);
+               Schild_Nvme.Fill_Buffer (Schild_Nvme.Block_Buf (SB_Buf));
                Schild_Nvme.Write_Block (Unsigned_64 (Super_Primary_LBA), W_OK);
                if not W_OK then return; end if;
-               Schild_Nvme.Fill_Buffer (SB_Buf);
+               Schild_Nvme.Fill_Buffer (Schild_Nvme.Block_Buf (SB_Buf));
                Schild_Nvme.Write_Block (Unsigned_64 (Super_Backup_LBA), W_OK);
                if not W_OK then return; end if;
                Active_Super_LBA := Super_Primary_LBA;
@@ -324,7 +253,7 @@ package body Schild_Schild_Fs with SPARK_Mode => Off is
       Buf_Size  : constant Unsigned_32 := Unsigned_32 (Buf'Length);
       Remaining : Unsigned_32;
       To_Read   : Unsigned_32;
-      Block_Buf : Schild_Nvme.Block_Buf;
+      Scratch : Block_Buf;
       LBA_Off   : Unsigned_32;
       Byte_Off  : Unsigned_32;
       Read_OK   : Boolean;
@@ -339,7 +268,7 @@ package body Schild_Schild_Fs with SPARK_Mode => Off is
       else To_Read := Remaining; end if;
       LBA_Off := File.Start_LBA + (File.Curr_Off / 512);
       Byte_Off := File.Curr_Off rem 512;
-      Read_Block_512 (Unsigned_64 (LBA_Off), Block_Buf, Read_OK);
+      Read_Block_512 (Unsigned_64 (LBA_Off), Scratch, Read_OK);
       if not Read_OK then return; end if;
       declare
          Copied : Unsigned_32 := 0;
@@ -347,7 +276,7 @@ package body Schild_Schild_Fs with SPARK_Mode => Off is
       begin
          while Copied < To_Read loop
             exit when Off >= 512;
-            Buf (Integer (Copied)) := Block_Buf (Integer (Off));
+            Buf (Integer (Copied)) := Scratch (Integer (Off));
             Copied := Copied + 1; Off := Off + 1;
          end loop;
          File.Curr_Off := File.Curr_Off + Copied;
@@ -358,71 +287,14 @@ package body Schild_Schild_Fs with SPARK_Mode => Off is
    -- Stage 7.8: WRITE SUPPORT
 
 
-   procedure Superblock_To_Bytes (SB : Superblock; Raw : out Schild_Nvme.Block_Buf) is
-   begin
-      Raw := (others => 0);
-      Raw (0) := Unsigned_8 (SB.Magic and 255);
-      Raw (1) := Unsigned_8 (Shift_Right (SB.Magic, 8) and 255);
-      Raw (2) := Unsigned_8 (Shift_Right (SB.Magic, 16) and 255);
-      Raw (3) := Unsigned_8 (Shift_Right (SB.Magic, 24) and 255);
-      Raw (4) := Unsigned_8 (SB.Version and 255);
-      Raw (5) := Unsigned_8 (Shift_Right (SB.Version, 8) and 255);
-      Raw (8) := Unsigned_8 (SB.Root_Dir_LBA and 255);
-      Raw (9) := Unsigned_8 (Shift_Right (SB.Root_Dir_LBA, 8) and 255);
-      Raw (10) := Unsigned_8 (Shift_Right (SB.Root_Dir_LBA, 16) and 255);
-      Raw (11) := Unsigned_8 (Shift_Right (SB.Root_Dir_LBA, 24) and 255);
-      Raw (12) := Unsigned_8 (SB.Root_Entries and 255);
-      Raw (13) := Unsigned_8 (Shift_Right (SB.Root_Entries, 8) and 255);
-      Raw (14) := Unsigned_8 (Shift_Right (SB.Root_Entries, 16) and 255);
-      Raw (15) := Unsigned_8 (Shift_Right (SB.Root_Entries, 24) and 255);
-      Raw (16) := Unsigned_8 (SB.Checksum and 255);
-      Raw (17) := Unsigned_8 (Shift_Right (SB.Checksum, 8) and 255);
-      Raw (18) := Unsigned_8 (Shift_Right (SB.Checksum, 16) and 255);
-      Raw (19) := Unsigned_8 (Shift_Right (SB.Checksum, 24) and 255);
-      Raw (20) := Unsigned_8 (SB.Dir_Checksum and 255);
-      Raw (21) := Unsigned_8 (Shift_Right (SB.Dir_Checksum, 8) and 255);
-      Raw (22) := Unsigned_8 (Shift_Right (SB.Dir_Checksum, 16) and 255);
-      Raw (23) := Unsigned_8 (Shift_Right (SB.Dir_Checksum, 24) and 255);
-      Raw (24) := Unsigned_8 (SB.Generation and 255);
-      Raw (25) := Unsigned_8 (Shift_Right (SB.Generation, 8) and 255);
-      Raw (26) := Unsigned_8 (Shift_Right (SB.Generation, 16) and 255);
-      Raw (27) := Unsigned_8 (Shift_Right (SB.Generation, 24) and 255);
-      -- Audit H74: persist Next_Free_LBA (bytes 28..31).
-      Raw (28) := Unsigned_8 (SB.Next_Free_LBA and 255);
-      Raw (29) := Unsigned_8 (Shift_Right (SB.Next_Free_LBA, 8) and 255);
-      Raw (30) := Unsigned_8 (Shift_Right (SB.Next_Free_LBA, 16) and 255);
-      Raw (31) := Unsigned_8 (Shift_Right (SB.Next_Free_LBA, 24) and 255);
-      -- Audit H60: persist Block_Bitmap (bytes 32..35).
-      Raw (32) := Unsigned_8 (SB.Block_Bitmap and 255);
-      Raw (33) := Unsigned_8 (Shift_Right (SB.Block_Bitmap, 8) and 255);
-      Raw (34) := Unsigned_8 (Shift_Right (SB.Block_Bitmap, 16) and 255);
-      Raw (35) := Unsigned_8 (Shift_Right (SB.Block_Bitmap, 24) and 255);
-   end Superblock_To_Bytes;
 
-   procedure Write_Block_512 (LBA : Unsigned_64; Data : Schild_Nvme.Block_Buf;
+   procedure Write_Block_512 (LBA : Unsigned_64; Data : Block_Buf;
                               Success : out Boolean) is
    begin
-      Schild_Nvme.Fill_Buffer (Data);
+      Schild_Nvme.Fill_Buffer (Schild_Nvme.Block_Buf (Data));
       Schild_Nvme.Write_Block (LBA, Success);
    end Write_Block_512;
 
-   procedure Dir_Entry_To_Bytes (Ent : Dir_Entry; Raw : out Schild_Nvme.Block_Buf;
-                                 Off : Integer) is
-   begin
-      for I in 0 .. 23 loop
-         if I < Ent.Name'Length then
-            Raw (Off + I) := Unsigned_8 (Character'Pos (Ent.Name (I + 1)));
-         else Raw (Off + I) := 0; end if;
-      end loop;
-      Raw (Off + 24) := Unsigned_8 (Ent.Start_LBA and 255);
-      Raw (Off + 25) := Unsigned_8 (Shift_Right (Ent.Start_LBA, 8) and 255);
-      Raw (Off + 26) := Unsigned_8 (Shift_Right (Ent.Start_LBA, 16) and 255);
-      Raw (Off + 27) := Unsigned_8 (Shift_Right (Ent.Start_LBA, 24) and 255);
-      Raw (Off + 28) := Unsigned_8 (Ent.Size and 255);
-      Raw (Off + 29) := Unsigned_8 (Shift_Right (Ent.Size, 8) and 255);
-      Raw (Off + 30) := Unsigned_8 (Shift_Right (Ent.Size, 16) and 255);
-      Raw (Off + 31) := Unsigned_8 (Shift_Right (Ent.Size, 24) and 255);
-   end Dir_Entry_To_Bytes;
 
    procedure Create_File (Name : in String; Size : in Unsigned_32;
                           Success : out Boolean) is
@@ -458,11 +330,11 @@ package body Schild_Schild_Fs with SPARK_Mode => Off is
       -- H60: zero the freshly allocated data blocks (prevents data leak on
       -- block reuse) and mark them used in the bitmap.
       declare
-         Zero_Buf : Schild_Nvme.Block_Buf := (others => 0);
+         Zero_Buf : Block_Buf := (others => 0);
          OK : Boolean;
       begin
          for I in 0 .. Integer (N) - 1 loop
-            Schild_Nvme.Fill_Buffer (Zero_Buf);
+            Schild_Nvme.Fill_Buffer (Schild_Nvme.Block_Buf (Zero_Buf));
             Schild_Nvme.Write_Block (Unsigned_64 (Next_Free_LBA + Unsigned_32 (I)), OK);
             if not OK then return; end if;
          end loop;
@@ -477,8 +349,8 @@ package body Schild_Schild_Fs with SPARK_Mode => Off is
       end;
       -- Flush directory + superblock (superblock is the commit point).
       declare
-         Dir_Buf : Schild_Nvme.Block_Buf := (others => 0);
-         SB_Buf  : Schild_Nvme.Block_Buf;
+         Dir_Buf : Block_Buf := (others => 0);
+         SB_Buf  : Block_Buf;
          SB      : Superblock := (Magic => NVFS_Magic, Version => NVFS_Version,
                                   Block_Size => 512, Root_Dir_LBA => Dir_Primary_LBA,
                                   Root_Entries => Entry_Count,
@@ -524,7 +396,7 @@ package body Schild_Schild_Fs with SPARK_Mode => Off is
       D_Pos    : Unsigned_32 := 0;
       LBA_Off  : Unsigned_32;
       Byte_Off : Unsigned_32;
-      Block_Buf : Schild_Nvme.Block_Buf;
+      Scratch : Block_Buf;
       Wr_OK    : Boolean;
    begin
       Success := False;
@@ -541,7 +413,7 @@ package body Schild_Schild_Fs with SPARK_Mode => Off is
       while D_Pos < Unsigned_32 (Data'Length) loop
          LBA_Off := File.Start_LBA + (Wr_Pos / 512);
          Byte_Off := Wr_Pos rem 512;
-         Read_Block_512 (Unsigned_64 (LBA_Off), Block_Buf, Wr_OK);
+         Read_Block_512 (Unsigned_64 (LBA_Off), Scratch, Wr_OK);
          if not Wr_OK then return; end if;
          declare
             Space : Unsigned_32 := 512 - Byte_Off;
@@ -549,10 +421,10 @@ package body Schild_Schild_Fs with SPARK_Mode => Off is
          begin
             if To_Write > Space then To_Write := Space; end if;
             for I in 0 .. Integer (To_Write) - 1 loop
-               Block_Buf (Integer (Byte_Off + Unsigned_32 (I))) :=
+               Scratch (Integer (Byte_Off + Unsigned_32 (I))) :=
                  Data (Integer (D_Pos + Unsigned_32 (I)));
             end loop;
-            Schild_Nvme.Fill_Buffer (Block_Buf);
+            Schild_Nvme.Fill_Buffer (Schild_Nvme.Block_Buf (Scratch));
             Schild_Nvme.Write_Block (Unsigned_64 (LBA_Off), Wr_OK);
             if not Wr_OK then return; end if;
             Wr_Pos := Wr_Pos + To_Write;
@@ -564,8 +436,8 @@ package body Schild_Schild_Fs with SPARK_Mode => Off is
       -- as Create_File.
       if Wr_Pos > File.Size then
          declare
-            Dir_Buf : Schild_Nvme.Block_Buf := (others => 0);
-            SB_Buf  : Schild_Nvme.Block_Buf;
+            Dir_Buf : Block_Buf := (others => 0);
+            SB_Buf  : Block_Buf;
             New_End : constant Unsigned_32 := File.Start_LBA + (Wr_Pos + 511) / 512;
             New_NFL : constant Unsigned_32 := (if New_End > Next_Free_LBA then New_End else Next_Free_LBA);
             Old_NFL : constant Unsigned_32 := Next_Free_LBA;

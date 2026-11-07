@@ -4,59 +4,14 @@
 --   LBA 2018: Root directory A          LBA 2019: Root directory B
 --   LBA 2020..2047: File data (contiguous per file)
 -- Each directory entry: 24-byte name + 4-byte start_lba + 4-byte size
+-- The on-disk types (Superblock / Dir_Entry) and their parsers live in
+-- Schild_Fs_Core (SPARK_Mode => On, audit H63); this package is the stateful
+-- I/O layer.
 with Interfaces; with System;
+with Schild_Fs_Core;
 
 package Schild_Schild_Fs with SPARK_Mode => Off is
-   use Interfaces;
-
-   -- Superblock
-   NVFS_Magic  : constant Unsigned_32 := 16#4E564653#;  -- "NVFS"
-   NVFS_Version : constant Unsigned_16 := 2;  -- H60: bitmap layout
-
-   type Superblock is record
-      Magic        : Unsigned_32 := 0;
-      Version      : Unsigned_16 := 0;
-      Block_Size   : Unsigned_16 := 512;
-      Root_Dir_LBA : Unsigned_32 := 2;
-      Root_Entries : Unsigned_32 := 0;   -- number of files in root dir
-      Checksum     : Unsigned_32 := 0;   -- CRC32 over bytes 0..15 (header)
-      Dir_Checksum : Unsigned_32 := 0;   -- CRC32 over the root-dir block
-      Generation   : Unsigned_32 := 0;   -- monotonic commit counter (A/B)
-      Next_Free_LBA : Unsigned_32 := 0;  -- audit H74: persisted allocator state
-      Block_Bitmap : Unsigned_32 := 0;   -- audit H60: used-block bitmap (data region)
-   end record
-     with Size => 512 * 8;  -- must fit in one 512-byte block
-
-   for Superblock use record
-      Magic        at 0 range 0 .. 31;
-      Version      at 4 range 0 .. 15;
-      Block_Size   at 6 range 0 .. 15;
-      Root_Dir_LBA at 8 range 0 .. 31;
-      Root_Entries at 12 range 0 .. 31;
-      Checksum     at 16 range 0 .. 31;
-      Dir_Checksum at 20 range 0 .. 31;
-      Generation    at 24 range 0 .. 31;
-      Next_Free_LBA at 28 range 0 .. 31;
-      Block_Bitmap at 32 range 0 .. 31;
-   end record;
-
-   -- Directory entry (32 bytes, 16 per 512-byte block)
-   Max_Name_Length : constant := 24;
-
-   type Dir_Entry_Name is new String (1 .. Max_Name_Length);
-
-   type Dir_Entry is record
-      Name      : Dir_Entry_Name := (others => ' ');
-      Start_LBA : Unsigned_32 := 0;
-      Size      : Unsigned_32 := 0;
-   end record
-     with Size => 32 * 8;
-
-   for Dir_Entry use record
-      Name      at 0  range 0 .. 191;   -- 24 bytes
-      Start_LBA at 24 range 0 .. 31;    -- 4 bytes
-      Size      at 28 range 0 .. 31;    -- 4 bytes
-   end record;
+   use Interfaces; use Schild_Fs_Core;
 
    type Dir_Table is array (0 .. 15) of Dir_Entry;
 
