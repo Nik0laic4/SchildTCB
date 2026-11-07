@@ -28,6 +28,7 @@ package body Schild_Schild_Fs with SPARK_Mode => Off is
       return not Crc;
    end CRC32;
 
+
    Mounted  : Boolean := False;
    Root_Dir : Dir_Table := (others => (Name => (others => ' '),
                                         Start_LBA => 0, Size => 0));
@@ -87,6 +88,10 @@ package body Schild_Schild_Fs with SPARK_Mode => Off is
       SB.Next_Free_LBA := Unsigned_32 (Raw (28)) or Shift_Left (Unsigned_32 (Raw (29)), 8)
         or Shift_Left (Unsigned_32 (Raw (30)), 16)
         or Shift_Left (Unsigned_32 (Raw (31)), 24);
+      -- Audit H60: used-block bitmap (bytes 32..35).
+      SB.Block_Bitmap := Unsigned_32 (Raw (32)) or Shift_Left (Unsigned_32 (Raw (33)), 8)
+        or Shift_Left (Unsigned_32 (Raw (34)), 16)
+        or Shift_Left (Unsigned_32 (Raw (35)), 24);
    end Bytes_To_Superblock;
 
    procedure Bytes_To_Dir_Entry
@@ -118,6 +123,7 @@ package body Schild_Schild_Fs with SPARK_Mode => Off is
    -- (fresh-format path and persisted allocator state). Ada requires
    -- declaration-before-use for variables; forward decl for procedures.
    Next_Free_LBA : Unsigned_32 := FS_BASE_LBA + 4;
+   Block_Bitmap  : Unsigned_32 := 0;  -- H60: used-block bitmap (data region)
 
    procedure Write_Block_512 (LBA : Unsigned_64; Data : Schild_Nvme.Block_Buf;
                               Success : out Boolean);
@@ -148,7 +154,7 @@ package body Schild_Schild_Fs with SPARK_Mode => Off is
       Read_Block_512 (Unsigned_64 (Super_Primary_LBA), Buf, Success);
       if Success then
          Bytes_To_Superblock (Buf, SB_A);
-         if SB_A.Magic = NVFS_Magic then
+         if SB_A.Magic = NVFS_Magic and then SB_A.Version = NVFS_Version then
             SB_A_Magic_OK := True;
             if CRC32 (Buf, 16) = SB_A.Checksum then
                Have_A := True;
@@ -159,7 +165,7 @@ package body Schild_Schild_Fs with SPARK_Mode => Off is
       Read_Block_512 (Unsigned_64 (Super_Backup_LBA), Buf, Success);
       if Success then
          Bytes_To_Superblock (Buf, SB_B);
-         if SB_B.Magic = NVFS_Magic then
+         if SB_B.Magic = NVFS_Magic and then SB_B.Version = NVFS_Version then
             SB_B_Magic_OK := True;
             if CRC32 (Buf, 16) = SB_B.Checksum then
                Have_B := True;
@@ -180,10 +186,10 @@ package body Schild_Schild_Fs with SPARK_Mode => Off is
             -- Audit H75: fresh device (no SchildFS signature). Format it.
             declare
                SB_Fresh : Superblock := (
-                  Magic => NVFS_Magic, Version => 1, Block_Size => 512,
+                  Magic => NVFS_Magic, Version => NVFS_Version, Block_Size => 512,
                   Root_Dir_LBA => Dir_Primary_LBA, Root_Entries => 0,
                   Checksum => 0, Dir_Checksum => 0, Generation => 1,
-                  Next_Free_LBA => FS_BASE_LBA + 4);
+                  Next_Free_LBA => FS_BASE_LBA + 4, Block_Bitmap => 0);
                SB_Buf : Schild_Nvme.Block_Buf;
                Dir_Buf : Schild_Nvme.Block_Buf := (others => 0);
                W_OK : Boolean;
@@ -209,6 +215,7 @@ package body Schild_Schild_Fs with SPARK_Mode => Off is
                Current_Generation := 1;
                Entry_Count := 0;
                Next_Free_LBA := FS_BASE_LBA + 4;
+               Block_Bitmap := 0;
                Mounted := True;
                Success := True;
                C_Putln (Msg_Fresh'Address, Msg_Fresh'Length);
@@ -231,6 +238,7 @@ package body Schild_Schild_Fs with SPARK_Mode => Off is
       -- pre-H74 superblock has 0 here; the fallback below recomputes it from
       -- the root-directory allocations after the loop.
       Next_Free_LBA := Chosen.Next_Free_LBA;
+      Block_Bitmap  := Chosen.Block_Bitmap;
 
       Entry_Count := Chosen.Root_Entries;
       if Entry_Count > 16 then Entry_Count := 16; end if;
@@ -384,6 +392,11 @@ package body Schild_Schild_Fs with SPARK_Mode => Off is
       Raw (29) := Unsigned_8 (Shift_Right (SB.Next_Free_LBA, 8) and 255);
       Raw (30) := Unsigned_8 (Shift_Right (SB.Next_Free_LBA, 16) and 255);
       Raw (31) := Unsigned_8 (Shift_Right (SB.Next_Free_LBA, 24) and 255);
+      -- Audit H60: persist Block_Bitmap (bytes 32..35).
+      Raw (32) := Unsigned_8 (SB.Block_Bitmap and 255);
+      Raw (33) := Unsigned_8 (Shift_Right (SB.Block_Bitmap, 8) and 255);
+      Raw (34) := Unsigned_8 (Shift_Right (SB.Block_Bitmap, 16) and 255);
+      Raw (35) := Unsigned_8 (Shift_Right (SB.Block_Bitmap, 24) and 255);
    end Superblock_To_Bytes;
 
    procedure Write_Block_512 (LBA : Unsigned_64; Data : Schild_Nvme.Block_Buf;
@@ -416,6 +429,7 @@ package body Schild_Schild_Fs with SPARK_Mode => Off is
       Msg_Full : constant String := "[NVFS] Directory full";
       Msg_NoSpace : constant String := "[NVFS] No space in GPT gap";
       Msg_OK   : constant String := "[NVFS] File created";
+      N        : constant Unsigned_32 := (Size + 511) / 512;
    begin
       Success := False;
       if not Mounted then return; end if;
@@ -429,7 +443,7 @@ package body Schild_Schild_Fs with SPARK_Mode => Off is
       end if;
       --  Data-region guard: never let file data grow past the GPT gap into the
       --  first partition (which would corrupt a real GPT disk).
-      if Next_Free_LBA + (Size + 511) / 512 > FS_END_LBA then
+      if Next_Free_LBA + N > FS_END_LBA then
          C_Putln (Msg_NoSpace'Address, Msg_NoSpace'Length);
          return;
       end if;
@@ -441,16 +455,37 @@ package body Schild_Schild_Fs with SPARK_Mode => Off is
          Root_Dir (Integer (Entry_Count)) := Ent;
       end;
       Entry_Count := Entry_Count + 1;
+      -- H60: zero the freshly allocated data blocks (prevents data leak on
+      -- block reuse) and mark them used in the bitmap.
+      declare
+         Zero_Buf : Schild_Nvme.Block_Buf := (others => 0);
+         OK : Boolean;
+      begin
+         for I in 0 .. Integer (N) - 1 loop
+            Schild_Nvme.Fill_Buffer (Zero_Buf);
+            Schild_Nvme.Write_Block (Unsigned_64 (Next_Free_LBA + Unsigned_32 (I)), OK);
+            if not OK then return; end if;
+         end loop;
+      end;
+      declare
+         Start_Idx : constant Unsigned_32 := Next_Free_LBA - (FS_BASE_LBA + 4);
+      begin
+         for I in 0 .. Integer (N) - 1 loop
+            Block_Bitmap := Block_Bitmap or
+              Shift_Left (Unsigned_32'(1), Integer (Start_Idx) + I);
+         end loop;
+      end;
       -- Flush directory + superblock (superblock is the commit point).
       declare
          Dir_Buf : Schild_Nvme.Block_Buf := (others => 0);
          SB_Buf  : Schild_Nvme.Block_Buf;
-         SB      : Superblock := (Magic => NVFS_Magic, Version => 1,
+         SB      : Superblock := (Magic => NVFS_Magic, Version => NVFS_Version,
                                   Block_Size => 512, Root_Dir_LBA => Dir_Primary_LBA,
                                   Root_Entries => Entry_Count,
                                   Checksum => 0, Dir_Checksum => 0,
                                   Generation => Current_Generation + 1,
-                                  Next_Free_LBA => Next_Free_LBA + (Size + 511) / 512);
+                                  Next_Free_LBA => Next_Free_LBA + N,
+                                  Block_Bitmap => Block_Bitmap);
          Dir_CRC : Unsigned_32;
          OK : Boolean;
       begin
@@ -478,7 +513,7 @@ package body Schild_Schild_Fs with SPARK_Mode => Off is
                               else Super_Primary_LBA);
          Current_Generation := SB.Generation;
       end;
-      Next_Free_LBA := Next_Free_LBA + (Size + 511) / 512;
+      Next_Free_LBA := Next_Free_LBA + N;
       Success := True;
       C_Putln (Msg_OK'Address, Msg_OK'Length);
    end Create_File;
@@ -532,16 +567,26 @@ package body Schild_Schild_Fs with SPARK_Mode => Off is
             Dir_Buf : Schild_Nvme.Block_Buf := (others => 0);
             SB_Buf  : Schild_Nvme.Block_Buf;
             New_End : constant Unsigned_32 := File.Start_LBA + (Wr_Pos + 511) / 512;
-            SB      : Superblock := (Magic => NVFS_Magic, Version => 1,
+            New_NFL : constant Unsigned_32 := (if New_End > Next_Free_LBA then New_End else Next_Free_LBA);
+            Old_NFL : constant Unsigned_32 := Next_Free_LBA;
+            SB      : Superblock := (Magic => NVFS_Magic, Version => NVFS_Version,
                                      Block_Size => 512, Root_Dir_LBA => Dir_Primary_LBA,
                                      Root_Entries => Entry_Count,
                                      Checksum => 0, Dir_Checksum => 0,
                                      Generation => Current_Generation + 1,
-                                     Next_Free_LBA => (if New_End > Next_Free_LBA
-                                                       then New_End else Next_Free_LBA));
+                                     Next_Free_LBA => New_NFL,
+                                     Block_Bitmap => Block_Bitmap);
             Dir_CRC : Unsigned_32;
             OK : Boolean;
          begin
+         -- H60: mark newly allocated blocks in the bitmap.
+         if New_NFL > Old_NFL then
+            for L in 0 .. Integer (New_NFL - Old_NFL) - 1 loop
+               Block_Bitmap := Block_Bitmap or
+                 Shift_Left (Unsigned_32'(1), Integer (Old_NFL - (FS_BASE_LBA + 4) + Unsigned_32 (L)));
+            end loop;
+            SB.Block_Bitmap := Block_Bitmap;
+         end if;
             for I in 0 .. Integer (Entry_Count) - 1 loop
                if Root_Dir (I).Start_LBA = File.Start_LBA then
                   Root_Dir (I).Size := Wr_Pos;

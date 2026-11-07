@@ -52,15 +52,17 @@ def _off(lba):
     return (lba - FS_BASE_LBA) * BLOCK_SIZE
 
 
-def _write_superblock(img, lba, root_dir_lba, root_entries, dir_crc, generation):
+def _write_superblock(img, lba, root_dir_lba, root_entries, dir_crc, generation, next_lba, bitmap):
     o = _off(lba)
     struct.pack_into('<I', img, o + 0,  MAGIC)
-    struct.pack_into('<H', img, o + 4,  1)              # version
+    struct.pack_into('<H', img, o + 4,  2)              # version (H60: bitmap layout)
     struct.pack_into('<H', img, o + 6,  BLOCK_SIZE)
     struct.pack_into('<I', img, o + 8,  root_dir_lba)
     struct.pack_into('<I', img, o + 12, root_entries)
     struct.pack_into('<I', img, o + 20, dir_crc)
     struct.pack_into('<I', img, o + 24, generation)
+    struct.pack_into('<I', img, o + 28, next_lba)       # Next_Free_LBA
+    struct.pack_into('<I', img, o + 32, bitmap)         # Block_Bitmap (H60)
     # Header checksum is CRC32 over bytes 0..15 (computed last).
     struct.pack_into('<I', img, o + 16, crc32_iso(img[o:o + 16]))
 
@@ -100,8 +102,9 @@ def build_gap(files, output_path):
     dir_crc = crc32_iso(img[_off(DIR_A_LBA):_off(DIR_A_LBA) + BLOCK_SIZE])
 
     # Superblocks A and B: both point at the primary directory, generation 0.
-    _write_superblock(img, SUPER_A_LBA, DIR_A_LBA, len(files), dir_crc, 0)
-    _write_superblock(img, SUPER_B_LBA, DIR_A_LBA, len(files), dir_crc, 0)
+    bitmap = (1 << (next_lba - DATA_LBA)) - 1
+    _write_superblock(img, SUPER_A_LBA, DIR_A_LBA, len(files), dir_crc, 0, next_lba, bitmap)
+    _write_superblock(img, SUPER_B_LBA, DIR_A_LBA, len(files), dir_crc, 0, next_lba, bitmap)
 
     # File data at their absolute LBAs.
     for i, (name, start_lba, size) in enumerate(dir_entries):

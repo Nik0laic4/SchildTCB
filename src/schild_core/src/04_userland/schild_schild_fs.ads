@@ -11,7 +11,7 @@ package Schild_Schild_Fs with SPARK_Mode => Off is
 
    -- Superblock
    NVFS_Magic  : constant Unsigned_32 := 16#4E564653#;  -- "NVFS"
-   NVFS_Version : constant Unsigned_16 := 1;
+   NVFS_Version : constant Unsigned_16 := 2;  -- H60: bitmap layout
 
    type Superblock is record
       Magic        : Unsigned_32 := 0;
@@ -23,6 +23,7 @@ package Schild_Schild_Fs with SPARK_Mode => Off is
       Dir_Checksum : Unsigned_32 := 0;   -- CRC32 over the root-dir block
       Generation   : Unsigned_32 := 0;   -- monotonic commit counter (A/B)
       Next_Free_LBA : Unsigned_32 := 0;  -- audit H74: persisted allocator state
+      Block_Bitmap : Unsigned_32 := 0;   -- audit H60: used-block bitmap (data region)
    end record
      with Size => 512 * 8;  -- must fit in one 512-byte block
 
@@ -36,6 +37,7 @@ package Schild_Schild_Fs with SPARK_Mode => Off is
       Dir_Checksum at 20 range 0 .. 31;
       Generation    at 24 range 0 .. 31;
       Next_Free_LBA at 28 range 0 .. 31;
+      Block_Bitmap at 32 range 0 .. 31;
    end record;
 
    -- Directory entry (32 bytes, 16 per 512-byte block)
