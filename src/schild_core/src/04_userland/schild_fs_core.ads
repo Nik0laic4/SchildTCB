@@ -7,6 +7,7 @@
 -- Constrained Block_Buf avoids the prover limitation of unconstrained arrays.
 
 with Interfaces; use Interfaces;
+with Schild_HMAC_SHA256;
 
 package Schild_Fs_Core with SPARK_Mode => On is
 
@@ -14,7 +15,7 @@ package Schild_Fs_Core with SPARK_Mode => On is
    type Block_Buf is array (0 .. 511) of Unsigned_8;
 
    NVFS_Magic   : constant Unsigned_32 := 16#4E564653#;  -- "NVFS"
-   NVFS_Version : constant Unsigned_16 := 2;             -- H60: bitmap layout
+   NVFS_Version : constant Unsigned_16 := 3;             -- H61: + HMAC key/tag
 
    -- Superblock (512 bytes; see also mkschildfs.py).
    type Superblock is record
@@ -28,6 +29,8 @@ package Schild_Fs_Core with SPARK_Mode => On is
       Generation    : Unsigned_32 := 0;   -- monotonic commit counter (A/B)
       Next_Free_LBA : Unsigned_32 := 0;   -- audit H74: persisted allocator state
       Block_Bitmap  : Unsigned_32 := 0;   -- audit H60: used-block bitmap
+      Hmac_Key      : Schild_HMAC_SHA256.SHA256_Hash := (others => 0);  -- H61
+      Hmac_Tag      : Schild_HMAC_SHA256.SHA256_Hash := (others => 0);  -- H61
    end record
      with Size => 512 * 8;  -- must fit in one 512-byte block
 
@@ -42,6 +45,8 @@ package Schild_Fs_Core with SPARK_Mode => On is
       Generation    at 24 range 0 .. 31;
       Next_Free_LBA at 28 range 0 .. 31;
       Block_Bitmap  at 32 range 0 .. 31;
+      Hmac_Key      at 448 range 0 .. 255;
+      Hmac_Tag      at 480 range 0 .. 255;
    end record;
 
    -- Directory entry (32 bytes, 16 per 512-byte block).

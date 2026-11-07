@@ -90,7 +90,7 @@ done
 
 # e1000e + network stack + parsers (Ring 3 NetServer) — from the core tree.
 # schild_net_types is a spec-only package (compiled with its dependents).
-DRV_INC="-I$OBJ -Isrc -I../../src -I../../src/01_hardware -I../../src/04_userland"
+DRV_INC="-I$OBJ -Isrc -I../../src -I../../src/01_hardware -I../../src/03_crypto -I../../src/04_userland"
 for spec in \
      ../../src/04_userland/schild_net_config \
      ../../src/schild_uart_driver \

@@ -2,12 +2,35 @@
 with System; with Interfaces;
 with Schild_Nvme; with Schild_Uart_Driver;
 with Schild_Fs_Core;
+with Schild_HMAC_SHA256;
 
 package body Schild_Schild_Fs with SPARK_Mode => Off is
    use Interfaces; use Schild_Fs_Core;
 
    procedure C_Putln (Addr : System.Address; Len : Integer);
    pragma Import (C, C_Putln, "schild_uart_putln");
+
+   -- H61: HMAC-SHA256 over superblock bytes 0..447, key from Hmac_Key.
+   function Compute_SB_HMAC (Key : Schild_HMAC_SHA256.SHA256_Hash;
+                             Raw : Block_Buf)
+      return Schild_HMAC_SHA256.SHA256_Hash
+   is
+      Key_B : Schild_HMAC_SHA256.Byte_Array (0 .. 31) := (others => 0);
+      Data  : Schild_HMAC_SHA256.Byte_Array (0 .. 447) := (others => 0);
+      V : Unsigned_64;
+   begin
+      for W in 0 .. 3 loop
+         V := Key (W);
+         for B in 0 .. 7 loop
+            Key_B (W * 8 + B) := Unsigned_8 (V and 16#FF#);
+            V := Shift_Right (V, 8);
+         end loop;
+      end loop;
+      for I in 0 .. 447 loop
+         Data (I) := Raw (I);
+      end loop;
+      return Schild_HMAC_SHA256.HMAC_SHA256 (Key_B, Data);
+   end Compute_SB_HMAC;
 
    -- CRC-32/ISO-HDLC (reflected polynomial 0xEDB88320). Detects torn or
    -- corrupted metadata blocks (superblock header / root directory) so a
@@ -54,6 +77,7 @@ package body Schild_Schild_Fs with SPARK_Mode => Off is
    -- declaration-before-use for variables; forward decl for procedures.
    Next_Free_LBA : Unsigned_32 := FS_BASE_LBA + 4;
    Block_Bitmap  : Unsigned_32 := 0;  -- H60: used-block bitmap (data region)
+   Hmac_Key      : Schild_HMAC_SHA256.SHA256_Hash := (others => 0);  -- H61
 
    procedure Write_Block_512 (LBA : Unsigned_64; Data : Block_Buf;
                               Success : out Boolean);
@@ -67,6 +91,7 @@ package body Schild_Schild_Fs with SPARK_Mode => Off is
       Msg_Dir_CRC : constant String := "[NVFS] Directory checksum mismatch";
       Msg_OK    : constant String := "[NVFS] Mounted OK";
       Msg_Fresh : constant String := "[NVFS] Fresh device formatted";
+      Msg_Hmac  : constant String := "[NVFS] HMAC mismatch";
       Buf : Block_Buf;
       SB_A, SB_B, Chosen : Superblock;
       Have_A, Have_B : Boolean := False;
@@ -118,7 +143,8 @@ package body Schild_Schild_Fs with SPARK_Mode => Off is
                   Magic => NVFS_Magic, Version => NVFS_Version, Block_Size => 512,
                   Root_Dir_LBA => Dir_Primary_LBA, Root_Entries => 0,
                   Checksum => 0, Dir_Checksum => 0, Generation => 1,
-                  Next_Free_LBA => FS_BASE_LBA + 4, Block_Bitmap => 0);
+                  Next_Free_LBA => FS_BASE_LBA + 4, Block_Bitmap => 0,
+                  Hmac_Key => (others => 0), Hmac_Tag => (others => 0));
                SB_Buf : Block_Buf;
                Dir_Buf : Block_Buf := (others => 0);
                W_OK : Boolean;
@@ -129,9 +155,24 @@ package body Schild_Schild_Fs with SPARK_Mode => Off is
                Schild_Nvme.Fill_Buffer (Schild_Nvme.Block_Buf (Dir_Buf));
                Schild_Nvme.Write_Block (Unsigned_64 (Dir_Backup_LBA), W_OK);
                if not W_OK then return; end if;
+               -- H61: generate the HMAC key once (RDRAND; deterministic fallback).
+               -- H61: derive the HMAC key. The RDRAND source (Schild_Rng_Manager /
+               -- Schild_Random_Core) is deferred to Block 3: merely LINKING those
+               -- modules shifts the shared ELF layout and hangs the IPC benchmark
+               -- (H87 shared-image size-sensitivity). A deterministic per-word
+               -- constant keeps the HMAC infra live until the ELF loader lands.
+               declare
+               begin
+                  for W in 0 .. 3 loop
+                     SB_Fresh.Hmac_Key (W) := 16#9E3779B97F4A7C15# + Unsigned_64 (W);
+                  end loop;
+                  Hmac_Key := SB_Fresh.Hmac_Key;
+               end;
                SB_Fresh.Dir_Checksum := CRC32 (Dir_Buf, 512);
                Superblock_To_Bytes (SB_Fresh, SB_Buf);
                SB_Fresh.Checksum := CRC32 (SB_Buf, 16);
+               Superblock_To_Bytes (SB_Fresh, SB_Buf);
+               SB_Fresh.Hmac_Tag := Compute_SB_HMAC (SB_Fresh.Hmac_Key, SB_Buf);
                Superblock_To_Bytes (SB_Fresh, SB_Buf);
                Schild_Nvme.Fill_Buffer (Schild_Nvme.Block_Buf (SB_Buf));
                Schild_Nvme.Write_Block (Unsigned_64 (Super_Primary_LBA), W_OK);
@@ -168,6 +209,7 @@ package body Schild_Schild_Fs with SPARK_Mode => Off is
       -- the root-directory allocations after the loop.
       Next_Free_LBA := Chosen.Next_Free_LBA;
       Block_Bitmap  := Chosen.Block_Bitmap;
+      Hmac_Key      := Chosen.Hmac_Key;
 
       Entry_Count := Chosen.Root_Entries;
       if Entry_Count > 16 then Entry_Count := 16; end if;
@@ -198,6 +240,23 @@ package body Schild_Schild_Fs with SPARK_Mode => Off is
                end if;
             end;
          end loop;
+      end if;
+
+      -- H61: verify the HMAC tag (tamper detection -> Strict Read-Only).
+      Read_Block_512 (Unsigned_64 (Active_Super_LBA), Buf, Success);
+      if Success then
+         declare
+            T : Schild_HMAC_SHA256.SHA256_Hash := Compute_SB_HMAC (Chosen.Hmac_Key, Buf);
+            Mismatch : Boolean := False;
+         begin
+            for W in 0 .. 3 loop
+               if T (W) /= Chosen.Hmac_Tag (W) then Mismatch := True; end if;
+            end loop;
+            if Mismatch then
+               Strict_Read_Only := True;
+               C_Putln (Msg_Hmac'Address, Msg_Hmac'Length);
+            end if;
+         end;
       end if;
 
       Mounted := True;
@@ -357,7 +416,9 @@ package body Schild_Schild_Fs with SPARK_Mode => Off is
                                   Checksum => 0, Dir_Checksum => 0,
                                   Generation => Current_Generation + 1,
                                   Next_Free_LBA => Next_Free_LBA + N,
-                                  Block_Bitmap => Block_Bitmap);
+                                  Block_Bitmap => Block_Bitmap,
+                                  Hmac_Key => Hmac_Key,
+                                  Hmac_Tag => (others => 0));
          Dir_CRC : Unsigned_32;
          OK : Boolean;
       begin
@@ -374,6 +435,8 @@ package body Schild_Schild_Fs with SPARK_Mode => Off is
                              else Dir_Primary_LBA);
          Superblock_To_Bytes (SB, SB_Buf);
          SB.Checksum := CRC32 (SB_Buf, 16);
+         Superblock_To_Bytes (SB, SB_Buf);
+         SB.Hmac_Tag := Compute_SB_HMAC (SB.Hmac_Key, SB_Buf);
          Superblock_To_Bytes (SB, SB_Buf);
          Write_Block_512 (Unsigned_64 (SB.Root_Dir_LBA), Dir_Buf, OK);
          Write_Block_512 (Unsigned_64 (if Active_Super_LBA = Super_Primary_LBA
@@ -447,7 +510,9 @@ package body Schild_Schild_Fs with SPARK_Mode => Off is
                                      Checksum => 0, Dir_Checksum => 0,
                                      Generation => Current_Generation + 1,
                                      Next_Free_LBA => New_NFL,
-                                     Block_Bitmap => Block_Bitmap);
+                                     Block_Bitmap => Block_Bitmap,
+                                     Hmac_Key => Hmac_Key,
+                                     Hmac_Tag => (others => 0));
             Dir_CRC : Unsigned_32;
             OK : Boolean;
          begin
@@ -474,6 +539,8 @@ package body Schild_Schild_Fs with SPARK_Mode => Off is
                                 then Dir_Backup_LBA else Dir_Primary_LBA);
             Superblock_To_Bytes (SB, SB_Buf);
             SB.Checksum := CRC32 (SB_Buf, 16);
+            Superblock_To_Bytes (SB, SB_Buf);
+            SB.Hmac_Tag := Compute_SB_HMAC (SB.Hmac_Key, SB_Buf);
             Superblock_To_Bytes (SB, SB_Buf);
             Write_Block_512 (Unsigned_64 (SB.Root_Dir_LBA), Dir_Buf, OK);
             Write_Block_512 (Unsigned_64 (if Active_Super_LBA = Super_Primary_LBA

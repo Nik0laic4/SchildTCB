@@ -48,6 +48,27 @@ package body Schild_Fs_Core with SPARK_Mode => On is
       SB.Block_Bitmap := Unsigned_32 (Raw (32)) or Shift_Left (Unsigned_32 (Raw (33)), 8)
         or Shift_Left (Unsigned_32 (Raw (34)), 16)
         or Shift_Left (Unsigned_32 (Raw (35)), 24);
+      -- H61: parse Hmac_Key (448..479) and Hmac_Tag (480..511), little-endian.
+      for W in 0 .. 3 loop
+         declare
+            V : Unsigned_64 := 0;
+         begin
+            for B in 0 .. 7 loop
+               V := V or Shift_Left (Unsigned_64 (Raw (448 + W * 8 + B)), 8 * B);
+            end loop;
+            SB.Hmac_Key (W) := V;
+         end;
+      end loop;
+      for W in 0 .. 3 loop
+         declare
+            V : Unsigned_64 := 0;
+         begin
+            for B in 0 .. 7 loop
+               V := V or Shift_Left (Unsigned_64 (Raw (480 + W * 8 + B)), 8 * B);
+            end loop;
+            SB.Hmac_Tag (W) := V;
+         end;
+      end loop;
    end Bytes_To_Superblock;
 
    -- Serialize the superblock header (little-endian, bytes 0..35, rest 0).
@@ -90,6 +111,27 @@ package body Schild_Fs_Core with SPARK_Mode => On is
       Raw (33) := Unsigned_8 (Shift_Right (SB.Block_Bitmap, 8) and 255);
       Raw (34) := Unsigned_8 (Shift_Right (SB.Block_Bitmap, 16) and 255);
       Raw (35) := Unsigned_8 (Shift_Right (SB.Block_Bitmap, 24) and 255);
+      -- H61: serialize Hmac_Key (448..479) and Hmac_Tag (480..511), little-endian.
+      for W in 0 .. 3 loop
+         declare
+            V : Unsigned_64 := SB.Hmac_Key (W);
+         begin
+            for B in 0 .. 7 loop
+               Raw (448 + W * 8 + B) := Unsigned_8 (V and 16#FF#);
+               V := Shift_Right (V, 8);
+            end loop;
+         end;
+      end loop;
+      for W in 0 .. 3 loop
+         declare
+            V : Unsigned_64 := SB.Hmac_Tag (W);
+         begin
+            for B in 0 .. 7 loop
+               Raw (480 + W * 8 + B) := Unsigned_8 (V and 16#FF#);
+               V := Shift_Right (V, 8);
+            end loop;
+         end;
+      end loop;
    end Superblock_To_Bytes;
 
    -- Parse one 32-byte directory entry at offset Off.

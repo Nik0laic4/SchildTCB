@@ -4,6 +4,7 @@
 .global fs_daemon_entry
 fs_daemon_entry:
     leaq    fs_daemon_stack_top(%rip), %rsp
+    andq    $-16, %rsp
     call    fs_daemon_main
     ud2
 
