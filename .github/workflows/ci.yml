@@ -31,9 +31,24 @@ jobs:
           echo "$HOME/.local/bin" >> "$GITHUB_PATH"
           "$HOME/.local/bin/alr" --version
 
+      - name: Cache Alire toolchains & releases
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.local/share/alire/toolchains
+            ~/.local/share/alire/releases
+            ~/.alire
+          key: alire-${{ runner.os }}-${{ runner.arch }}-v1
+
       - name: Install Ada/SPARK toolchain
         run: |
-          alr -n toolchain --select gnat_native=14.2.1
+          set -e
+          for i in 1 2 3 4 5; do
+            if alr -n toolchain --select gnat_native=14.2.1; then break; fi
+            echo "gnat_native download failed (attempt $i), retrying in 10s ..."
+            sleep 10
+            if [ "$i" -eq 5 ]; then exit 1; fi
+          done
           alr -n toolchain --select gprbuild=22.0.1
           alr -n install gnatprove
           echo "$HOME/.alire/bin" >> "$GITHUB_PATH"
@@ -89,9 +104,24 @@ jobs:
           echo "$HOME/.local/bin" >> "$GITHUB_PATH"
           "$HOME/.local/bin/alr" --version
 
+      - name: Cache Alire toolchains & releases
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.local/share/alire/toolchains
+            ~/.local/share/alire/releases
+            ~/.alire
+          key: alire-${{ runner.os }}-${{ runner.arch }}-v1
+
       - name: Install Ada/SPARK toolchain
         run: |
-          alr -n toolchain --select gnat_native=14.2.1
+          set -e
+          for i in 1 2 3 4 5; do
+            if alr -n toolchain --select gnat_native=14.2.1; then break; fi
+            echo "gnat_native download failed (attempt $i), retrying in 10s ..."
+            sleep 10
+            if [ "$i" -eq 5 ]; then exit 1; fi
+          done
           alr -n toolchain --select gprbuild=22.0.1
           alr -n install gnatprove
           echo "$HOME/.alire/bin" >> "$GITHUB_PATH"
@@ -135,9 +165,24 @@ jobs:
           echo "$HOME/.local/bin" >> "$GITHUB_PATH"
           "$HOME/.local/bin/alr" --version
 
+      - name: Cache Alire toolchains & releases
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.local/share/alire/toolchains
+            ~/.local/share/alire/releases
+            ~/.alire
+          key: alire-${{ runner.os }}-${{ runner.arch }}-v1
+
       - name: Install Ada/SPARK toolchain
         run: |
-          alr -n toolchain --select gnat_native=14.2.1
+          set -e
+          for i in 1 2 3 4 5; do
+            if alr -n toolchain --select gnat_native=14.2.1; then break; fi
+            echo "gnat_native download failed (attempt $i), retrying in 10s ..."
+            sleep 10
+            if [ "$i" -eq 5 ]; then exit 1; fi
+          done
           alr -n toolchain --select gprbuild=22.0.1
           echo "$HOME/.alire/bin" >> "$GITHUB_PATH"
 
