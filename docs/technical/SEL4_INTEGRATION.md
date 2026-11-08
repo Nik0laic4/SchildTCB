@@ -287,7 +287,7 @@ Extra caps[2] = VSpace root (slot 3 = seL4_CapInitThreadVSpace)
 
 ```
 Invocation via SysSend(-3) or SysCall(-1):
-  RSI = message info  (label<<12 | extraCaps<<9 | length)
+  RSI = message info  (label<<12 | extraCaps<<7 | length)
   R10 = MR[0], R8 = MR[1], R9 = MR[2], R15 = MR[3]
   MR[4+] in IPC buffer at word offset 1+N
   Extra caps at word offset seL4_MsgMaxLength + 2 + N (= 122+N)
