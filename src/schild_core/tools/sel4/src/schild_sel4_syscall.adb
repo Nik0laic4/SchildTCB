@@ -8,6 +8,7 @@
 with Schild_Sel4_BootInfo; use Schild_Sel4_BootInfo;
 with Schild_HM_Model;      use type Schild_HM_Model.HM_Action;
 with Schild_Launch_Model;
+with Schild_Elf_Loader;    use Schild_Elf_Loader;
 
 package body Schild_Sel4_Syscall
   with SPARK_Mode => Off
@@ -1514,10 +1515,13 @@ is
       -- 5 untyped needed: EP, TCB, IPC frame, CNode, SC+Reply (Setup_MCS_Thread
       -- retypes SC and Reply from one UT).
       UT_EP, UT_TCB, UT_IPC, UT_CN, UT_SC, UT_REPLY : Cap_Ref := 0;
+      UT_ELF : Cap_Ref := 0;   -- H87: RAM untyped for the fs_daemon.elf frames
       Found : Natural := 0;
       CNode_Slot : constant Cap_Ref := 2;
       ASID_Pool  : constant Cap_Ref := 6;   -- seL4_CapInitThreadASIDPool (shared)
       FS_IPC_VAddr : constant Word := 16#530000#;
+      -- H87: fs_daemon.elf is linked at 0x400000; its .bss stack top is fixed.
+      FS_Daemon_Stack : constant Word := 16#417048#;
       FS_CSpace_Bits : constant Word := 4;   -- 16 slots
       Root_CNode_Depth : constant Word := 64;
       FS_EP_Cn    : constant Word := 1;
@@ -1529,19 +1533,20 @@ is
       VAddr : Word;
       I : Word;
       Alive : Word;
+      Load_Status, Load_Entry : Word := 0;
 
-      function FsDaemon_Entry_Addr return Word
-        with Import, Convention => C, External_Name => "schild_fs_daemon_entry_addr";
-      function FsDaemon_Stack_Addr return Word
-        with Import, Convention => C, External_Name => "schild_fs_daemon_stack_addr";
       function Get_FS_Alive return Word
         with Import, Convention => C, External_Name => "schild_get_fs_alive";
+      function Fs_Daemon_Elf_Start return Word
+        with Import, Convention => C, External_Name => "schild_fs_daemon_elf_start";
+      function Fs_Daemon_Elf_Size return Word
+        with Import, Convention => C, External_Name => "schild_fs_daemon_elf_size";
    begin
       -- Block A: find 6 RAM untyped (VSpace + kernel objects).
       -- Range 0x800000..0x20000000 matches NetServer; leftover UT1..UT6 is reused
       -- (seL4 keeps remaining memory in the same cap). QEMU 512M ends at 0x20000000.
       for Idx in 1 .. N_UNTYPED loop
-         exit when Found >= 6;
+         exit when Found >= 7;
          if BI.all.Untyped_List (Idx).Size_Bits > 0
            and then Word (BI.all.Untyped_List (Idx).Size_Bits) >= Min_Size_Bits
            and then BI.all.Untyped_List (Idx).Is_Device = 0
@@ -1560,6 +1565,8 @@ is
                UT_SC := BI.all.Untyped_Start + Word (Idx - 1); Found := Found + 1;
             elsif UT_REPLY = 0 then
                UT_REPLY := BI.all.Untyped_Start + Word (Idx - 1); Found := Found + 1;
+            elsif UT_ELF = 0 then
+               UT_ELF := BI.all.Untyped_Start + Word (Idx - 1); Found := Found + 1;
             end if;
          end if;
       end loop;
@@ -1568,9 +1575,10 @@ is
       Put_String (" TCB="); Put_Hex (UT_TCB);
       Put_String (" IPC="); Put_Hex (UT_IPC);
       Put_String (" CN="); Put_Hex (UT_CN);
-      Put_String (" SC="); Put_Hex (UT_SC); Put_String (" RPY="); Put_Hex (UT_REPLY); Put_String (ASCII.CR & ASCII.LF);
+      Put_String (" SC="); Put_Hex (UT_SC); Put_String (" RPY="); Put_Hex (UT_REPLY);
+      Put_String (" ELF="); Put_Hex (UT_ELF); Put_String (ASCII.CR & ASCII.LF);
 
-      if Found < 6 then
+      if Found < 7 then
          Put_String ("[FS] FATAL: untyped exhausted" & ASCII.CR & ASCII.LF);
          return 1;
       end if;
@@ -1636,20 +1644,18 @@ is
       R := Page_Table_Map (FS_PT_Mmio_Slot, FS_PML4_Slot, 16#600000#);
       if R /= 0 then Put_String ("[FS] PTMmioMap FAIL" & ASCII.CR & ASCII.LF); return 2; end if;
 
-      -- Mint + map user image frames into FS PML4 (shared with root, same as Net).
-      Frame := BI.all.User_Image_Frames_Start;
-      VAddr := 16#400000#;
-      I := 0;
-      while Frame < BI.all.User_Image_Frames_End loop
-         R := CNode_Mint (CNode_Slot, FS_Image_Frame_Base + I, 64,
-                          CNode_Slot, Frame, 64, 16#F#, 0);
-         if R /= 0 then Put_String ("[FS] ImgMint FAIL" & ASCII.CR & ASCII.LF); return 2; end if;
-         R := Page_Map (FS_Image_Frame_Base + I, FS_PML4_Slot, VAddr);
-         if R /= 0 then Put_String ("[FS] ImgMap FAIL" & ASCII.CR & ASCII.LF); return 2; end if;
-         Frame := Frame + 1;
-         VAddr := VAddr + 16#1000#;
-         I := I + 1;
-      end loop;
+      -- H87: load the fs_daemon.elf (embedded blob) into the FS VSpace.
+      declare
+         Root_VSpace : constant Cap_Ref := 3;  -- seL4_CapInitThreadVSpace
+      begin
+         Load_Elf (Fs_Daemon_Elf_Start, Fs_Daemon_Elf_Size,
+                   FS_PML4_Slot, Root_VSpace, UT_ELF, CNode_Slot,
+                   FS_Image_Frame_Base, Load_Status, Load_Entry);
+         if Load_Status /= 0 then
+            Put_String ("[FS] Load_Elf FAIL" & ASCII.CR & ASCII.LF);
+            return 2;
+         end if;
+      end;
 
       -- Map IPC frame @ 0x530000 (above image, above Net's 0x510000, shared @ 0x520000).
       R := Page_Map (FS_IPC_Slot, FS_PML4_Slot, FS_IPC_VAddr);
@@ -1703,7 +1709,7 @@ is
       R := TCB_Set_IPC_Buffer (FS_TCB_Slot, FS_IPC_Slot, FS_IPC_VAddr);
       if R /= 0 then Put_String ("[FS] SetIPCBuffer FAIL" & ASCII.CR & ASCII.LF); return 2; end if;
 
-      R := TCB_Write_Registers (FS_TCB_Slot, FsDaemon_Entry_Addr, FsDaemon_Stack_Addr);
+      R := TCB_Write_Registers (FS_TCB_Slot, Load_Entry, FS_Daemon_Stack);
       if R /= 0 then Put_String ("[FS] WriteRegs FAIL" & ASCII.CR & ASCII.LF); return 2; end if;
 
       declare
@@ -1736,8 +1742,8 @@ is
          -- H93: remember FS daemon TCB/entry/stack for Health Monitoring, and
          -- record the launch in the two SPARK-proved models (HM + launch).
          FS_TCB_Cap := FS_TCB_Slot;
-         FS_Entry    := FsDaemon_Entry_Addr;
-         FS_Stack    := FsDaemon_Stack_Addr;
+         FS_Entry    := Load_Entry;
+         FS_Stack    := FS_Daemon_Stack;
          Schild_HM_Model.Launch (HM_St, Schild_HM_Model.HM_FS_Daemon);
          Schild_Launch_Model.Launch
            (Launch_St, Schild_Launch_Model.FS_Daemon, Natural (FS_Fault_Root_Slot));

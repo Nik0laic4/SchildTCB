@@ -30,6 +30,17 @@ void schild_memset_zero(u64 dst, u64 n) {
     for (u64 i = 0; i < n; i++) d[i] = 0;
 }
 
+/* H87: fs_daemon.elf blob accessors (embedded via ld -r -b binary). */
+extern unsigned char _binary_obj_root_task_fs_daemon_bin_start[];
+extern unsigned char _binary_obj_root_task_fs_daemon_bin_end[];
+u64 schild_fs_daemon_elf_start(void) {
+    return (u64)_binary_obj_root_task_fs_daemon_bin_start;
+}
+u64 schild_fs_daemon_elf_size(void) {
+    return (u64)(_binary_obj_root_task_fs_daemon_bin_end -
+                 _binary_obj_root_task_fs_daemon_bin_start);
+}
+
 volatile u64 schild_ipc_buf_addr = 0;
 void schild_set_ipc_buf_addr(u64 addr) { schild_ipc_buf_addr = addr; }
 i64 schild_test_ipc_writable(void) { volatile u64 *b=(volatile u64*)schild_ipc_buf_addr; u64 o=b[0]; b[0]=0xDEAD; __asm__("":::"memory"); i64 ok=b[0]==0xDEAD; b[0]=o; return ok; }
