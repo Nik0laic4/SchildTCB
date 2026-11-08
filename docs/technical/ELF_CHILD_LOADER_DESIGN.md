@@ -101,9 +101,13 @@ x86_64 повторяет этот паттерн, но для **четырёх*
 > ELF `e_entry`, stack = `fs_daemon_stack_top` (0x417048); +7-й untyped `UT_ELF`.
 > FS daemon теперь работает на **своём** ELF (отдельные .text/.data/.bss).
 > run_tests 23/23. H87 (FS-daemon) закрыт; остальные daemons — по аналогии.
-> **MLS (round 35):** `mls_daemon.elf` уже собирается (mls_server + mls_server_c +
+> **MLS (round 35–39):** `mls_daemon.elf` уже собирается (mls_server + mls_server_c +
 > schild_mls_policy + schild_config_daemon + shim + stubs); слот-фикс под рост
-> образа применён (§4.1). Встраивание mls-блоба даёт hang Load_Elf — в работе.
+> образа применён (§4.1). Встраивание mls-блоба даёт hang Load_Elf: **второй
+> `Retype_Object` из того же untyped-капа `0xE9` зависает** (первый retype ок).
+> Зацепка: `UT_ELF` = 64 МБ (`Size_Bits=26`), free-index = `MAX_FREE_INDEX` (конец),
+> поэтому первый retype через `resetUntypedCap` чистит все 64 МБ; но второй
+> (reset=false, без очистки) всё равно виснет — причина не выяснена.
 
 Каждый daemon-ELF линкуется со своим linker-скриптом `daemon_linker.ld`
 (RX-код, R-rodata, RW-data/bss, entry в `.text` @ 0x400000), затем

@@ -129,7 +129,7 @@ Qubes-подобной изоляции рабочей среды.
 
 | # | Предпосылка | Почему обязательна | Статус |
 |---|---|---|---|
-| P1 | **H87 CLOSED** — ELF loader, каждый daemon в своём VSpace | Без него VMM в shared image = OOB в общий `.bss` всех daemons | open |
+| P1 | **H87 частично** — ELF loader + FS daemon CLOSED; MLS/Config/NetServer → Load_Elf open | Без него VMM в shared image = OOB в общий `.bss` всех daemons | ⏳ FS ✅ / MLS·Config·Net open |
 | P2 | **Блок 3 CLOSED** — AS6 (syscall seam), C1 (ring-0 C) | VMM — новый Tier B компонент, зависит от стабильного seam | open |
 | P3 | **Точка С** — Assurance Case готов | VMM — новая поверхность, добавлять до фиксации baseline нельзя | open |
 | P4 | **H61 решён или официально out of scope** | Merkle tree audit (§4.2.6) — продолжение H61; без решения H61 весь пункт 3 откладывается | ✅ решён (H61 HMAC-SHA256, ключ детерминированный; RNG → Блок 3) |

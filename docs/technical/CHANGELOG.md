@@ -6,6 +6,13 @@
 > *pending* or *target* have not yet been validated. Formal-verification
 > coverage is stated per-module, never as an aggregate percentage.
 
+## v0.44 (2026-11-08) — boot stability: raise Config daemon MCS budget 1000→5000 us
+
+**Validated: the Config daemon's 1000 us budget overran on slow QEMU (validate@Top_Secret then validate@Public stalled), producing intermittent 8-PASS boot-timeout flakes. 5000 us (5% CPU) makes the boot stable: 6× run_tests 23/23.**
+
+- `schild_sel4_syscall.adb`: `Config_Budget_Us` 1_000 → 5_000 (period stays 100_000 us).
+- Gates: build OK; verify.sh "all proved"; run_tests 23/23 (6 consecutive runs).
+
 ## v0.43 (2026-11-08) — H87: re-lay FS image frames for larger images (slot collision)
 
 **Validated: the FS image-frame base and the per-page mint offset are re-laid so the FS daemon's Load_Elf stays clear of the NetServer image minting as the embedded daemon blobs grow the root-task image.**
