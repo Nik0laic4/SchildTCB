@@ -52,8 +52,30 @@ x86_64 повторяет этот паттерн, но для **четырёх*
 | `netserver.elf` | `netserver.c` + `schild_net_server` + `schild_http_server` |
 | `fs_daemon.elf` | `fs_daemon.c` + `schild_fs_server` + `schild_schild_fs` + `schild_fs_core` + `schild_nvme` |
 
-Каждый daemon-ELF линкуется со своим linker-скриптом (RX-код, R-rodata,
-RW-data+bss), по образцу ARM64 `child_linker.ld`.
+Каждый daemon-ELF линкуется со своим linker-скриптом `daemon_linker.ld`
+(RX-код, R-rodata, RW-data/bss, entry в `.text` @ 0x400000), затем
+конвертируется в flat binary и встраивается в `root_task.elf` как blob:
+
+```sh
+# 1. Link the daemon ELF (own linker script, own .o set).
+ld -T src/daemon_linker.ld -o fs_daemon.elf \
+   fs_daemon.o fs_daemon_c.o schild_fs_server.o schild_schild_fs.o \
+   schild_fs_core.o schild_nvme.o ...
+
+# 2. Flatten to a binary.
+objcopy -O binary fs_daemon.elf fs_daemon.bin
+
+# 3. Embed the binary into the root task as a symbol.
+ld -r -b binary fs_daemon.bin -o fs_daemon_blob.o
+#  → symbols: _binary_fs_daemon_bin_start / _end / _size
+
+# 4. Link fs_daemon_blob.o into root_task.elf; the root task passes
+#    _binary_fs_daemon_bin_start to Load_Elf (Image_Base) with _size.
+```
+
+В Ada root task адреса blob'ов импортируются через `Import (C)` на символы
+`_binary_*_bin_start`; `Load_Elf` получает `Image_Base` + `Image_Size` + VSpace
+даемона + `RAM_UT`/`CNode`/`Slot_Base` и грузит PT_LOAD-сегменты.
 
 ### 4.2 ELF loader (memory-safe, в TCB)
 
