@@ -46,7 +46,8 @@ THREAT_MODEL AS6/R10). Баг здесь = побег из CSpace/VSpace.
 
 ## 4. Message-info encoding
 
-`msgInfo = (label << 12) | (extraCaps << 9) | length`.
+`msgInfo = (label << 12) | (capsUnwrapped << 9) | (extraCaps << 7) | length`
+(`length` 7 бит, `extraCaps` 2 бита, `capsUnwrapped` 3 бита; источник — `schild_sel4_ipc.c`).
 
 Инвокационные label'ы (x86_64 MCS, источник — `schild_sel4_ipc.c`):
 `TCBWriteRegisters=3`, `TCBSetTimeoutEndpoint=9`, `TCBSetIPCBuffer=10`,
