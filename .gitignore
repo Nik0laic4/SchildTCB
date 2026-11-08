@@ -31,3 +31,6 @@ docs/ARTICLE.md
 
 # Agent working docs (session handoff, rules, audit registry) — kept local, not for master
 START/
+
+# Local seL4 kernel source clone (patch development)
+.sel4-src/

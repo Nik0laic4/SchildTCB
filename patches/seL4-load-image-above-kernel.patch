@@ -1,0 +1,66 @@
+From: Ирганов А.Н.
+Date: 2026-11-08
+Subject: [PATCH] seL4: load the root-task image above the kernel region (H87)
+
+The root-task image is ELF-loaded at mods_end_paddr (the end of the GRUB-loaded
+boot module). With the embedded fs_daemon blob the module grows, pushing
+mods_end_paddr 0x7a8000 -> 0x799000 — INSIDE the kernel's physical region
+(ki_p_reg = [0x100000, 0xa21000) with PRINTING=1). The old
+`assert(mods_end_paddr > ki_p_reg.end)` catches this, but is compiled out in
+release builds (DEBUG_BUILD=OFF), so memzero/elf_load overwrote kernel boot code
+and the kernel triple-faulted.
+
+Fix (release-safe, no assert):
+ - Clamp mods_end_paddr to ki_p_reg.end so the image always loads AFTER the
+   kernel's physical region.
+ - memcpy from boot_state.ui_info.p_reg.start (the actual load address chosen by
+   find_load_paddr) instead of mods_end_paddr, and size the copy from the real
+   image bounds (ui_info.p_reg.end - start), fixing a latent mismatch when
+   find_load_paddr returns an address above mods_end_paddr.
+
+diff --git a/src/arch/x86/kernel/boot_sys.c b/src/arch/x86/kernel/boot_sys.c
+index 51665e6..c6b78ea 100644
+--- a/src/arch/x86/kernel/boot_sys.c
++++ b/src/arch/x86/kernel/boot_sys.c
+@@ -449,7 +449,12 @@ static BOOT_CODE bool_t try_boot_sys(void)
+     }
+ 
+     mods_end_paddr = ROUND_UP(mods_end_paddr, PAGE_BITS);
+-    assert(mods_end_paddr > boot_state.ki_p_reg.end);
++    /* Schild TCB (H87): load the userland image strictly AFTER the kernel's
++     * physical region, so memzero/elf_load never overwrite kernel boot code.
++     * The previous assert() was a no-op in release builds (DEBUG_BUILD=OFF). */
++    if (mods_end_paddr < boot_state.ki_p_reg.end) {
++        mods_end_paddr = boot_state.ki_p_reg.end;
++    }
+ 
+     printf("ELF-loading userland images from boot modules:\n");
+     load_paddr = mods_end_paddr;
+@@ -461,20 +466,21 @@ static BOOT_CODE bool_t try_boot_sys(void)
+ 
+     /* calculate final location of userland images */
+     ui_p_regs.start = boot_state.ki_p_reg.end;
+-    ui_p_regs.end = ui_p_regs.start + load_paddr - mods_end_paddr;
++    ui_p_regs.end = ui_p_regs.start + (boot_state.ui_info.p_reg.end - boot_state.ui_info.p_reg.start);
+ 
+     printf(
+         "Moving loaded userland images to final location: from=0x%lx to=0x%lx size=0x%lx\n",
+-        mods_end_paddr,
++        boot_state.ui_info.p_reg.start,
+         ui_p_regs.start,
+         ui_p_regs.end - ui_p_regs.start
+     );
+-    memcpy((void *)ui_p_regs.start, (void *)mods_end_paddr, ui_p_regs.end - ui_p_regs.start);
++    memcpy((void *)ui_p_regs.start, (void *)boot_state.ui_info.p_reg.start,
++           ui_p_regs.end - ui_p_regs.start);
+ 
+     /* adjust p_reg and pv_offset to final load address */
+-    boot_state.ui_info.p_reg.start -= mods_end_paddr - ui_p_regs.start;
+-    boot_state.ui_info.p_reg.end   -= mods_end_paddr - ui_p_regs.start;
+-    boot_state.ui_info.pv_offset   -= mods_end_paddr - ui_p_regs.start;
++    boot_state.ui_info.pv_offset -= boot_state.ui_info.p_reg.start - ui_p_regs.start;
++    boot_state.ui_info.p_reg.start = ui_p_regs.start;
++    boot_state.ui_info.p_reg.end   = ui_p_regs.end;
+ 
+     /* ==== following code corresponds to abstract specification after "select" ==== */
+ 
