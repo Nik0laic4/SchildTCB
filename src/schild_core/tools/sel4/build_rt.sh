@@ -77,7 +77,7 @@ if ! "$TOOL/gcc" -c --RTS="$(pwd)/../../bare_runtime" -gnat2022 -gnatwa -gnato -
     exit 1
 fi
 
-for src in schild_mls_policy schild_audit_logger schild_config_daemon schild_boot_manager schild_hm_model schild_launch_model schild_watchdog schild_root_task schild_sel4_syscall schild_sel4_bootinfo schild_net_server; do
+for src in schild_mls_policy schild_audit_logger schild_config_daemon schild_boot_manager schild_hm_model schild_launch_model schild_watchdog schild_root_task schild_sel4_syscall schild_sel4_bootinfo schild_net_server schild_elf_loader; do
     SF="src/${src}.adb"
     [ -f "$OVERLAY/${src}.adb" ] && SF="$OVERLAY/${src}.adb"
     if ! "$TOOL/gcc" -c --RTS="$(pwd)/../../bare_runtime" -gnat2022 -gnatwa -gnato -gnatVa -g -O0 "${PREFIX_MAP_ADA[@]}" \
@@ -103,6 +103,7 @@ for spec in \
      ../../src/04_userland/schild_http_core \
      ../../src/04_userland/schild_http_server \
      ../../src/04_userland/schild_fs_core \
+     ../../src/04_userland/schild_elf_core \
      ../../src/04_userland/schild_schild_fs \
      ../../src/04_userland/schild_net_stack \
      src/schild_fs_server; do
@@ -169,6 +170,7 @@ done
     "$OBJ/schild_sel4_syscall.o" \
     "$OBJ/schild_sel4_bootinfo.o" \
     "$OBJ/schild_net_server.o" \
+    "$OBJ/schild_elf_loader.o" \
     "$OBJ/schild_uart_driver.o" \
     "$OBJ/schild_pci_scanner.o" \
     "$OBJ/schild_e1000e.o" \
@@ -179,6 +181,7 @@ done
     "$OBJ/schild_http_core.o" \
     "$OBJ/schild_http_server.o" \
     "$OBJ/schild_fs_core.o" \
+    "$OBJ/schild_elf_core.o" \
     "$OBJ/schild_schild_fs.o" \
     "$OBJ/schild_net_stack.o" \
     "$OBJ/schild_fs_server.o" \

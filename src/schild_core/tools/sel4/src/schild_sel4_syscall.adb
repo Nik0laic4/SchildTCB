@@ -34,21 +34,6 @@ is
 
    CNode_Slot : constant Cap_Ref := 2;
 
-   -- seL4 object types (MCS `api_object` enum).  SchedContext/Reply are MCS-only;
-   -- the arch types (PDPT/PML4/Frame/PT/PD) are shifted +2 relative to non-MCS.
-   Object_TCB           : constant Word := 1;
-   Object_Endpoint      : constant Word := 2;
-   Object_Notification  : constant Word := 3;
-   Object_CNode         : constant Word := 4;
-   Object_SchedContext  : constant Word := 5;   -- MCS
-   Object_Reply         : constant Word := 6;   -- MCS
-   Object_PDPT          : constant Word := 7;
-   Object_PML4          : constant Word := 8;
-   Object_Frame         : constant Word := 10;  -- 4K frame (9 = huge page)
-   Object_LargePage     : constant Word := 11;  -- 2 MiB large page (seL4_X86_LargePageObject)
-   Object_PageTable     : constant Word := 12;
-   Object_PageDirectory : constant Word := 13;
-
    -- Health Monitoring: per-domain restart state (populated at launch).
    Net_TCB_Cap : Cap_Ref := 0;
    Net_Entry    : Word := 0;

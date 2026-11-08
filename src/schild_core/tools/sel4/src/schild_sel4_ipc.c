@@ -18,6 +18,18 @@
 typedef unsigned long long u64;
 typedef          long long i64;
 
+/* H87: byte copy for the ELF loader (image -> freshly-retyped frame). */
+void schild_memcpy(u64 dst, u64 src, u64 n) {
+    volatile unsigned char *d = (volatile unsigned char *)dst;
+    const volatile unsigned char *s = (const volatile unsigned char *)src;
+    for (u64 i = 0; i < n; i++) d[i] = s[i];
+}
+/* H87: zero the .bss tail of a freshly-retyped frame. */
+void schild_memset_zero(u64 dst, u64 n) {
+    volatile unsigned char *d = (volatile unsigned char *)dst;
+    for (u64 i = 0; i < n; i++) d[i] = 0;
+}
+
 volatile u64 schild_ipc_buf_addr = 0;
 void schild_set_ipc_buf_addr(u64 addr) { schild_ipc_buf_addr = addr; }
 i64 schild_test_ipc_writable(void) { volatile u64 *b=(volatile u64*)schild_ipc_buf_addr; u64 o=b[0]; b[0]=0xDEAD; __asm__("":::"memory"); i64 ok=b[0]==0xDEAD; b[0]=o; return ok; }
