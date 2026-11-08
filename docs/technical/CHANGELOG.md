@@ -6,6 +6,14 @@
 > *pending* or *target* have not yet been validated. Formal-verification
 > coverage is stated per-module, never as an aggregate percentage.
 
+## v0.39 (2026-11-08) — H87: Schild_Elf_Core — provable ELF64 parsing
+
+**Validated: the ELF64 header + program-header parsing (magic/class/data/machine/type validation, little-endian decode, PT_LOAD) is extracted into `Schild_Elf_Core` (SPARK_Mode => On) and proved memory-safe — the foundation for the ELF child loader (H87).**
+
+- `schild_elf_core.ads/.adb` (new): `Elf64_Ehdr`/`Elf64_Phdr`, `Is_Valid_Header`, `Parse_Header`, `Parse_Phdr`, `Is_Load`/`Is_Executable`. Fixed-size bounds-checked buffers. Proved at Level 4 (0 not-proved).
+- Gates: bare 184/0; proof set 188 modules (0 not-proved for `schild_elf_core`).
+- Note: the loader body (retype frames + `X86PageMap` + copy) is the next H87 step; this is the parsing core it will use.
+
 ## v0.38 (2026-11-08) — H62: per-file checksum (CRC32) — detect torn data writes
 
 **Validated: each directory entry carries a CRC32 over the file's data bytes; `Open` verifies it and rejects a file whose data was torn by a power loss (previously a torn data write was silently trusted — only metadata had A/B).**

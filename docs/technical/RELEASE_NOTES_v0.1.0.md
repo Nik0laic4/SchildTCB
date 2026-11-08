@@ -39,7 +39,7 @@ Step-by-step tutorial (build → run → verify): [`docs/GUIDE.md`](docs/GUIDE.m
 
 ```bash
 cd src/schild_core
-./build.sh                          # bare-metal (183 objects, 0 errors)
+./build.sh                          # bare-metal (184 objects, 0 errors)
 bash scripts/verify.sh              # 8 proof units (not-proved: 0)
 bash scripts/prove_kernel.sh        # full 187-module sweep (~10 min)
 # Docker: docker build -t schild-tcb . && docker run --rm -v "$PWD":/repo schild-tcb

@@ -17,7 +17,7 @@
 | Компонент | Статус | Механическая проверка |
 |---|---|---|
 | Bare-metal ядро — сборка | ✅ 0 ошибок | `./build.sh` |
-| Bare-metal ядро — SPARK L4 | ✅ `not-proved: 0` | `scripts/prove_kernel.sh` → `obj/proof/report.txt` (187 модулей; `130 proved / 56 skipped`, 2026-11-01) |
+| Bare-metal ядро — SPARK L4 | ✅ `not-proved: 0` | `scripts/prove_kernel.sh` → `obj/proof/report.txt` (188 модулей; `130 proved / 56 skipped`, 2026-11-01) |
 | Демоны root-задачи — SPARK L4 | ✅ все VC доказаны | `scripts/verify.sh` (`verify.gpr`, 8 модулей) |
 | Модель угроз | ✅ | `docs/technical/THREAT_MODEL.md` |
 | Контрактный аудит (Tier-A) | ✅ усилены, `not-proved: 0` | `docs/technical/THREAT_MODEL.md` §7 + `CHANGELOG.md` (W8) |

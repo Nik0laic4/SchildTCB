@@ -24,11 +24,11 @@ the audit log through the FS daemon over IPC.
 
 ## Key results (mechanically checkable)
 
-- Bare-metal build: **183 objects, 0 errors**.
+- Bare-metal build: **184 objects, 0 errors**.
 - seL4 build (public + private): `Done`, no `[RT] ERROR`.
 - SPARK: `verify.sh` (8 proof units = 1 daemon + 7 libraries/models) and
   `verify_private.sh` (full private bodies) — all VCs proved; full sweep
-  **187 modules, 130 proved / 56 skipped** (`not-proved: 0`).
+  **188 modules, 130 proved / 56 skipped** (`not-proved: 0`).
 - QEMU: `run_tests.sh` **23/23** markers in both profiles.
 
 ## Honest limitations (residual risks)
@@ -52,7 +52,7 @@ the audit log through the FS daemon over IPC.
 
 ```bash
 cd src/schild_core
-SCHILD_PROFILE=public ./build.sh                         # bare-metal (183 objects)
+SCHILD_PROFILE=public ./build.sh                         # bare-metal (184 objects)
 SEL4_PRIMARY=1 SCHILD_PROFILE=public ./build.sh          # seL4 root task
 SEL4_PRIMARY=1 SCHILD_PROFILE=private ./build.sh         # full daemon bodies
 bash scripts/verify.sh                                   # 8 proof units

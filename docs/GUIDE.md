@@ -46,7 +46,7 @@ cd src/schild_core
 ./build.sh
 ```
 
-Ожидаемый результат: `Ada: 183 objects, 0 errors` → `schild_os.elf` +
+Ожидаемый результат: `Ada: 184 objects, 0 errors` → `schild_os.elf` +
 `schild_os.iso`. Сборка воспроизводима (`SOURCE_DATE_EPOCH`, `-fdebug-prefix-map`).
 
 ## 4. Шаг 2 — запуск в QEMU
@@ -82,7 +82,7 @@ SKIP_BUILD=1 SEL4_PRIMARY=1 scripts/run_tests.sh  # QEMU, 23 маркера
 cd src/schild_core
 bash scripts/verify.sh            # 8 демонов root-задачи (not-proved: 0)
 bash scripts/verify_private.sh     # полные (private) тела демонов
-bash scripts/prove_kernel.sh       # полный свип 187 модулей (~10 мин)
+bash scripts/prove_kernel.sh       # полный свип 188 модулей (~10 мин)
 ```
 
 Каноничный гейт — **`not-proved: 0`**. Число proved/skipped недетерминировано

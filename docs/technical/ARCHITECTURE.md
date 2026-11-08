@@ -3,7 +3,7 @@
 **Version:** v1.0.0-pre (Stage 12)  |  **Date:** 2026-08-16 (обновлено 2026-11-01)
 **Developer:** Ирганов А.Н.
 **NetServer isolation:** CSpace ✅ (own CNode) · VSpace ✅ (own ASID-bound PML4) · IRQ ✅ · DMA frame ✅ · crash-containment ✅
-**Build:** 183 объектов (public, bare-metal) + C + ASM → 0 ошибок
+**Build:** 184 объектов (public, bare-metal) + C + ASM → 0 ошибок
 **Root Task ELF:** ~239 KB (with NetServer)  |  **kernel.elf:** ~186 KB (nehalem, PRINTING=ON)
 
 ---
