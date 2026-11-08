@@ -52,6 +52,15 @@ x86_64 повторяет этот паттерн, но для **четырёх*
 | `netserver.elf` | `netserver.c` + `schild_net_server` + `schild_http_server` |
 | `fs_daemon.elf` | `fs_daemon.c` + `schild_fs_server` + `schild_schild_fs` + `schild_fs_core` + `schild_nvme` |
 
+> **Практическая сложность (проверено экспериментальной линковкой, round 19):**
+> daemon-ELF **не самодостаточен**. `fs_daemon.elf` тянет общий шов: `schild_sel4_ipc.o`
+> + `schild_sel4_syscalls.o` + `message_info.o` (syscall), `schild_net_runtime.o`
+> (UART/DMA/shared-copy/NVMe-MMIO), `schild_hmac_sha256.o` (H61), `schild_pci_scanner.o`
+> (для NVMe). Хуже того, `schild_sel4_ipc.c` ссылается на **все** daemon'ы сразу
+> (`mls_server_entry`, `netserver_entry`, `config_daemon_entry` и их `*_cptr`),
+> т.е. шов надо **расщепить per-daemon** (или сделать daemon-agnostic), прежде чем
+> каждый daemon станет отдельным ELF. Это основная работа шага 4–5.
+
 Каждый daemon-ELF линкуется со своим linker-скриптом `daemon_linker.ld`
 (RX-код, R-rodata, RW-data/bss, entry в `.text` @ 0x400000), затем
 конвертируется в flat binary и встраивается в `root_task.elf` как blob:
