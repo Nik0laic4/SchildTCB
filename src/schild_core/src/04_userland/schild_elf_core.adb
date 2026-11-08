@@ -2,34 +2,50 @@
 
 package body Schild_Elf_Core with SPARK_Mode => On is
 
-   function LE16 (Raw : Elf_Header_Buf; Off : Natural) return Unsigned_16 is
-     (Unsigned_16 (Raw (Off)) or Shift_Left (Unsigned_16 (Raw (Off + 1)), 8));
+   function LE16 (Raw : Elf_Header_Buf; Off : Natural) return Unsigned_16
+     with Pre => Off <= Raw'Last - 1
+   is
+   begin
+      return Unsigned_16 (Raw (Off)) or Shift_Left (Unsigned_16 (Raw (Off + 1)), 8);
+   end LE16;
 
-   function LE64 (Raw : Elf_Header_Buf; Off : Natural) return Unsigned_64 is
-     (Unsigned_64 (Raw (Off))
+   function LE64 (Raw : Elf_Header_Buf; Off : Natural) return Unsigned_64
+     with Pre => Off <= Raw'Last - 7
+   is
+   begin
+      return Unsigned_64 (Raw (Off))
         or Shift_Left (Unsigned_64 (Raw (Off + 1)), 8)
         or Shift_Left (Unsigned_64 (Raw (Off + 2)), 16)
         or Shift_Left (Unsigned_64 (Raw (Off + 3)), 24)
         or Shift_Left (Unsigned_64 (Raw (Off + 4)), 32)
         or Shift_Left (Unsigned_64 (Raw (Off + 5)), 40)
         or Shift_Left (Unsigned_64 (Raw (Off + 6)), 48)
-        or Shift_Left (Unsigned_64 (Raw (Off + 7)), 56));
+        or Shift_Left (Unsigned_64 (Raw (Off + 7)), 56);
+   end LE64;
 
-   function Ph_LE32 (Raw : Phdr_Buf; Off : Natural) return Unsigned_32 is
-     (Unsigned_32 (Raw (Off))
+   function Ph_LE32 (Raw : Phdr_Buf; Off : Natural) return Unsigned_32
+     with Pre => Off <= Raw'Last - 3
+   is
+   begin
+      return Unsigned_32 (Raw (Off))
         or Shift_Left (Unsigned_32 (Raw (Off + 1)), 8)
         or Shift_Left (Unsigned_32 (Raw (Off + 2)), 16)
-        or Shift_Left (Unsigned_32 (Raw (Off + 3)), 24));
+        or Shift_Left (Unsigned_32 (Raw (Off + 3)), 24);
+   end Ph_LE32;
 
-   function Ph_LE64 (Raw : Phdr_Buf; Off : Natural) return Unsigned_64 is
-     (Unsigned_64 (Raw (Off))
+   function Ph_LE64 (Raw : Phdr_Buf; Off : Natural) return Unsigned_64
+     with Pre => Off <= Raw'Last - 7
+   is
+   begin
+      return Unsigned_64 (Raw (Off))
         or Shift_Left (Unsigned_64 (Raw (Off + 1)), 8)
         or Shift_Left (Unsigned_64 (Raw (Off + 2)), 16)
         or Shift_Left (Unsigned_64 (Raw (Off + 3)), 24)
         or Shift_Left (Unsigned_64 (Raw (Off + 4)), 32)
         or Shift_Left (Unsigned_64 (Raw (Off + 5)), 40)
         or Shift_Left (Unsigned_64 (Raw (Off + 6)), 48)
-        or Shift_Left (Unsigned_64 (Raw (Off + 7)), 56));
+        or Shift_Left (Unsigned_64 (Raw (Off + 7)), 56);
+   end Ph_LE64;
 
    function Is_Valid_Header (Raw : Elf_Header_Buf) return Boolean is
    begin
