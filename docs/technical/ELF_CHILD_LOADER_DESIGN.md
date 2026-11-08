@@ -75,6 +75,21 @@ x86_64 повторяет этот паттерн, но для **четырёх*
 > **откатана** (build_rt.sh), `daemon_stubs.c` + `daemon_linker.ld` оставлены.
 > Нужен другой механизм доставки daemon-ELF: отдельный multiboot2-модуль
 > (через BootInfo), а не blob внутри root_task.elf.
+>
+> **Update (round 26, проверено по исходникам ядра seL4):** multiboot2-модуль
+> **тоже не работает** — `src/arch/x86/kernel/boot_sys.c` (`try_boot_sys_mbi2`)
+> записывает только **модуль #0** (`mod_count == 0` → `boot_module_start/end`),
+> а `try_boot_sys()` вызывает `load_boot_module()` ровно **один раз** (root task).
+> Дополнительные модули (fs_daemon.elf) **игнорируются** (их адрес не попадает
+> в BootInfo; лишь `mods_end_paddr` = max-конец всех модулей). BootInfo'а поле
+> «boot modules» нет (extra-регион несёт VBE/mmap/ACPI, не модули).
+>
+> **Итог по доставке:** оба пути в текущем ядре закрыты — blob даёт boot-loop,
+> модуль игнорируется ядром. Варианты: (а) разобраться с причиной blob-boot-loop
+> (образ 416 КиБ, сброс после `p_start/p_end`), (б) патч ядра (вне scope),
+> (в) иной механизм (daemon-ELF в untyped-памяти по известному физическому адресу,
+> заданному при сборке). `build_rt.sh`-линковка `fs_daemon.elf` + `daemon_stubs.c`
+> оставлены как готовая инфраструктура.
 
 Каждый daemon-ELF линкуется со своим linker-скриптом `daemon_linker.ld`
 (RX-код, R-rodata, RW-data/bss, entry в `.text` @ 0x400000), затем
