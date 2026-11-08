@@ -121,7 +121,7 @@ grep -c 'not proved' /tmp/focus_obj/gnatprove/gnatprove.out   # должно б�
 
 ```bash
 cd /home/null/Рабочий стол/SchildTCB/src/schild_core
-bash scripts/prove_kernel.sh      # полный свип 186 (~10 мин)
+bash scripts/prove_kernel.sh      # полный свип 187 (~10 мин)
 bash scripts/verify.sh            # 8 демонов root-задачи
 bash scripts/verify_private.sh    # полные тела демонов
 SCHILD_PROFILE=public ./build.sh  # bare-metal сборка

@@ -16,7 +16,7 @@ environment. Two artifacts:
 
 ## Key results (mechanically checkable)
 
-- 186 kernel modules swept at **SPARK Level 4** with **0 unproved VCs**; ~130 proved / ~56 out-of-proof (`SPARK_Mode => Off` drivers/platform code).
+- 187 kernel modules swept at **SPARK Level 4** with **0 unproved VCs**; ~130 proved / ~56 out-of-proof (`SPARK_Mode => Off` drivers/platform code).
 - 8 proof units proved (`verify.sh` — 1 daemon + 7 libraries/models); full (private) bodies — `verify_private.sh`.
 - MLS Bell-LaPadula (5 levels) proved in `schild_server_security_policy`, `schild_process_manager`, `schild_file_descriptors`.
 - Network: ARP/IPv4/ICMP/UDP/TCP parsers proved at L4 (W10); CBC chaining, max-priority scheduler + ARINC-653 MTF (W11).
@@ -39,9 +39,9 @@ Step-by-step tutorial (build → run → verify): [`docs/GUIDE.md`](docs/GUIDE.m
 
 ```bash
 cd src/schild_core
-./build.sh                          # bare-metal (182 objects, 0 errors)
+./build.sh                          # bare-metal (183 objects, 0 errors)
 bash scripts/verify.sh              # 8 proof units (not-proved: 0)
-bash scripts/prove_kernel.sh        # full 186-module sweep (~10 min)
+bash scripts/prove_kernel.sh        # full 187-module sweep (~10 min)
 # Docker: docker build -t schild-tcb . && docker run --rm -v "$PWD":/repo schild-tcb
 ```
 

@@ -24,18 +24,18 @@ the audit log through the FS daemon over IPC.
 
 ## Key results (mechanically checkable)
 
-- Bare-metal build: **182 objects, 0 errors**.
+- Bare-metal build: **183 objects, 0 errors**.
 - seL4 build (public + private): `Done`, no `[RT] ERROR`.
 - SPARK: `verify.sh` (8 proof units = 1 daemon + 7 libraries/models) and
   `verify_private.sh` (full private bodies) — all VCs proved; full sweep
-  **186 modules, 130 proved / 56 skipped** (`not-proved: 0`).
+  **187 modules, 130 proved / 56 skipped** (`not-proved: 0`).
 - QEMU: `run_tests.sh` **23/23** markers in both profiles.
 
 ## Honest limitations (residual risks)
 
 1. **Shared image RW (H87)** — daemons share one ELF `.bss`; an OOB write from
    one daemon can corrupt the root task's globals. ELF loader → v0.3.0.
-2. **Syscall seam (AS6)** — `schild_sel4_syscall.adb` 1475 lines `Off`, trusted
+2. **Syscall seam (AS6)** — `schild_sel4_syscall.adb` 1767 lines `Off`, trusted
    not proven; a seam bug = Ring-0 escape.
 3. **Ring-0 C (C1)** — `runtime_stubs.c` / `interrupt_handlers.c` / `hw_io.c` are
    trusted, runtime-tested only.
@@ -52,7 +52,7 @@ the audit log through the FS daemon over IPC.
 
 ```bash
 cd src/schild_core
-SCHILD_PROFILE=public ./build.sh                         # bare-metal (182 objects)
+SCHILD_PROFILE=public ./build.sh                         # bare-metal (183 objects)
 SEL4_PRIMARY=1 SCHILD_PROFILE=public ./build.sh          # seL4 root task
 SEL4_PRIMARY=1 SCHILD_PROFILE=private ./build.sh         # full daemon bodies
 bash scripts/verify.sh                                   # 8 proof units

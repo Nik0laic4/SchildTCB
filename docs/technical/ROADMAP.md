@@ -17,13 +17,13 @@
 | Компонент | Статус | Механическая проверка |
 |---|---|---|
 | Bare-metal ядро — сборка | ✅ 0 ошибок | `./build.sh` |
-| Bare-metal ядро — SPARK L4 | ✅ `not-proved: 0` | `scripts/prove_kernel.sh` → `obj/proof/report.txt` (186 модулей; `130 proved / 56 skipped`, 2026-11-01) |
+| Bare-metal ядро — SPARK L4 | ✅ `not-proved: 0` | `scripts/prove_kernel.sh` → `obj/proof/report.txt` (187 модулей; `130 proved / 56 skipped`, 2026-11-01) |
 | Демоны root-задачи — SPARK L4 | ✅ все VC доказаны | `scripts/verify.sh` (`verify.gpr`, 8 модулей) |
 | Модель угроз | ✅ | `docs/technical/THREAT_MODEL.md` |
 | Контрактный аудит (Tier-A) | ✅ усилены, `not-proved: 0` | `docs/technical/THREAT_MODEL.md` §7 + `CHANGELOG.md` (W8) |
 | W10 — сетевые парсеры | ✅ доказано (arp/icmp/ipv4/udp/tcp — все подпрограммы `On`) | `scripts/prove_kernel.sh`; `http_server` — prover-ограничение (см. §3 W10) |
-| Boot counter (A/B + порог блокировки) | ✅ доказано | `scripts/verify.sh` (`schild_boot_manager` 8 подпрограмм); `BOOT_COUNTER_DESIGN.md` |
-| Health check перед commit (W9.2) | ✅ доказано | `scripts/verify.sh` (`Commit_If_Healthy`, `schild_boot_manager` 10 подпрограмм) |
+| Boot counter (A/B + порог блокировки) | ✅ доказано | `scripts/verify.sh` (`schild_boot_manager` 21 подпрограмма); `BOOT_COUNTER_DESIGN.md` |
+| Health check перед commit (W9.2) | ✅ доказано | `scripts/verify.sh` (`Commit_If_Healthy`, `schild_boot_manager` 21 подпрограмма) |
 | Watchdog (W9.3) + Load/Save (round-trip + byte-упаковка) | ✅ логика доказана | `scripts/verify.sh` (`schild_watchdog` 5; `schild_boot_manager` 21: `To_Persistent`/`From_Persistent` + `Encode_Block`/`Decode_Block`/`Verify_Block`); таймер/NVMe I/O deferred |
 | Firewall (порт-блокировка + контракты) | ✅ доказано | `gnatprove` (`schild_firewall` 7 подпрограмм, `not-proved: 0`); encryption — scaffold |
 | Bare-metal boot + сеть | ✅ T580 + QEMU | `run_tests.sh` (`SEL4_PRIMARY=0`); HTTP на T580 (IRQ-driven RX) |

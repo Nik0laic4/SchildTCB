@@ -1,8 +1,8 @@
 # seL4 MCS — миграция root-задачи (план и контекст)
 
 > Статус: **завершено** — root-задача переведена на MCS API, валидирована в QEMU
-> (`run_tests.sh`: все 12 маркеров PASS, 0 ошибок). **Исторический документ** —
-> актуальный маркерный гейт сейчас 20 маркеров (см. `ROADMAP.md`).
+> (`run_tests.sh`: все 23 маркера PASS, 0 ошибок). **Исторический документ** —
+> актуальный маркерный гейт сейчас 23 маркера (см. `ROADMAP.md`).
 > Дата: 2026-10-03.
 
 ## 1. Цель
@@ -124,7 +124,7 @@ seL4_TCB_SetSchedParams(tcb, schedcontext, priority, mcp);
 - **Шаг 5** — C-шимсы: цикл `Recv(src, reply)` → `ReplyRecv(src, info, reply)`;
   reply-объект передаётся через новые глобальные `net/mls/config_reply_cptr`.
 - **Шаг 6** — MCS-ядро пересобрано с `CONFIG_PRINTING=1` (иначе ядро молчит),
-  `run_tests.sh` даёт **PASS по всем 12 маркерам** (MLS, NetServer, IRQ, DMA,
+  `run_tests.sh` даёт **PASS по всем 23 маркерам** (MLS, NetServer, IRQ, DMA,
   fault-containment badge=0xE2 + HM-restart).
 
 ## 8. Файлы для изменения
@@ -134,7 +134,7 @@ seL4_TCB_SetSchedParams(tcb, schedcontext, priority, mcp);
 | `tools/sel4/src/schild_sel4_syscalls.S` | 141 | reply→ReplyRecv + новые stub'ы |
 | `tools/sel4/src/schild_sel4_ipc.c` | 408 | Call/Reply обёртки |
 | `tools/sel4/src/schild_sel4_syscall.ads` | 328 | объявления |
-| `tools/sel4/src/schild_sel4_syscall.adb` | 863 | Init_Fault_Handler, Launch_* |
+| `tools/sel4/src/schild_sel4_syscall.adb` | 1767 | Init_Fault_Handler, Launch_* |
 | `tools/sel4/src/netserver.c` / `mls_server.c` / `config_daemon.c` | — | replyrecv |
 
 ## 9. Команды

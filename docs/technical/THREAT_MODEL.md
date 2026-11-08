@@ -288,7 +288,7 @@ for Pi 4 is a separate profile (§6 corrected).
 **C-§5 AS4.** Scope clarified: applies to P1-P3, void against P4.
 
 **AS6 — syscall seam (new).** `Schild_Sel4_Syscall` body is
-`SPARK_Mode => Off` (1475 lines, audit C10), plus C shims
+`SPARK_Mode => Off` (1767 lines, audit C10), plus C shims
 (`schild_sel4_ipc.c`, `schild_sel4_syscalls.S`, `message_info.c`). Trusted,
 not proven. Maps Ada contracts to seL4 ABI. A bug here lets a domain escape
 CSpace/VSpace. Per §3.2 (AI-axis), AS6 is **assumed exploitable**; under P2
@@ -362,7 +362,7 @@ Additional residuals:
 runtime-tested only. A bug here is not contained. Under AI-axis (assumed
 exploitable), largest single residual after DMA.
 
-**R10 — Syscall seam Off (1475 lines).** `Schild_Sel4_Syscall` body Off.
+**R10 — Syscall seam Off (1767 lines).** `Schild_Sel4_Syscall` body Off.
 Bug here lets a domain escape CSpace/VSpace. Both Ada body and C shims are
 trusted, not proven.
 
@@ -392,7 +392,7 @@ Expand to include:
   `seL4-max-num-drhu.patch`, `seL4-bootinfo-8k-untyped.patch`.
   Each modifies verified kernel; reviewed but not re-proven. **AS8**: if any
   patch introduces a defect, the transferred guarantee is void.
-- **Syscall seam** — `Schild_Sel4_Syscall` body (1475 lines Off), C shims.
+- **Syscall seam** — `Schild_Sel4_Syscall` body (1767 lines Off), C shims.
   AS6 above.
 - **Spec Tier B** — contracts of Tier B services called from Tier A. AS7 above.
 - **Ring-0 trusted C** — `runtime_stubs.c`, `interrupt_handlers.c`,
@@ -437,7 +437,7 @@ with status "documented in TM §12" until either (a) code mitigates or
 
 **C-§9 (patches scope).** Clarify §9's local patches: they do NOT touch the capability model or the scheduler. They DO touch object lifecycle (`seL4-object-zeroing.patch`, security-relevant: uninit memory disclosure) and kernel memory layout (`seL4-bootinfo-8k-untyped.patch`). AS8 applies: if `object-zeroing` or `bootinfo-8k` introduces a defect, kernel memory disclosure is possible; containment depends on seL4's capability model remaining intact (which patches do not touch). Audit H10 remains open, but its scope is narrowed: patches affect object lifecycle and memory layout, not capability model or scheduler.
 
-**C-§9 AS6 refinement.** `Schild_Sel4_Syscall` body is Off (1475 lines). The syscall seam is the largest single trusted component. Mitigations in queue (audit C4): memory-safe C shim, fuzzing of ABI mapping, formal ABI specification. Not fixed in v0.1.0.
+**C-§9 AS6 refinement.** `Schild_Sel4_Syscall` body is Off (1767 lines). The syscall seam is the largest single trusted component. Mitigations in queue (audit C4): memory-safe C shim, fuzzing of ABI mapping, formal ABI specification. Not fixed in v0.1.0.
 
 ### 12.11 FS daemon: NVMe ownership + MLS + Persist via IPC (audit v0.23–v0.30, 2026-11-04)
 

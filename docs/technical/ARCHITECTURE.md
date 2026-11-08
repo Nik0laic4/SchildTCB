@@ -3,7 +3,7 @@
 **Version:** v1.0.0-pre (Stage 12)  |  **Date:** 2026-08-16 (обновлено 2026-11-01)
 **Developer:** Ирганов А.Н.
 **NetServer isolation:** CSpace ✅ (own CNode) · VSpace ✅ (own ASID-bound PML4) · IRQ ✅ · DMA frame ✅ · crash-containment ✅
-**Build:** 182 объектов (public, bare-metal) + C + ASM → 0 ошибок
+**Build:** 183 объектов (public, bare-metal) + C + ASM → 0 ошибок
 **Root Task ELF:** ~239 KB (with NetServer)  |  **kernel.elf:** ~186 KB (nehalem, PRINTING=ON)
 
 ---
@@ -50,7 +50,7 @@ with an Ada/SPARK user-space environment (MLS policy formally verified; drivers 
 │  │ FS Daemon Thread (fs_daemon.c + fs_server.adb)      │  │
 │  │  └─ NVMe + SchildFS (own PML4, BAR0 @ 0x620000)     │  │
 │  ├────────────────────────────────────────────────────┤  │
-│  │ Schild TCB Kernel (186 Ada modules, bare-metal)     │  │
+│  │ Schild TCB Kernel (187 Ada modules, bare-metal)     │  │
 │  │  ├─ 01_hardware: HAL, MMU, APIC, NVMe, e1000e      │  │
 │  │  ├─ 02_security:  MLS Core, IPC Gateway, Firewall   │  │
 │  │  ├─ 03_crypto:   AES-NI, TME, SHA-256, RNG          │  │
@@ -109,7 +109,7 @@ timeout 10 qemu-system-x86_64 -cdrom sel4_primary.iso \
 
 | Language | Files | Purpose |
 |------|--------|------------|
-| Ada (.ads/.adb) | 186 | Kernel, drivers, SPARK modules (proof set; 182 compiled objects by default) |
+| Ada (.ads/.adb) | 187 | Kernel, drivers, SPARK modules (proof set; 183 compiled objects by default) |
 | C (.c) | 6 | seL4 IPC, runtime stubs, interrupts |
 | ASM (.S) | 3 | Entry point, syscall stubs, MLS server |
 

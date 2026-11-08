@@ -65,7 +65,7 @@
 
 | Факт | Каноничное значение | Механическая проверка |
 |---|---|---|
-| Модули ядра в proof-наборе | **186** `.adb` (без `null/`) | `find src -name '*.adb' -not -path '*/null/*'` |
+| Модули ядра в proof-наборе | **187** `.adb` (без `null/`) | `find src -name '*.adb' -not -path '*/null/*'` |
 | Proof ядра (SPARK L4) | **`not-proved: 0`**; 130 proved / 56 skipped (прогон 2026-11-01, W11.3) | `bash scripts/prove_kernel.sh` → `obj/proof/report.txt` |
 | Фокусно доказуемые (L4) | `schild_firewall` (7), `schild_signals`, `schild_frame_allocator`, `schild_server_security_policy`, `schild_mtf`, `schild_scheduler`, `schild_aes_cbc_engine`, `schild_crypto_fabric`, `schild_sentinel`, `schild_file_descriptors`, `schild_sha256_pad_guard`, `schild_sha_manager` | фокус-прогон одного модуля (команда ниже) |
 | Демоны root-задачи (SPARK L4) | **8** (verify.gpr), `not-proved: 0`; `schild_boot_manager` 21, `schild_watchdog` 5, `schild_root_task` 76 checks | `bash scripts/verify.sh` |

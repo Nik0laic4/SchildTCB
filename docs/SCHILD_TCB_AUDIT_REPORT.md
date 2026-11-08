@@ -249,7 +249,7 @@ known-answer тестами.
   (MLS-политика, Config Daemon, Audit Logger, Boot Manager, HM Model,
   Launch Model, **Root Task**) — **все VC доказаны**. Драйвер
   `schild_root_task.adb` переведён `SPARK_Mode => On` и доказан (54 checks).
-- **Регрессионные маркеры QEMU:** `run_tests.sh` → **20 маркеров PASS**
+- **Регрессионные маркеры QEMU:** `run_tests.sh` → **23 маркера PASS**
   (MLS, NetServer, IRQ, DMA, 3×fault-containment, timeout, эскалация HM,
   NVMe-init, SchildFS write-path).
 - **Сборка:** 181 объект, 0 ошибок.
@@ -388,7 +388,7 @@ cd src/schild_core
 KERNEL_MCS=ON scripts/build_sel4_kernel.sh      # → tools/sel4/kernel.elf
 SEL4_PRIMARY=1 ./build.sh   # → sel4_primary.iso
 
-# 3) Регрессионный прогон в QEMU (20 маркеров)
+# 3) Регрессионный прогон в QEMU (23 маркера)
 SKIP_BUILD=1 SEL4_PRIMARY=1 ./scripts/run_tests.sh
 
 # 4) Верификация

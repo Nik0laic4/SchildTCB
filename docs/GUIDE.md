@@ -46,7 +46,7 @@ cd src/schild_core
 ./build.sh
 ```
 
-Ожидаемый результат: `Ada: 182 objects, 0 errors` → `schild_os.elf` +
+Ожидаемый результат: `Ada: 183 objects, 0 errors` → `schild_os.elf` +
 `schild_os.iso`. Сборка воспроизводима (`SOURCE_DATE_EPOCH`, `-fdebug-prefix-map`).
 
 ## 4. Шаг 2 — запуск в QEMU
@@ -70,7 +70,7 @@ qemu-system-x86_64 -cdrom schild_os.iso -nographic -m 512M -smp 2 \
 cd src/schild_core
 KERNEL_MCS=ON scripts/build_sel4_kernel.sh        # ядро seL4 → tools/sel4/kernel.elf
 SEL4_PRIMARY=1 ./build.sh                          # root_task.elf + sel4_primary.iso
-SKIP_BUILD=1 SEL4_PRIMARY=1 scripts/run_tests.sh  # QEMU, 20 маркеров
+SKIP_BUILD=1 SEL4_PRIMARY=1 scripts/run_tests.sh  # QEMU, 23 маркера
 ```
 
 ⚠️ При ручной пересборке ядра: `DEBUG_BUILD=ON` не загружается — нужен
@@ -82,7 +82,7 @@ SKIP_BUILD=1 SEL4_PRIMARY=1 scripts/run_tests.sh  # QEMU, 20 маркеров
 cd src/schild_core
 bash scripts/verify.sh            # 8 демонов root-задачи (not-proved: 0)
 bash scripts/verify_private.sh     # полные (private) тела демонов
-bash scripts/prove_kernel.sh       # полный свип 186 модулей (~10 мин)
+bash scripts/prove_kernel.sh       # полный свип 187 модулей (~10 мин)
 ```
 
 Каноничный гейт — **`not-proved: 0`**. Число proved/skipped недетерминировано
