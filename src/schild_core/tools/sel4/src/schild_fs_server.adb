@@ -230,6 +230,24 @@ package body Schild_Fs_Server with SPARK_Mode => Off is
       return St_Ok;
    end Fs_Append;
 
+   function Fs_Delete (Name_Len : Unsigned_32) return Unsigned_32 is
+      Name_Buf : Schild_Schild_Fs.Unsigned_8_Array (0 .. 31) := (others => 0);
+      Name_Str : String (1 .. 24) := (others => ' ');
+      Ok       : Boolean;
+      L        : constant Unsigned_32 := (if Name_Len > 24 then 24 else Name_Len);
+   begin
+      if not Initialized then return St_Not_Mounted; end if;
+      if Schild_Schild_Fs.Is_Read_Only then return St_Read_Only; end if;
+      if L = 0 then return St_Bad_Op; end if;
+      Shared_Copy_From (Name_Buf (0)'Address, L);
+      for I in 0 .. Integer (L) - 1 loop
+         Name_Str (I + 1) := Character'Val (Name_Buf (I));
+      end loop;
+      Schild_Schild_Fs.Delete_File (Name_Str (1 .. Integer (L)), Ok);
+      if not Ok then return St_No_File; end if;
+      return St_Ok;
+   end Fs_Delete;
+
    function Fs_Get_Entry (Index : Unsigned_32) return Unsigned_32 is
       Ent : Schild_Fs_Core.Dir_Entry;
       Ok  : Boolean;

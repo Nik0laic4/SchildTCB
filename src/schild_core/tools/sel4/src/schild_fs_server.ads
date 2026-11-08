@@ -9,7 +9,7 @@
 --
 -- Ops:
 --   0 Init, 1 Open, 2 Read, 3 Write, 4 Create, 5 Append, 6 Get_Entry,
---   7 Is_Mounted, 8 Is_Read_Only, 99 fault-injection (test)
+--   7 Is_Mounted, 8 Is_Read_Only, 9 Delete, 99 fault-injection (test)
 with Interfaces;
 with Schild_Schild_Fs;
 
@@ -25,6 +25,7 @@ package Schild_Fs_Server with SPARK_Mode => Off is
    Op_Get_Entry   : constant := 6;
    Op_Is_Mounted  : constant := 7;
    Op_Is_Read_Only: constant := 8;
+   Op_Delete      : constant := 9;
    Op_Fault_Test  : constant := 99;
 
    -- Status codes (Reply MR[0])
@@ -81,6 +82,12 @@ package Schild_Fs_Server with SPARK_Mode => Off is
       Len       : Interfaces.Unsigned_32;
       New_Size  : out Interfaces.Unsigned_32) return Interfaces.Unsigned_32;
    pragma Export (C, Fs_Append, "schild_fs_append");
+
+   -- Delete a file by name (name in shared frame, name_len). Frees its data
+   -- blocks in the bitmap (H73). Reply: status.
+   function Fs_Delete
+     (Name_Len  : Interfaces.Unsigned_32) return Interfaces.Unsigned_32;
+   pragma Export (C, Fs_Delete, "schild_fs_delete");
 
    function Fs_Get_Entry
      (Index     : Interfaces.Unsigned_32) return Interfaces.Unsigned_32;

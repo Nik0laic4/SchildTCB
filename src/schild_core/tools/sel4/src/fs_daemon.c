@@ -6,7 +6,7 @@
  * IPC buffer: dedicated 4KB frame at 0x530000 (set by Root Task).
  * MR layout: MR[0]=op, MR[1..3]=args; Reply MR[0]=status (0=ok), MR[1..3]=result.
  *   op 0 = Init, 1 = Open, 2 = Read, 3 = Write, 4 = Create, 5 = Append,
- *   6 = Get_Entry, 7 = Is_Mounted, 8 = Is_Read_Only, 99 = fault injection (test).
+ *   6 = Get_Entry, 7 = Is_Mounted, 8 = Is_Read_Only, 9 = Delete, 99 = fault injection (test).
  * Large data (name, bytes, dir entry) via the shared frame @ 0x52A000.
  */
 #include "ipc_limits.h"
@@ -33,6 +33,7 @@ extern u32 schild_fs_append(u32 name_len, u32 len, u32* new_size);
 extern u32 schild_fs_get_entry(u32 index);
 extern u32 schild_fs_is_mounted(void);
 extern u32 schild_fs_is_read_only(void);
+extern u32 schild_fs_delete(u32 name_len);
 
 _Static_assert(sizeof(schild_recv_mr) == SCHILD_IPC_MR_BYTES,  "recv MR window must be 32 bytes");
 _Static_assert(sizeof(schild_reply_mr) == SCHILD_IPC_MR_BYTES, "reply MR window must be 32 bytes");
@@ -105,6 +106,9 @@ void fs_daemon_main(void) {
             break;
         case 8:  /* Is_Read_Only -> status (0 = writable) */
             result = (u64) schild_fs_is_read_only();
+            break;
+        case 9:  /* Delete: name_len (name in shared) -> status */
+            result = (u64) schild_fs_delete((u32)a);
             break;
         case 99: /* Crash-containment test: reply first, then fault on unmapped
                   * 0xFFFFF000 so seL4 delivers a #PF to the FS fault endpoint. */
