@@ -132,8 +132,8 @@ is
    NetServer_Period_Us : constant Word := 50_000;  -- round-robin
    MLS_Budget_Us       : constant Word := 2_000;  -- security decisions
    MLS_Period_Us       : constant Word := 2_000;  -- round-robin
-   Config_Budget_Us    : constant Word := 1_000;  -- config: smallest slice
-   Config_Period_Us    : constant Word := 100_000;  -- sporadic (1% CPU) -> B.6 timeout
+   Config_Budget_Us    : constant Word := 5_000;  -- config: 5% CPU (1000us flaked on slow QEMU)
+   Config_Period_Us    : constant Word := 100_000;  -- sporadic (5% CPU) -> B.6 timeout
    -- H90: the FS daemon drives NVMe by busy-wait polling (Fs_Init blocks in
    -- Read_Block loops), so it must run round-robin (budget == period).  A
    -- sporadic slice (5000/10000 = 50% CPU, the PRE_H86_CHECK mitigation) hangs
