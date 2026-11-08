@@ -96,3 +96,11 @@ void mls_server_main(void) {
 }
 volatile u64 mls_endpoint_cptr = 0;
 volatile u64 mls_reply_cptr = 0;
+
+/* H87: MLS entry/stack/cptr accessors (moved from schild_sel4_ipc.c — shim split). */
+extern void mls_server_entry(void);
+extern char mls_stack_top[];
+u64 schild_mls_entry_addr(void)  { return (u64)(void*)mls_server_entry; }
+u64 schild_mls_stack_addr(void)  { return (u64)mls_stack_top; }
+void schild_set_mls_endpoint(u64 ep) { mls_endpoint_cptr = ep; }
+void schild_set_mls_reply(u64 r)     { mls_reply_cptr = r; }

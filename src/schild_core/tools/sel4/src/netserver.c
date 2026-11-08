@@ -97,3 +97,11 @@ void netserver_main(void) {
 
 volatile u64 schild_net_endpoint_cptr = 0;
 volatile u64 net_reply_cptr = 0;
+
+/* H87: NetServer entry/stack/cptr accessors (moved from schild_sel4_ipc.c — shim split). */
+extern void netserver_entry(void);
+extern char netserver_stack_top[];
+u64 schild_netserver_entry_addr(void)  { return (u64)(void*)netserver_entry; }
+u64 schild_netserver_stack_addr(void)  { return (u64)netserver_stack_top; }
+void schild_set_net_endpoint(u64 ep) { schild_net_endpoint_cptr = ep; }
+void schild_set_net_reply(u64 r)     { net_reply_cptr = r; }

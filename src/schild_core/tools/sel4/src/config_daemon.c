@@ -93,3 +93,11 @@ void config_daemon_main(void) {
 }
 volatile u64 config_endpoint_cptr = 0;
 volatile u64 config_reply_cptr = 0;
+
+/* H87: Config entry/stack/cptr accessors (moved from schild_sel4_ipc.c — shim split). */
+extern void config_daemon_entry(void);
+extern char config_stack_top[];
+u64 schild_config_entry_addr(void) { return (u64)(void*)config_daemon_entry; }
+u64 schild_config_stack_addr(void) { return (u64)config_stack_top; }
+void schild_set_config_endpoint(u64 ep) { config_endpoint_cptr = ep; }
+void schild_set_config_reply(u64 r)     { config_reply_cptr = r; }

@@ -138,3 +138,12 @@ void fs_daemon_main(void) {
 
 volatile u64 fs_endpoint_cptr = 0;
 volatile u64 fs_reply_cptr = 0;
+
+/* H87: FS entry/stack/cptr accessors (moved from schild_sel4_ipc.c — shim split). */
+extern void  fs_daemon_entry(void);
+extern char  fs_daemon_stack_top[];
+u64 schild_fs_daemon_entry_addr(void) { return (u64)(void*)fs_daemon_entry; }
+u64 schild_fs_daemon_stack_addr(void) { return (u64)fs_daemon_stack_top; }
+void schild_set_fs_endpoint(u64 ep)   { fs_endpoint_cptr = ep; }
+void schild_set_fs_reply(u64 rpl)     { fs_reply_cptr = rpl; }
+u64  schild_get_fs_alive(void)        { return fs_daemon_alive_flag; }

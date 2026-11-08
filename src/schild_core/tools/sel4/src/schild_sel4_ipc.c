@@ -121,26 +121,6 @@ i64 schild_sel4_tcb_set_ipc_buffer(u64 tcb, u64 buf_cap, u64 buf_addr) {
     return raw_send(tcb, info);
 }
 
-/* Stage 7.6: get addresses of MLS server symbols */
-extern void mls_server_entry(void);
-extern char mls_stack_top[];
-u64 schild_mls_entry_addr(void)  { return (u64)(void*)mls_server_entry; }
-u64 schild_mls_stack_addr(void)  { return (u64)mls_stack_top; }
-
-/* R3: Config Daemon entry/stack addresses (from config_daemon.S). */
-extern void config_daemon_entry(void);
-extern char config_stack_top[];
-u64 schild_config_entry_addr(void) { return (u64)(void*)config_daemon_entry; }
-u64 schild_config_stack_addr(void) { return (u64)config_stack_top; }
-
-/* Stage 8.1D: NetServer endpoint setter + entry/stack addresses */
-extern volatile u64 schild_net_endpoint_cptr;
-void schild_set_net_endpoint(u64 ep) { schild_net_endpoint_cptr = ep; }
-extern void netserver_entry(void);
-extern char netserver_stack_top[];
-u64 schild_netserver_entry_addr(void)  { return (u64)(void*)netserver_entry; }
-u64 schild_netserver_stack_addr(void)  { return (u64)netserver_stack_top; }
-
 /* Generic UntypedRetype for any object type */
 
 i64 schild_sel4_retype_object(u64 untyped, u64 obj_type, u64 size_bits,
@@ -218,25 +198,6 @@ i64 schild_sel4_tcb_write_registers(u64 tcb, u64 rip, u64 rsp) {
     set_mr(4, 0x202ULL);    /* FLAGS: IF=1 */
     return raw_send(tcb, info);
 }
-
-/* Stage 7.6: set MLS endpoint CPtr */
-extern volatile u64 mls_endpoint_cptr;
-void schild_set_mls_endpoint(u64 ep) { mls_endpoint_cptr = ep; }
-
-/* R3: set Config Daemon endpoint CPtr */
-extern volatile u64 config_endpoint_cptr;
-void schild_set_config_endpoint(u64 ep) { config_endpoint_cptr = ep; }
-
-/* MCS reply-object CPtr setters.  Each server thread owns a reply object in
- * its CSpace; the root task writes the CPtr here before resuming the thread,
- * and the server passes it to Recv/ReplyRecv (the kernel stores the caller's
- * reply capability into it on a Call). */
-extern volatile u64 net_reply_cptr;
-void schild_set_net_reply(u64 r) { net_reply_cptr = r; }
-extern volatile u64 mls_reply_cptr;
-void schild_set_mls_reply(u64 r) { mls_reply_cptr = r; }
-extern volatile u64 config_reply_cptr;
-void schild_set_config_reply(u64 r) { config_reply_cptr = r; }
 
 /* Reply MR[0..3] captured by schild_sel4_call (seL4 x86_64: delivered in R10/R8/R9/R15) */
 extern volatile u64 schild_call_mr[4];
@@ -517,17 +478,4 @@ u64 schild_rdtsc(void) {
 }
 
 
-/* === FS Daemon (audit H65/H86 Stage 1) ===
- * Entry/stack/alive_flag от fs_daemon.S; setters из Launch_FS_Daemon (ADB).
- * Getter schild_get_fs_alive для alive check после TCBResume + Yield. */
-extern void  fs_daemon_entry(void);
-extern char  fs_daemon_stack_top[];
-extern u64   fs_daemon_alive_flag;
-extern volatile u64 fs_endpoint_cptr;
-extern volatile u64 fs_reply_cptr;
-
-u64 schild_fs_daemon_entry_addr(void) { return (u64)(void*)fs_daemon_entry; }
-u64 schild_fs_daemon_stack_addr(void) { return (u64)fs_daemon_stack_top; }
-void schild_set_fs_endpoint(u64 ep)   { fs_endpoint_cptr = ep; }
-void schild_set_fs_reply(u64 rpl)     { fs_reply_cptr = rpl; }
-u64  schild_get_fs_alive(void)        { return fs_daemon_alive_flag; }
+/* (FS-daemon entry/stack/alive/cptr accessors moved to fs_daemon.c — H87 shim split) */
