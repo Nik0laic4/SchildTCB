@@ -90,8 +90,11 @@ x86_64 повторяет этот паттерн, но для **четырёх*
 > на 0x799000–0x801000 и уходит в triple-fault (бесконечный reboot; в логе —
 > «size=…p_start=0x799000 p_end=0x801000» → «Boot config…» повтор).
 > До-blob образ (330 КиБ @ 0x7a8000) попадал в «безвредный» участок, поэтому работал.
-> **Фикс blob-пути:** поднять физический адрес root_task.elf (чтобы mods_end_paddr >
-> ki_p_reg.end) ИЛИ включить/исправить проверку в ядре.
+> **Фикс blob-пути (round 42, применён):** патч ядра `patches/seL4-load-image-
+> above-kernel.patch` — clamp `mods_end_paddr` к `ki_p_reg.end` (release-safe
+> замена выключенного assert) + `memcpy` из фактического адреса загрузки
+> (`boot_state.ui_info.p_reg.start`). Blob снова встроен в `build_rt.sh`.
+> **Проверено: run_tests 23/23** (до фикса — triple-fault).
 
 Каждый daemon-ELF линкуется со своим linker-скриптом `daemon_linker.ld`
 (RX-код, R-rodata, RW-data/bss, entry в `.text` @ 0x400000), затем

@@ -6,6 +6,14 @@
 > *pending* or *target* have not yet been validated. Formal-verification
 > coverage is stated per-module, never as an aggregate percentage.
 
+## v0.40 (2026-11-08) — H87: kernel patch — root-task image loads above the kernel region
+
+**Validated: the seL4 kernel now loads the root-task image strictly after its own physical region, so the embedded fs_daemon blob no longer overwrites kernel boot code (the previous assert was a release no-op).**
+
+- `patches/seL4-load-image-above-kernel.patch` (new): clamp `mods_end_paddr` to `ki_p_reg.end` + `memcpy` from `boot_state.ui_info.p_reg.start` (the actual `find_load_paddr` result) instead of `mods_end_paddr`.
+- `build_rt.sh`: `fs_daemon.elf` embedded as a blob again (`objcopy -O binary` → `ld -r -b binary`).
+- Gates: run_tests 23/23 (was a triple-fault reboot loop before the patch).
+
 ## v0.39 (2026-11-08) — H87: Schild_Elf_Core — provable ELF64 parsing
 
 **Validated: the ELF64 header + program-header parsing (magic/class/data/machine/type validation, little-endian decode, PT_LOAD) is extracted into `Schild_Elf_Core` (SPARK_Mode => On) and proved memory-safe — the foundation for the ELF child loader (H87).**
