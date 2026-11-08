@@ -42,8 +42,12 @@ unsigned long long schild_ptr_to_u64(void *ptr) {
     return (unsigned long long)(unsigned long)ptr;
 }
 
-/* DMA physical-address translation: virtual + (phys_base - image_vbase). */
-static unsigned long long dma_offset = 0;
+/* DMA physical-address translation: virtual + (phys_base - image_vbase).
+ * The root task overwrites this for the NetServer (shared image, 0x21000); the
+ * FS daemon runs its own ELF whose frames are retyped from UT_ELF, so its
+ * initial value is UT_ELF_PAddr - 0x400000 (0x18000000 - 0x400000, QEMU).
+ * TODO(H87): compute + pass this per-daemon instead of a hardcoded initial. */
+static unsigned long long dma_offset = 0x17C00000;
 void schild_set_dma_offset(unsigned long long off) { dma_offset = off; }
 unsigned long long schild_dma_phys(void *ptr) {
     return (unsigned long long)(unsigned long)ptr + dma_offset;
