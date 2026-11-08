@@ -7,7 +7,7 @@
 -- =============================================================================
 
 project Verify is
-   for Source_Dirs use ("tools/sel4/src", "src/03_crypto");
+   for Source_Dirs use ("tools/sel4/src", "src/03_crypto", "src/04_userland");
    for Object_Dir use "obj/verify";
    for Main use ("schild_mls_policy.adb",
                  "schild_config_daemon.adb",

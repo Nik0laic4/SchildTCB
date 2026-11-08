@@ -14,7 +14,7 @@ package Schild_Elf_Core with SPARK_Mode => On is
    type Elf_Header_Buf is array (0 .. 63) of Byte;
    type Phdr_Buf is array (0 .. 55) of Byte;
 
-   Elf_Magic : constant array (0 .. 3) of Byte := [16#7F#, 16#45#, 16#4C#, 16#46#];
+   Elf_Magic : constant array (0 .. 3) of Byte := (16#7F#, 16#45#, 16#4C#, 16#46#);
    Elf_Class_64       : constant Byte := 2;
    Elf_Data_Lsb       : constant Byte := 1;
    Elf_Machine_X86_64 : constant Unsigned_16 := 62;
