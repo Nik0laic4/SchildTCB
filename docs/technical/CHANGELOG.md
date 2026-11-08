@@ -6,6 +6,15 @@
 > *pending* or *target* have not yet been validated. Formal-verification
 > coverage is stated per-module, never as an aggregate percentage.
 
+## v0.38 (2026-11-08) — H62: per-file checksum (CRC32) — detect torn data writes
+
+**Validated: each directory entry carries a CRC32 over the file's data bytes; `Open` verifies it and rejects a file whose data was torn by a power loss (previously a torn data write was silently trusted — only metadata had A/B).**
+
+- `schild_fs_core.ads/.adb`: `Dir_Entry.Checksum` (entry 32→36 bytes, `NVFS_Version` 3→4, 16→14 entries per dir block); parsers updated (proved, 0 not-proved).
+- `schild_schild_fs.ads/.adb`: `Dir_Table` 16→14; `Compute_File_CRC`; `Create_File`/`Write_File` persist the CRC; `Open` verifies it (mismatch → `[NVFS] File checksum mismatch`); `Write_File` now commits on every write (CRC is committed metadata).
+- Gates: bare 183/0; seL4 run_tests 23/23.
+- Note: `mkschildfs.py` stays a seed (version 2) that the FS daemon auto-reformats on mount.
+
 ## v0.37 (2026-11-08) — H73: free-block allocator + Delete_File
 
 **Validated: `Create_File` now allocates via first-fit over the block bitmap (reusing blocks freed by `Delete_File`) instead of the monotonic `Next_Free_LBA` watermark, so the 28-block data region no longer fills up permanently.**
@@ -13,7 +22,7 @@
 - `schild_schild_fs.ads`: `Delete_File` declaration.
 - `schild_schild_fs.adb`: `Find_Contiguous_Free` (first-fit over `Block_Bitmap`), `Blocks_Are_Free`, `Set_Blocks`/`Clear_Blocks`, and `Commit_Metadata` (factored A/B commit: CRC32 + HMAC, write inactive slots, flip). `Create_File` allocates via `Find_Contiguous_Free`; `Write_File` extend verifies the extension blocks are free and marks them used; `Delete_File` frees blocks + removes the dir entry + commits.
 - Gates: bare 183/0; seL4 public/private `Done` (no `[RT] ERROR`); `prove_kernel.sh` 187 modules / 0 not-proved; run_tests seL4 23/23 + standalone 6/6.
-- Note: `Delete_File` is implemented at the `Schild_Schild_Fs` API level but not yet exposed over the FS-daemon IPC (follow-up; `schild_fs_server` is Tier A).
+- Note: `Delete_File` is exposed over the FS-daemon IPC (op=9, H73-IPC).
 
 ## v0.36 (2026-11-08) — M1: monotonic PID (no PID reuse without delay)
 
