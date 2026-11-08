@@ -67,7 +67,14 @@ x86_64 повторяет этот паттерн, но для **четырёх*
 > + `schild_hmac_sha256` + `schild_pci_scanner` + `schild_audit_logger` +
 > `schild_uart_driver` + **стаб `rt_bootinfo_vptr`** (daemon'у boot-info не
 > передаётся — `message_info.c` требует символ, нужен `rt_bootinfo_vptr = 0`
-> в отдельном daemon-only файле).
+> в отдельном daemon-only файле). Стабы собраны в `daemon_stubs.c`
+> (`rt_bootinfo_vptr` + `schild_audit_render`).
+>
+> **Update (round 24):** встройка blob'а в root_task.elf **вызвала boot-loop**
+> (root-task image вырос 330→416 КиБ; ядро грузит образ, затем сброс). Встройка
+> **откатана** (build_rt.sh), `daemon_stubs.c` + `daemon_linker.ld` оставлены.
+> Нужен другой механизм доставки daemon-ELF: отдельный multiboot2-модуль
+> (через BootInfo), а не blob внутри root_task.elf.
 
 Каждый daemon-ELF линкуется со своим linker-скриптом `daemon_linker.ld`
 (RX-код, R-rodata, RW-data/bss, entry в `.text` @ 0x400000), затем
