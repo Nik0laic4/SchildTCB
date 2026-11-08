@@ -354,6 +354,111 @@ package body Schild_Schild_Fs with SPARK_Mode => Off is
       Schild_Nvme.Write_Block (LBA, Success);
    end Write_Block_512;
 
+   -- ============================================================
+   --  H73: free-block allocator (first-fit over Block_Bitmap).
+   -- ============================================================
+
+   Data_Blocks : constant Unsigned_32 := FS_END_LBA - (FS_BASE_LBA + 4);  -- 28
+
+   --  Return the LBA of a contiguous run of at least N free data blocks
+   --  (first-fit), or 0 if none exists. N = 0 returns the first free block
+   --  (a Size-0 file reserves its future growth point).
+   function Find_Contiguous_Free (N : Unsigned_32) return Unsigned_32 is
+      Need : constant Unsigned_32 := (if N = 0 then 1 else N);
+   begin
+      if Need > Data_Blocks then
+         return 0;
+      end if;
+      for Start in 0 .. Data_Blocks - Need loop
+         declare
+            All_Free : Boolean := True;
+         begin
+            for I in 0 .. Integer (Need) - 1 loop
+               if (Block_Bitmap and
+                   Shift_Left (Unsigned_32'(1), Integer (Start) + I)) /= 0
+               then
+                  All_Free := False;
+                  exit;
+               end if;
+            end loop;
+            if All_Free then
+               return FS_BASE_LBA + 4 + Start;
+            end if;
+         end;
+      end loop;
+      return 0;
+   end Find_Contiguous_Free;
+
+   --  True when all N blocks starting at Start_LBA are free (bit = 0).
+   function Blocks_Are_Free (Start_LBA : Unsigned_32; N : Unsigned_32)
+                             return Boolean is
+      Start_Idx : constant Unsigned_32 := Start_LBA - (FS_BASE_LBA + 4);
+   begin
+      for I in 0 .. Integer (N) - 1 loop
+         if (Block_Bitmap and
+             Shift_Left (Unsigned_32'(1), Integer (Start_Idx) + I)) /= 0 then
+            return False;
+         end if;
+      end loop;
+      return True;
+   end Blocks_Are_Free;
+
+   --  Mark N blocks starting at Start_LBA as used (bit = 1).
+   procedure Set_Blocks (Start_LBA : Unsigned_32; N : Unsigned_32) is
+      Start_Idx : constant Unsigned_32 := Start_LBA - (FS_BASE_LBA + 4);
+   begin
+      for I in 0 .. Integer (N) - 1 loop
+         Block_Bitmap := Block_Bitmap or
+           Shift_Left (Unsigned_32'(1), Integer (Start_Idx) + I);
+      end loop;
+   end Set_Blocks;
+
+   --  Mark N blocks starting at Start_LBA as free (bit = 0).
+   procedure Clear_Blocks (Start_LBA : Unsigned_32; N : Unsigned_32) is
+      Start_Idx : constant Unsigned_32 := Start_LBA - (FS_BASE_LBA + 4);
+   begin
+      for I in 0 .. Integer (N) - 1 loop
+         Block_Bitmap := Block_Bitmap and
+           (not Shift_Left (Unsigned_32'(1), Integer (Start_Idx) + I));
+      end loop;
+   end Clear_Blocks;
+
+   --  H73: shared A/B metadata commit. Serializes the root directory, computes
+   --  CRC32 + HMAC-SHA256, writes the directory and superblock to the INACTIVE
+   --  slots, then flips the active pointers (atomic A/B commit). The caller
+   --  already populated SB's Root_Entries / Next_Free_LBA / Block_Bitmap.
+   procedure Commit_Metadata (SB : in out Superblock; Success : out Boolean) is
+      Dir_Buf : Block_Buf := (others => 0);
+      SB_Buf  : Block_Buf;
+      Dir_CRC : Unsigned_32;
+      OK      : Boolean;
+   begin
+      Success := False;
+      for I in 0 .. Integer (Entry_Count) - 1 loop
+         Dir_Entry_To_Bytes (Root_Dir (I), Dir_Buf, I * 32);
+      end loop;
+      Dir_CRC := CRC32 (Dir_Buf, 512);
+      SB.Dir_Checksum := Dir_CRC;
+      SB.Root_Dir_LBA := (if Active_Dir_LBA = Dir_Primary_LBA
+                          then Dir_Backup_LBA else Dir_Primary_LBA);
+      Superblock_To_Bytes (SB, SB_Buf);
+      SB.Checksum := CRC32 (SB_Buf, 16);
+      Superblock_To_Bytes (SB, SB_Buf);
+      SB.Hmac_Tag := Compute_SB_HMAC (SB.Hmac_Key, SB_Buf);
+      Superblock_To_Bytes (SB, SB_Buf);
+      Write_Block_512 (Unsigned_64 (SB.Root_Dir_LBA), Dir_Buf, OK);
+      if not OK then return; end if;
+      Write_Block_512 (Unsigned_64 (if Active_Super_LBA = Super_Primary_LBA
+                                    then Super_Backup_LBA
+                                    else Super_Primary_LBA), SB_Buf, OK);
+      if not OK then return; end if;
+      Active_Dir_LBA := SB.Root_Dir_LBA;
+      Active_Super_LBA := (if Active_Super_LBA = Super_Primary_LBA
+                           then Super_Backup_LBA else Super_Primary_LBA);
+      Current_Generation := SB.Generation;
+      Success := True;
+   end Commit_Metadata;
+
 
    procedure Create_File (Name : in String; Size : in Unsigned_32;
                           Success : out Boolean) is
@@ -361,6 +466,7 @@ package body Schild_Schild_Fs with SPARK_Mode => Off is
       Msg_NoSpace : constant String := "[NVFS] No space in GPT gap";
       Msg_OK   : constant String := "[NVFS] File created";
       N        : constant Unsigned_32 := (Size + 511) / 512;
+      Start_LBA : Unsigned_32;
    begin
       Success := False;
       if not Mounted then return; end if;
@@ -372,83 +478,54 @@ package body Schild_Schild_Fs with SPARK_Mode => Off is
          C_Putln (Msg_Full'Address, Msg_Full'Length);
          return;
       end if;
-      --  Data-region guard: never let file data grow past the GPT gap into the
-      --  first partition (which would corrupt a real GPT disk).
-      if Next_Free_LBA + N > FS_END_LBA then
+      --  H73: first-fit allocation over the free-block bitmap (reuses blocks
+      --  freed by Delete_File instead of the monotonic Next_Free_LBA).
+      Start_LBA := Find_Contiguous_Free (N);
+      if Start_LBA = 0 then
          C_Putln (Msg_NoSpace'Address, Msg_NoSpace'Length);
          return;
       end if;
       declare
-         Ent : Dir_Entry := (Name => (others => ' '), Start_LBA => Next_Free_LBA, Size => Size);
+         Ent : Dir_Entry := (Name => (others => ' '), Start_LBA => Start_LBA, Size => Size);
       begin
          for J in Name'Range loop exit when J > Max_Name_Length;
             Ent.Name (J) := Name (J); end loop;
          Root_Dir (Integer (Entry_Count)) := Ent;
       end;
       Entry_Count := Entry_Count + 1;
-      -- H60: zero the freshly allocated data blocks (prevents data leak on
-      -- block reuse) and mark them used in the bitmap.
+      --  H60/H73: zero the freshly allocated data blocks (no data leak on
+      --  block reuse) and mark them used in the bitmap.
       declare
          Zero_Buf : Block_Buf := (others => 0);
          OK : Boolean;
       begin
          for I in 0 .. Integer (N) - 1 loop
             Schild_Nvme.Fill_Buffer (Schild_Nvme.Block_Buf (Zero_Buf));
-            Schild_Nvme.Write_Block (Unsigned_64 (Next_Free_LBA + Unsigned_32 (I)), OK);
+            Schild_Nvme.Write_Block (Unsigned_64 (Start_LBA + Unsigned_32 (I)), OK);
             if not OK then return; end if;
          end loop;
       end;
+      Set_Blocks (Start_LBA, N);
+      --  Advance the allocator watermark only if this allocation extended it.
+      if Start_LBA + N > Next_Free_LBA then
+         Next_Free_LBA := Start_LBA + N;
+      end if;
+      --  Commit: directory + superblock (superblock is the commit point).
       declare
-         Start_Idx : constant Unsigned_32 := Next_Free_LBA - (FS_BASE_LBA + 4);
-      begin
-         for I in 0 .. Integer (N) - 1 loop
-            Block_Bitmap := Block_Bitmap or
-              Shift_Left (Unsigned_32'(1), Integer (Start_Idx) + I);
-         end loop;
-      end;
-      -- Flush directory + superblock (superblock is the commit point).
-      declare
-         Dir_Buf : Block_Buf := (others => 0);
-         SB_Buf  : Block_Buf;
-         SB      : Superblock := (Magic => NVFS_Magic, Version => NVFS_Version,
-                                  Block_Size => 512, Root_Dir_LBA => Dir_Primary_LBA,
-                                  Root_Entries => Entry_Count,
-                                  Checksum => 0, Dir_Checksum => 0,
-                                  Generation => Current_Generation + 1,
-                                  Next_Free_LBA => Next_Free_LBA + N,
-                                  Block_Bitmap => Block_Bitmap,
-                                  Hmac_Key => Hmac_Key,
-                                  Hmac_Tag => (others => 0));
-         Dir_CRC : Unsigned_32;
+         SB : Superblock := (Magic => NVFS_Magic, Version => NVFS_Version,
+                             Block_Size => 512, Root_Dir_LBA => Dir_Primary_LBA,
+                             Root_Entries => Entry_Count,
+                             Checksum => 0, Dir_Checksum => 0,
+                             Generation => Current_Generation + 1,
+                             Next_Free_LBA => Next_Free_LBA,
+                             Block_Bitmap => Block_Bitmap,
+                             Hmac_Key => Hmac_Key,
+                             Hmac_Tag => (others => 0));
          OK : Boolean;
       begin
-         for I in 0 .. Integer (Entry_Count) - 1 loop
-            Dir_Entry_To_Bytes (Root_Dir (I), Dir_Buf, I * 32);
-         end loop;
-         -- Commit: checksum the directory, then the superblock header. Write
-         -- the directory to the INACTIVE directory slot and the superblock to
-         -- the INACTIVE superblock slot, so a power loss mid-write leaves the
-         -- previous (directory, superblock) pair intact for rollback.
-         Dir_CRC := CRC32 (Dir_Buf, 512);
-         SB.Dir_Checksum := Dir_CRC;
-         SB.Root_Dir_LBA := (if Active_Dir_LBA = Dir_Primary_LBA then Dir_Backup_LBA
-                             else Dir_Primary_LBA);
-         Superblock_To_Bytes (SB, SB_Buf);
-         SB.Checksum := CRC32 (SB_Buf, 16);
-         Superblock_To_Bytes (SB, SB_Buf);
-         SB.Hmac_Tag := Compute_SB_HMAC (SB.Hmac_Key, SB_Buf);
-         Superblock_To_Bytes (SB, SB_Buf);
-         Write_Block_512 (Unsigned_64 (SB.Root_Dir_LBA), Dir_Buf, OK);
-         Write_Block_512 (Unsigned_64 (if Active_Super_LBA = Super_Primary_LBA
-                                       then Super_Backup_LBA
-                                       else Super_Primary_LBA), SB_Buf, OK);
-         Active_Dir_LBA := SB.Root_Dir_LBA;
-         Active_Super_LBA := (if Active_Super_LBA = Super_Primary_LBA
-                              then Super_Backup_LBA
-                              else Super_Primary_LBA);
-         Current_Generation := SB.Generation;
+         Commit_Metadata (SB, OK);
+         if not OK then return; end if;
       end;
-      Next_Free_LBA := Next_Free_LBA + N;
       Success := True;
       C_Putln (Msg_OK'Address, Msg_OK'Length);
    end Create_File;
@@ -473,6 +550,16 @@ package body Schild_Schild_Fs with SPARK_Mode => Off is
       if File.Start_LBA + (Wr_Pos + Unsigned_32 (Data'Length) + 511) / 512 > FS_END_LBA then
          return;
       end if;
+      --  H73: if the write extends the file, the newly targeted blocks must be
+      --  free (otherwise a fragmented allocation would be corrupted).
+      declare
+         Old_End : constant Unsigned_32 := File.Start_LBA + (File.Size + 511) / 512;
+         New_End : constant Unsigned_32 := File.Start_LBA + (Wr_Pos + Unsigned_32 (Data'Length) + 511) / 512;
+      begin
+         if New_End > Old_End and then not Blocks_Are_Free (Old_End, New_End - Old_End) then
+            return;
+         end if;
+      end;
       while D_Pos < Unsigned_32 (Data'Length) loop
          LBA_Off := File.Start_LBA + (Wr_Pos / 512);
          Byte_Off := Wr_Pos rem 512;
@@ -494,16 +581,14 @@ package body Schild_Schild_Fs with SPARK_Mode => Off is
             D_Pos := D_Pos + To_Write;
          end;
       end loop;
-      -- H72: if the write grew the file, persist the new Size (dir entry) and
-      -- the allocator watermark (Next_Free_LBA) with the same commit discipline
-      -- as Create_File.
+      -- H72/H73: if the write grew the file, mark the newly extended blocks
+      -- as used and persist the new Size (dir entry) + watermark with the
+      -- shared A/B commit.
       if Wr_Pos > File.Size then
          declare
-            Dir_Buf : Block_Buf := (others => 0);
-            SB_Buf  : Block_Buf;
+            Old_End : constant Unsigned_32 := File.Start_LBA + (File.Size + 511) / 512;
             New_End : constant Unsigned_32 := File.Start_LBA + (Wr_Pos + 511) / 512;
             New_NFL : constant Unsigned_32 := (if New_End > Next_Free_LBA then New_End else Next_Free_LBA);
-            Old_NFL : constant Unsigned_32 := Next_Free_LBA;
             SB      : Superblock := (Magic => NVFS_Magic, Version => NVFS_Version,
                                      Block_Size => 512, Root_Dir_LBA => Dir_Primary_LBA,
                                      Root_Entries => Entry_Count,
@@ -513,49 +598,96 @@ package body Schild_Schild_Fs with SPARK_Mode => Off is
                                      Block_Bitmap => Block_Bitmap,
                                      Hmac_Key => Hmac_Key,
                                      Hmac_Tag => (others => 0));
-            Dir_CRC : Unsigned_32;
             OK : Boolean;
          begin
-         -- H60: mark newly allocated blocks in the bitmap.
-         if New_NFL > Old_NFL then
-            for L in 0 .. Integer (New_NFL - Old_NFL) - 1 loop
-               Block_Bitmap := Block_Bitmap or
-                 Shift_Left (Unsigned_32'(1), Integer (Old_NFL - (FS_BASE_LBA + 4) + Unsigned_32 (L)));
-            end loop;
-            SB.Block_Bitmap := Block_Bitmap;
-         end if;
+            if New_End > Old_End then
+               Set_Blocks (Old_End, New_End - Old_End);
+               SB.Block_Bitmap := Block_Bitmap;
+            end if;
             for I in 0 .. Integer (Entry_Count) - 1 loop
                if Root_Dir (I).Start_LBA = File.Start_LBA then
                   Root_Dir (I).Size := Wr_Pos;
                   exit;
                end if;
             end loop;
-            for I in 0 .. Integer (Entry_Count) - 1 loop
-               Dir_Entry_To_Bytes (Root_Dir (I), Dir_Buf, I * 32);
-            end loop;
-            Dir_CRC := CRC32 (Dir_Buf, 512);
-            SB.Dir_Checksum := Dir_CRC;
-            SB.Root_Dir_LBA := (if Active_Dir_LBA = Dir_Primary_LBA
-                                then Dir_Backup_LBA else Dir_Primary_LBA);
-            Superblock_To_Bytes (SB, SB_Buf);
-            SB.Checksum := CRC32 (SB_Buf, 16);
-            Superblock_To_Bytes (SB, SB_Buf);
-            SB.Hmac_Tag := Compute_SB_HMAC (SB.Hmac_Key, SB_Buf);
-            Superblock_To_Bytes (SB, SB_Buf);
-            Write_Block_512 (Unsigned_64 (SB.Root_Dir_LBA), Dir_Buf, OK);
-            Write_Block_512 (Unsigned_64 (if Active_Super_LBA = Super_Primary_LBA
-                                          then Super_Backup_LBA
-                                          else Super_Primary_LBA), SB_Buf, OK);
-            Active_Dir_LBA := SB.Root_Dir_LBA;
-            Active_Super_LBA := (if Active_Super_LBA = Super_Primary_LBA
-                                 then Super_Backup_LBA else Super_Primary_LBA);
-            Current_Generation := SB.Generation;
+            Commit_Metadata (SB, OK);
+            if not OK then return; end if;
+            Next_Free_LBA := New_NFL;
             File.Size := Wr_Pos;
          end;
       end if;
       File.Curr_Off := Wr_Pos;
       Success := True;
    end Write_File;
+
+   procedure Delete_File (Name : in String; Success : out Boolean) is
+      Msg_NotFound : constant String := "[NVFS] File not found";
+      Msg_Deleted  : constant String := "[NVFS] File deleted";
+      Match : Boolean;
+      Idx   : Integer := -1;
+   begin
+      Success := False;
+      if not Mounted then return; end if;
+      if Strict_Read_Only then
+         C_Putln (Msg_RO'Address, Msg_RO'Length);
+         return;
+      end if;
+      --  Audit H42 (same as Open): Ent.Name is 1-based; a sliced Name would
+      --  index Ent.Name out of bounds.
+      if Name'First /= 1 then return; end if;
+      --  Locate the file by name.
+      for I in 0 .. Integer (Entry_Count) - 1 loop
+         Match := True;
+         declare
+            Ent : Dir_Entry renames Root_Dir (I);
+         begin
+            if Name'Length <= Max_Name_Length then
+               for J in Name'Range loop
+                  if Name (J) /= Ent.Name (J) then Match := False; exit; end if;
+               end loop;
+               if Match and Name'Length < Max_Name_Length then
+                  if Ent.Name (Name'Length + 1) /= ' ' then Match := False; end if;
+               end if;
+            else Match := False; end if;
+            if Match then Idx := I; exit; end if;
+         end;
+      end loop;
+      if Idx < 0 then
+         C_Putln (Msg_NotFound'Address, Msg_NotFound'Length);
+         return;
+      end if;
+      --  H73: free the file's data blocks in the bitmap.
+      declare
+         N : constant Unsigned_32 := (Root_Dir (Idx).Size + 511) / 512;
+      begin
+         Clear_Blocks (Root_Dir (Idx).Start_LBA, N);
+      end;
+      --  Remove the entry (shift the tail down; order is not significant).
+      for I in Idx .. Integer (Entry_Count) - 2 loop
+         Root_Dir (I) := Root_Dir (I + 1);
+      end loop;
+      Root_Dir (Integer (Entry_Count) - 1) :=
+        (Name => (others => ' '), Start_LBA => 0, Size => 0);
+      Entry_Count := Entry_Count - 1;
+      --  Commit (directory + superblock, A/B atomic).
+      declare
+         SB : Superblock := (Magic => NVFS_Magic, Version => NVFS_Version,
+                             Block_Size => 512, Root_Dir_LBA => Dir_Primary_LBA,
+                             Root_Entries => Entry_Count,
+                             Checksum => 0, Dir_Checksum => 0,
+                             Generation => Current_Generation + 1,
+                             Next_Free_LBA => Next_Free_LBA,
+                             Block_Bitmap => Block_Bitmap,
+                             Hmac_Key => Hmac_Key,
+                             Hmac_Tag => (others => 0));
+         OK : Boolean;
+      begin
+         Commit_Metadata (SB, OK);
+         if not OK then return; end if;
+      end;
+      Success := True;
+      C_Putln (Msg_Deleted'Address, Msg_Deleted'Length);
+   end Delete_File;
 
    procedure Get_Entry
      (Index   : in     Unsigned_32;

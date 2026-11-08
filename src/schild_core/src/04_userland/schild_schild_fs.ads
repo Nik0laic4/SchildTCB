@@ -66,4 +66,11 @@ package Schild_Schild_Fs with SPARK_Mode => Off is
       Data    : in     Unsigned_8_Array;
       Success :    out Boolean);
 
+   procedure Delete_File
+     (Name    : in     String;
+      Success :    out Boolean);
+   --  H73: remove a file by name and free its data blocks in the block bitmap
+   --  (first-fit allocator reuses freed blocks). Fails if the name is unknown
+   --  or the FS is read-only.
+
 end Schild_Schild_Fs;
