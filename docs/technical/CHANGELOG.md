@@ -6,6 +6,15 @@
 > *pending* or *target* have not yet been validated. Formal-verification
 > coverage is stated per-module, never as an aggregate percentage.
 
+## v0.42 (2026-11-08) — H87 closed: FS daemon genuinely boots its own ELF (23/23)
+
+**Validated: the FS daemon now runs `fs_daemon.elf` end-to-end — ELF header parse, frame retype/mint, per-segment RX/RW mapping, copy of `.data` + zero `.bss`, NVMe init + FS mount — and the CI SPARK-verify gate passes again.**
+
+- `schild_elf_loader.adb`: mint an unmapped frame copy (`Frame_Slot+200`) for the root-scratch map (a frame cap is single-mapped); map RX segments `seL4_CanRead` (2), not `CanWrite` (1).
+- `fs_daemon.c` + `schild_net_runtime.c`: pass endpoint/reply/alive via the shared frame (`0x52A000[0..2]`) — the daemon's `.bss` globals are a different ELF copy; hardcode `schild_nvme_get_mmio` (0x620000) and the daemon `dma_offset` (UT_ELF phys − 0x400000 = 0x17C00000, QEMU).
+- `verify.gpr` + `schild_elf_core.ad[bs]`: add `src/04_userland`; Ada-2012 aggregate; `Pre (Off <= Raw'Last - N)` on the LE/Ph readers → SPARK Level 4 proves cleanly (CI was failing 1 s on `schild_elf_core.ads` not found / unproved index checks).
+- Gates: build OK; verify.sh "all verification conditions proved"; run_tests 23/23.
+
 ## v0.41 (2026-11-08) — H87: Launch_FS_Daemon loads fs_daemon.elf via Schild_Elf_Loader
 
 **Validated: the FS daemon now runs its own ELF (separate .text/.data/.bss), loaded from the embedded blob — no longer the shared root-task image.**
