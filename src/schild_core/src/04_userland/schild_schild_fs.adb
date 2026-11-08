@@ -40,7 +40,7 @@ package body Schild_Schild_Fs with SPARK_Mode => Off is
 
    Mounted  : Boolean := False;
    Root_Dir : Dir_Table := (others => (Name => (others => ' '),
-                                        Start_LBA => 0, Size => 0));
+                                        Start_LBA => 0, Size => 0, Checksum => 0));
    Entry_Count : Unsigned_32 := 0;
 
    --  Engaged on CRC32 torn-write detection: blocks all write transactions
@@ -69,6 +69,40 @@ package body Schild_Schild_Fs with SPARK_Mode => Off is
       Schild_Nvme.Read_Block (LBA, Success);
       if Success then Buf := Block_Buf (Schild_Nvme.Get_Buffer); end if;
    end Read_Block_512;
+
+   --  H62: CRC32 over a file's logical data bytes (0..Size-1), read block by
+   --  block. Detects a torn data write on the next Open (per-file checksum).
+   function Compute_File_CRC (Start_LBA : Unsigned_32; Size : Unsigned_32)
+                              return Unsigned_32 is
+      Crc  : Unsigned_32 := 16#FFFF_FFFF#;
+      Done : Unsigned_32 := 0;
+      Buf  : Block_Buf;
+      Ok   : Boolean;
+   begin
+      while Done < Size loop
+         declare
+            LBA : constant Unsigned_32 := Start_LBA + (Done / 512);
+            Off : constant Unsigned_32 := Done rem 512;
+            Len : Unsigned_32 := Size - Done;
+         begin
+            if Len > 512 - Off then Len := 512 - Off; end if;
+            Read_Block_512 (Unsigned_64 (LBA), Buf, Ok);
+            if not Ok then return 0; end if;
+            for I in 0 .. Integer (Len) - 1 loop
+               Crc := Crc xor Unsigned_32 (Buf (Integer (Off) + I));
+               for J in 1 .. 8 loop
+                  if (Crc and 1) = 1 then
+                     Crc := Shift_Right (Crc, 1) xor 16#EDB8_8320#;
+                  else
+                     Crc := Shift_Right (Crc, 1);
+                  end if;
+               end loop;
+            end loop;
+            Done := Done + Len;
+         end;
+      end loop;
+      return not Crc;
+   end Compute_File_CRC;
 
 
 
@@ -222,7 +256,7 @@ package body Schild_Schild_Fs with SPARK_Mode => Off is
          Success := False; return;
       end if;
       for I in 0 .. Integer (Entry_Count) - 1 loop
-         Bytes_To_Dir_Entry (Buf, I * 32, Root_Dir (I));
+         Bytes_To_Dir_Entry (Buf, I * 36, Root_Dir (I));
       end loop;
 
       -- Audit H74 fallback: if the persisted Next_Free_LBA is invalid (legacy
@@ -272,6 +306,7 @@ package body Schild_Schild_Fs with SPARK_Mode => Off is
       File    :    out File_Info;
       Success :    out Boolean) is
       Match : Boolean;
+      Msg_Corrupt : constant String := "[NVFS] File checksum mismatch (torn write)";
    begin
       Success := False; File.Valid := False;
       if not Mounted then return; end if;
@@ -296,6 +331,11 @@ package body Schild_Schild_Fs with SPARK_Mode => Off is
                end if;
             else Match := False; end if;
             if Match then
+               --  H62: verify the file's data CRC (torn-write detection).
+               if Compute_File_CRC (Ent.Start_LBA, Ent.Size) /= Ent.Checksum then
+                  C_Putln (Msg_Corrupt'Address, Msg_Corrupt'Length);
+                  return;
+               end if;
                File.Valid := True; File.Name := Ent.Name;
                File.Start_LBA := Ent.Start_LBA; File.Size := Ent.Size;
                File.Curr_Off := 0; Success := True; return;
@@ -435,7 +475,7 @@ package body Schild_Schild_Fs with SPARK_Mode => Off is
    begin
       Success := False;
       for I in 0 .. Integer (Entry_Count) - 1 loop
-         Dir_Entry_To_Bytes (Root_Dir (I), Dir_Buf, I * 32);
+         Dir_Entry_To_Bytes (Root_Dir (I), Dir_Buf, I * 36);
       end loop;
       Dir_CRC := CRC32 (Dir_Buf, 512);
       SB.Dir_Checksum := Dir_CRC;
@@ -474,7 +514,7 @@ package body Schild_Schild_Fs with SPARK_Mode => Off is
          C_Putln (Msg_RO'Address, Msg_RO'Length);
          return;
       end if;
-      if Entry_Count >= 16 then
+      if Entry_Count >= 14 then
          C_Putln (Msg_Full'Address, Msg_Full'Length);
          return;
       end if;
@@ -486,7 +526,7 @@ package body Schild_Schild_Fs with SPARK_Mode => Off is
          return;
       end if;
       declare
-         Ent : Dir_Entry := (Name => (others => ' '), Start_LBA => Start_LBA, Size => Size);
+         Ent : Dir_Entry := (Name => (others => ' '), Start_LBA => Start_LBA, Size => Size, Checksum => 0);
       begin
          for J in Name'Range loop exit when J > Max_Name_Length;
             Ent.Name (J) := Name (J); end loop;
@@ -506,6 +546,9 @@ package body Schild_Schild_Fs with SPARK_Mode => Off is
          end loop;
       end;
       Set_Blocks (Start_LBA, N);
+      --  H62: persist the file's data CRC (data is zeroed on create).
+      Root_Dir (Integer (Entry_Count) - 1).Checksum :=
+        Compute_File_CRC (Start_LBA, Size);
       --  Advance the allocator watermark only if this allocation extended it.
       if Start_LBA + N > Next_Free_LBA then
          Next_Free_LBA := Start_LBA + N;
@@ -581,41 +624,41 @@ package body Schild_Schild_Fs with SPARK_Mode => Off is
             D_Pos := D_Pos + To_Write;
          end;
       end loop;
-      -- H72/H73: if the write grew the file, mark the newly extended blocks
-      -- as used and persist the new Size (dir entry) + watermark with the
-      -- shared A/B commit.
-      if Wr_Pos > File.Size then
-         declare
-            Old_End : constant Unsigned_32 := File.Start_LBA + (File.Size + 511) / 512;
-            New_End : constant Unsigned_32 := File.Start_LBA + (Wr_Pos + 511) / 512;
-            New_NFL : constant Unsigned_32 := (if New_End > Next_Free_LBA then New_End else Next_Free_LBA);
-            SB      : Superblock := (Magic => NVFS_Magic, Version => NVFS_Version,
-                                     Block_Size => 512, Root_Dir_LBA => Dir_Primary_LBA,
-                                     Root_Entries => Entry_Count,
-                                     Checksum => 0, Dir_Checksum => 0,
-                                     Generation => Current_Generation + 1,
-                                     Next_Free_LBA => New_NFL,
-                                     Block_Bitmap => Block_Bitmap,
-                                     Hmac_Key => Hmac_Key,
-                                     Hmac_Tag => (others => 0));
-            OK : Boolean;
-         begin
-            if New_End > Old_End then
-               Set_Blocks (Old_End, New_End - Old_End);
-               SB.Block_Bitmap := Block_Bitmap;
+      --  H72/H73/H62: recompute the file CRC and persist Size + watermark with
+      --  the shared A/B commit. The CRC is committed metadata, so every write
+      --  (extend or in-place) commits.
+      declare
+         New_Size : constant Unsigned_32 := (if Wr_Pos > File.Size then Wr_Pos else File.Size);
+         Old_End  : constant Unsigned_32 := File.Start_LBA + (File.Size + 511) / 512;
+         New_End  : constant Unsigned_32 := File.Start_LBA + (New_Size + 511) / 512;
+         New_NFL  : constant Unsigned_32 := (if New_End > Next_Free_LBA then New_End else Next_Free_LBA);
+         SB       : Superblock := (Magic => NVFS_Magic, Version => NVFS_Version,
+                                   Block_Size => 512, Root_Dir_LBA => Dir_Primary_LBA,
+                                   Root_Entries => Entry_Count,
+                                   Checksum => 0, Dir_Checksum => 0,
+                                   Generation => Current_Generation + 1,
+                                   Next_Free_LBA => New_NFL,
+                                   Block_Bitmap => Block_Bitmap,
+                                   Hmac_Key => Hmac_Key,
+                                   Hmac_Tag => (others => 0));
+         OK : Boolean;
+      begin
+         if New_End > Old_End then
+            Set_Blocks (Old_End, New_End - Old_End);
+            SB.Block_Bitmap := Block_Bitmap;
+         end if;
+         for I in 0 .. Integer (Entry_Count) - 1 loop
+            if Root_Dir (I).Start_LBA = File.Start_LBA then
+               Root_Dir (I).Size := New_Size;
+               Root_Dir (I).Checksum := Compute_File_CRC (File.Start_LBA, New_Size);
+               exit;
             end if;
-            for I in 0 .. Integer (Entry_Count) - 1 loop
-               if Root_Dir (I).Start_LBA = File.Start_LBA then
-                  Root_Dir (I).Size := Wr_Pos;
-                  exit;
-               end if;
-            end loop;
-            Commit_Metadata (SB, OK);
-            if not OK then return; end if;
-            Next_Free_LBA := New_NFL;
-            File.Size := Wr_Pos;
-         end;
-      end if;
+         end loop;
+         Commit_Metadata (SB, OK);
+         if not OK then return; end if;
+         Next_Free_LBA := New_NFL;
+         File.Size := New_Size;
+      end;
       File.Curr_Off := Wr_Pos;
       Success := True;
    end Write_File;
@@ -667,7 +710,7 @@ package body Schild_Schild_Fs with SPARK_Mode => Off is
          Root_Dir (I) := Root_Dir (I + 1);
       end loop;
       Root_Dir (Integer (Entry_Count) - 1) :=
-        (Name => (others => ' '), Start_LBA => 0, Size => 0);
+        (Name => (others => ' '), Start_LBA => 0, Size => 0, Checksum => 0);
       Entry_Count := Entry_Count - 1;
       --  Commit (directory + superblock, A/B atomic).
       declare
@@ -696,7 +739,7 @@ package body Schild_Schild_Fs with SPARK_Mode => Off is
    begin
       if not Mounted or Index >= Entry_Count then
          Success := False;
-         Dir_Ent := (Name => (others => ' '), Start_LBA => 0, Size => 0);
+         Dir_Ent := (Name => (others => ' '), Start_LBA => 0, Size => 0, Checksum => 0);
          return;
       end if;
       Dir_Ent := Root_Dir (Integer (Index)); Success := True;

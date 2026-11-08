@@ -15,7 +15,7 @@ package Schild_Fs_Core with SPARK_Mode => On is
    type Block_Buf is array (0 .. 511) of Unsigned_8;
 
    NVFS_Magic   : constant Unsigned_32 := 16#4E564653#;  -- "NVFS"
-   NVFS_Version : constant Unsigned_16 := 3;             -- H61: + HMAC key/tag
+   NVFS_Version : constant Unsigned_16 := 4;             -- H62: + per-file CRC
 
    -- Superblock (512 bytes; see also mkschildfs.py).
    type Superblock is record
@@ -49,7 +49,7 @@ package Schild_Fs_Core with SPARK_Mode => On is
       Hmac_Tag      at 480 range 0 .. 255;
    end record;
 
-   -- Directory entry (32 bytes, 16 per 512-byte block).
+   -- Directory entry (36 bytes, 14 per 512-byte block).
    Max_Name_Length : constant := 24;
 
    type Dir_Entry_Name is new String (1 .. Max_Name_Length);
@@ -58,13 +58,15 @@ package Schild_Fs_Core with SPARK_Mode => On is
       Name      : Dir_Entry_Name := (others => ' ');
       Start_LBA : Unsigned_32 := 0;
       Size      : Unsigned_32 := 0;
+      Checksum  : Unsigned_32 := 0;   -- H62: CRC32 over the file's data bytes
    end record
-     with Size => 32 * 8;
+     with Size => 36 * 8;
 
    for Dir_Entry use record
       Name      at 0  range 0 .. 191;   -- 24 bytes
       Start_LBA at 24 range 0 .. 31;    -- 4 bytes
       Size      at 28 range 0 .. 31;    -- 4 bytes
+      Checksum  at 32 range 0 .. 31;    -- 4 bytes (H62)
    end record;
 
    -- CRC-32/ISO-HDLC (reflected polynomial 0xEDB88320) over the first Len
@@ -79,15 +81,15 @@ package Schild_Fs_Core with SPARK_Mode => On is
    procedure Superblock_To_Bytes (SB : Superblock; Raw : out Block_Buf)
      with Relaxed_Initialization => Raw;
 
-   -- Parse one 32-byte directory entry at offset Off.
+   -- Parse one 36-byte directory entry at offset Off.
    procedure Bytes_To_Dir_Entry
      (Raw : Block_Buf; Off : Natural; Ent : out Dir_Entry)
-     with Pre => Off <= 512 - 32;
+     with Pre => Off <= 512 - 36;
 
-   -- Serialize one 32-byte directory entry at offset Off.
+   -- Serialize one 36-byte directory entry at offset Off.
    procedure Dir_Entry_To_Bytes
      (Ent : Dir_Entry; Raw : in out Block_Buf; Off : Natural)
-     with Pre => Off <= 512 - 32,
+     with Pre => Off <= 512 - 36,
           Relaxed_Initialization => Raw;
 
 end Schild_Fs_Core;

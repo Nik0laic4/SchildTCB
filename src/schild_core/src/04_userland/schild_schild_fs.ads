@@ -3,7 +3,7 @@
 --   LBA 2016: Superblock A (primary)    LBA 2017: Superblock B (backup)
 --   LBA 2018: Root directory A          LBA 2019: Root directory B
 --   LBA 2020..2047: File data (contiguous per file)
--- Each directory entry: 24-byte name + 4-byte start_lba + 4-byte size
+-- Each directory entry: 24-byte name + 4-byte start_lba + 4-byte size + 4-byte checksum
 -- The on-disk types (Superblock / Dir_Entry) and their parsers live in
 -- Schild_Fs_Core (SPARK_Mode => On, audit H63); this package is the stateful
 -- I/O layer.
@@ -13,7 +13,7 @@ with Schild_Fs_Core;
 package Schild_Schild_Fs with SPARK_Mode => Off is
    use Interfaces; use Schild_Fs_Core;
 
-   type Dir_Table is array (0 .. 15) of Dir_Entry;
+   type Dir_Table is array (0 .. 13) of Dir_Entry;  -- H62: 14 × 36 B = 504 B
 
    -- File handle for opened files
    type File_Info is record
