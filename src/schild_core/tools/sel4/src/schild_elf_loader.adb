@@ -4,6 +4,7 @@ with System;
 with System.Storage_Elements;
 with Interfaces; use type Interfaces.Unsigned_64;
 with Schild_Elf_Core; use Schild_Elf_Core;
+with Schild_Sel4_BootInfo;
 
 package body Schild_Elf_Loader with SPARK_Mode => Off is
    use Schild_Sel4_Syscall;
@@ -23,7 +24,9 @@ package body Schild_Elf_Loader with SPARK_Mode => Off is
    --  Root-VSpace scratch VA: a reserved, otherwise-unused 4K-aligned address
    --  used to copy each freshly-retyped frame before it is mapped into the
    --  daemon VSpace. Must not collide with the image/IPC/shared/MMIO mappings.
-   Scratch_VA : constant Word := 16#700000#;
+   --  0x580000 is inside the image PT (0x400000..0x600000) and free (image ends
+   --  0x468000; IPC=0x500000; shared DMA=0x520000).
+   Scratch_VA : constant Word := 16#480000#;
 
    --  Load one PT_LOAD segment: retype a 4K frame per page, map it into the
    --  daemon VSpace (RX or RW), copy the file bytes via the scratch mapping,
@@ -45,7 +48,11 @@ package body Schild_Elf_Loader with SPARK_Mode => Off is
    begin
       while VA < VEnd loop
          R := Retype_Object (RAM_UT, Object_Frame, 0, CNode, 0, Frame_Slot, 1);
-         if R /= 0 then return R; end if;
+         if R /= 0 then
+            Put_String ("[ELF] Retype FAIL "); Schild_Sel4_BootInfo.Put_Hex (R);
+            Put_String (ASCII.CR & ASCII.LF);
+            return R;
+         end if;
 
          --  Map into the daemon VSpace: RX for executable segments, RW otherwise.
          if Is_Executable (Ph) then
@@ -53,11 +60,19 @@ package body Schild_Elf_Loader with SPARK_Mode => Off is
          else
             R := Page_Map_Rights (Frame_Slot, VSpace, VA, 3);  -- RW + NX
          end if;
-         if R /= 0 then return R; end if;
+         if R /= 0 then
+            Put_String ("[ELF] MapRights FAIL "); Schild_Sel4_BootInfo.Put_Hex (R);
+            Put_String (ASCII.CR & ASCII.LF);
+            return R;
+         end if;
 
          --  Map into the root VSpace at the scratch VA so the copy can write it.
          R := Page_Map (Frame_Slot, Root_VSpace, Scratch_VA);
-         if R /= 0 then return R; end if;
+         if R /= 0 then
+            Put_String ("[ELF] MapScratch FAIL "); Schild_Sel4_BootInfo.Put_Hex (R);
+            Put_String (ASCII.CR & ASCII.LF);
+            return R;
+         end if;
 
          --  Copy the file bytes for this page (bounded by filesz), zero the rest.
          declare

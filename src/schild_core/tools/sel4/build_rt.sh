@@ -126,6 +126,10 @@ done
 
 "$TOOL/gcc" -m64 -nostdlib -nostdinc -fno-builtin -std=gnu11 \
     -fno-stack-protector -mno-red-zone -ffreestanding -mgeneral-regs-only "${PREFIX_MAP_C[@]}" \
+    -c -o "$OBJ/elf_blobs.o" src/elf_blobs.c 2>&1
+
+"$TOOL/gcc" -m64 -nostdlib -nostdinc -fno-builtin -std=gnu11 \
+    -fno-stack-protector -mno-red-zone -ffreestanding -mgeneral-regs-only "${PREFIX_MAP_C[@]}" \
     -c -o "$OBJ/schild_net_runtime.o" "$C_RUNTIME" 2>&1
 
 # ASM compilation
@@ -170,8 +174,8 @@ done
     "$OBJ/daemon_stubs.o" 2>&1
 
 # H87: embed fs_daemon.elf as a blob (kernel loads it above the kernel region).
-"$TOOL/objcopy" -O binary "$OBJ/fs_daemon.elf" "$OBJ/fs_daemon.bin" 2>&1
-"$TOOL/ld" -r -b binary "$OBJ/fs_daemon.bin" -o "$OBJ/fs_daemon_blob.o" 2>&1
+# Embed the ELF FILE (not objcopy -O binary) so the loader can parse its header.
+"$TOOL/ld" -r -b binary "$OBJ/fs_daemon.elf" -o "$OBJ/fs_daemon_blob.o" 2>&1
 
 # Link
 "$TOOL/ld" -T src/rt_linker.ld -o root_task.elf \
@@ -216,6 +220,7 @@ done
     "$OBJ/message_info.o" \
     "$OBJ/schild_sel4_ipc.o" \
     "$OBJ/schild_net_runtime.o" \
+    "$OBJ/elf_blobs.o" \
     "$OBJ/fs_daemon_blob.o" 2>&1
 
 echo "  [RT] root_task.elf: $(wc -c < root_task.elf) bytes"
