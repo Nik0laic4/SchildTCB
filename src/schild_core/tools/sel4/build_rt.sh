@@ -155,6 +155,20 @@ done
     -fno-stack-protector -mno-red-zone -ffreestanding -mgeneral-regs-only "${PREFIX_MAP_C[@]}" \
     -c -o "$OBJ/fs_daemon_c.o" src/fs_daemon.c 2>&1
 
+# H87: build a separate fs_daemon.elf (delivered as a multiboot2 module, NOT
+# embedded in root_task.elf — the in-image blob caused a boot loop, round 24).
+"$TOOL/gcc" -m64 -nostdlib -nostdinc -fno-builtin -std=gnu11 \
+    -fno-stack-protector -mno-red-zone -ffreestanding -mgeneral-regs-only "${PREFIX_MAP_C[@]}" \
+    -c -o "$OBJ/daemon_stubs.o" src/daemon_stubs.c 2>&1
+
+"$TOOL/ld" -T src/daemon_linker.ld -o "$OBJ/fs_daemon.elf" \
+    "$OBJ/fs_daemon.o" "$OBJ/fs_daemon_c.o" \
+    "$OBJ/schild_fs_server.o" "$OBJ/schild_schild_fs.o" "$OBJ/schild_fs_core.o" "$OBJ/schild_nvme.o" \
+    "$OBJ/schild_sel4_ipc.o" "$OBJ/schild_sel4_syscalls.o" "$OBJ/message_info.o" \
+    "$OBJ/schild_net_runtime.o" "$OBJ/schild_hmac_sha256.o" "$OBJ/schild_pci_scanner.o" \
+    "$OBJ/schild_audit_logger.o" "$OBJ/schild_uart_driver.o" \
+    "$OBJ/daemon_stubs.o" 2>&1
+
 # Link
 "$TOOL/ld" -T src/rt_linker.ld -o root_task.elf \
     "$OBJ/rt_start.o" \
