@@ -97,7 +97,7 @@ plus `src/03_crypto` (`schild_hmac_sha256`). Полные (private) тела т�
 | CVE | Date | Vulnerabilities | Status |
 |-----|------|-------------|--------|
 | [CVE-2026-SCHILD-01](security/CVE-2026-SCHILD-01.md) | 2026-08-09 | 8 | ✅ Fixed |
-| [CVE-2026-SCHILD-02](security/CVE-2026-SCHILD-02.md) | 2026-08-09 | 5 (4 fixed + 1 noted) | ✅ |
+| [CVE-2026-SCHILD-02](security/CVE-2026-SCHILD-02.md) | 2026-08-09 | 5 (5 fixed — #005 PID reuse closed in M1) | ✅ |
 
 ## Hardware countermeasures (x86_64 seL4 kernel)
 
@@ -142,7 +142,7 @@ SMAP is safe. SMEP and CR0.WP also remain active.
 ### Security status
 
 > **Historical snapshot (2026-08-09)** — актуальный статус выше в таблицах
-> (`verify.gpr` доказывает 8 proof units (1 daemon + 7 библиотек/моделей); CVE-2026-SCHILD-02 = 4 fixed + 1 noted).
+> (`verify.gpr` доказывает 8 proof units (1 daemon + 7 библиотек/моделей); CVE-2026-SCHILD-02 = 5 fixed).
 
 - ✅ MLS Bell-LaPadula: 8/8 tests
 - ✅ SPARK Level 4 (verify.gpr): MLS policy + 3 daemons, 0 unproved
