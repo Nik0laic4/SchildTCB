@@ -101,31 +101,39 @@ x86_64 повторяет этот паттерн, но для **четырёх*
 > ELF `e_entry`, stack = `fs_daemon_stack_top` (0x417048); +7-й untyped `UT_ELF`.
 > FS daemon теперь работает на **своём** ELF (отдельные .text/.data/.bss).
 > run_tests 23/23. H87 (FS-daemon) закрыт; остальные daemons — по аналогии.
+> **MLS (round 35):** `mls_daemon.elf` уже собирается (mls_server + mls_server_c +
+> schild_mls_policy + schild_config_daemon + shim + stubs); слот-фикс под рост
+> образа применён (§4.1). Встраивание mls-блоба даёт hang Load_Elf — в работе.
 
 Каждый daemon-ELF линкуется со своим linker-скриптом `daemon_linker.ld`
 (RX-код, R-rodata, RW-data/bss, entry в `.text` @ 0x400000), затем
-конвертируется в flat binary и встраивается в `root_task.elf` как blob:
+**встраивается как ELF-файл** (не `objcopy -O binary` — иначе теряется
+ELF-header и `Is_Valid_Header` не пройдёт) в `root_task.elf` как blob:
 
 ```sh
-# 1. Link the daemon ELF (own linker script, own .o set).
+# 1. Link the daemon ELF (own linker script, own .o set). .data page-aligned
+#    (ALIGN(0x1000)) so small daemons get separate RX/RW PT_LOAD segments.
 ld -T src/daemon_linker.ld -o fs_daemon.elf \
    fs_daemon.o fs_daemon_c.o schild_fs_server.o schild_schild_fs.o \
    schild_fs_core.o schild_nvme.o ...
 
-# 2. Flatten to a binary.
-objcopy -O binary fs_daemon.elf fs_daemon.bin
+# 2. Embed the ELF FILE (not a flat binary).
+ld -r -b binary fs_daemon.elf -o fs_daemon_blob.o
+#  → symbols: _binary_obj_root_task_fs_daemon_elf_start / _end
 
-# 3. Embed the binary into the root task as a symbol.
-ld -r -b binary fs_daemon.bin -o fs_daemon_blob.o
-#  → symbols: _binary_fs_daemon_bin_start / _end / _size
-
-# 4. Link fs_daemon_blob.o into root_task.elf; the root task passes
-#    _binary_fs_daemon_bin_start to Load_Elf (Image_Base) with _size.
+# 3. Link fs_daemon_blob.o into root_task.elf; the root task passes
+#    _binary_obj_root_task_fs_daemon_elf_start to Load_Elf (Image_Base) with size.
 ```
 
 В Ada root task адреса blob'ов импортируются через `Import (C)` на символы
-`_binary_*_bin_start`; `Load_Elf` получает `Image_Base` + `Image_Size` + VSpace
+`_binary_*_elf_start`; `Load_Elf` получает `Image_Base` + `Image_Size` + VSpace
 даемона + `RAM_UT`/`CNode`/`Slot_Base` и грузит PT_LOAD-сегменты.
+
+> **Slot layout (round 35):** NetServer минтит образ в `Image_Frame_Base+I`
+> (4224+), поэтому с ростом образа (blob'ы MLS/Config/NetServer) фреймы
+> NetServer'а накрыли `FS_Image_Frame_Base` (4352) → "Slot #4352 non-empty".
+> Фикс: `FS_Image_Frame_Base` 4352 → **4480** (`Slot_Base+384`), mint-offset
+> `+200` → **`+64`** (иначе mint улетал в MMIO 4608).
 
 ### 4.2 ELF loader (memory-safe, в TCB)
 
