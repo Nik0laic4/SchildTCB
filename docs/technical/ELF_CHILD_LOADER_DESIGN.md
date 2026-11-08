@@ -95,6 +95,12 @@ x86_64 повторяет этот паттерн, но для **четырёх*
 > замена выключенного assert) + `memcpy` из фактического адреса загрузки
 > (`boot_state.ui_info.p_reg.start`). Blob снова встроен в `build_rt.sh`.
 > **Проверено: run_tests 23/23** (до фикса — triple-fault).
+>
+> **Update (round 43, готово):** `Launch_FS_Daemon` переведён на `Load_Elf` —
+> читает blob (`schild_fs_daemon_elf_start/size`), грузит в FS VSpace, entry =
+> ELF `e_entry`, stack = `fs_daemon_stack_top` (0x417048); +7-й untyped `UT_ELF`.
+> FS daemon теперь работает на **своём** ELF (отдельные .text/.data/.bss).
+> run_tests 23/23. H87 (FS-daemon) закрыт; остальные daemons — по аналогии.
 
 Каждый daemon-ELF линкуется со своим linker-скриптом `daemon_linker.ld`
 (RX-код, R-rodata, RW-data/bss, entry в `.text` @ 0x400000), затем

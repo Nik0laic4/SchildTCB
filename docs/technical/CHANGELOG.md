@@ -6,6 +6,14 @@
 > *pending* or *target* have not yet been validated. Formal-verification
 > coverage is stated per-module, never as an aggregate percentage.
 
+## v0.41 (2026-11-08) — H87: Launch_FS_Daemon loads fs_daemon.elf via Schild_Elf_Loader
+
+**Validated: the FS daemon now runs its own ELF (separate .text/.data/.bss), loaded from the embedded blob — no longer the shared root-task image.**
+
+- `schild_sel4_ipc.c`: `schild_fs_daemon_elf_start/size` accessors for the embedded `_binary_..._fs_daemon_bin` symbols.
+- `schild_sel4_syscall.adb`: `Launch_FS_Daemon` replaces shared-image minting with `Load_Elf` (entry = ELF `e_entry`, stack = `fs_daemon_stack_top` 0x417048); adds a 7th RAM untyped `UT_ELF` for the frames.
+- Gates: run_tests 23/23 (FS daemon boots from its own ELF).
+
 ## v0.40 (2026-11-08) — H87: kernel patch — root-task image loads above the kernel region
 
 **Validated: the seL4 kernel now loads the root-task image strictly after its own physical region, so the embedded fs_daemon blob no longer overwrites kernel boot code (the previous assert was a release no-op).**
