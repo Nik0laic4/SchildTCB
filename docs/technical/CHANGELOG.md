@@ -6,6 +6,23 @@
 > *pending* or *target* have not yet been validated. Formal-verification
 > coverage is stated per-module, never as an aggregate percentage.
 
+## v0.37 (2026-11-08) — H73: free-block allocator + Delete_File
+
+**Validated: `Create_File` now allocates via first-fit over the block bitmap (reusing blocks freed by `Delete_File`) instead of the monotonic `Next_Free_LBA` watermark, so the 28-block data region no longer fills up permanently.**
+
+- `schild_schild_fs.ads`: `Delete_File` declaration.
+- `schild_schild_fs.adb`: `Find_Contiguous_Free` (first-fit over `Block_Bitmap`), `Blocks_Are_Free`, `Set_Blocks`/`Clear_Blocks`, and `Commit_Metadata` (factored A/B commit: CRC32 + HMAC, write inactive slots, flip). `Create_File` allocates via `Find_Contiguous_Free`; `Write_File` extend verifies the extension blocks are free and marks them used; `Delete_File` frees blocks + removes the dir entry + commits.
+- Gates: bare 183/0; seL4 public/private `Done` (no `[RT] ERROR`); `prove_kernel.sh` 187 modules / 0 not-proved; run_tests seL4 23/23 + standalone 6/6.
+- Note: `Delete_File` is implemented at the `Schild_Schild_Fs` API level but not yet exposed over the FS-daemon IPC (follow-up; `schild_fs_server` is Tier A).
+
+## v0.36 (2026-11-08) — M1: monotonic PID (no PID reuse without delay)
+
+**Validated: Process IDs are monotonic per slot (`PID = Slot + Generation × Max_Processes`) instead of the bare slot index, so a stale PID can no longer alias a successor after reap (CVE-2026-SCHILD-02 #005, THREAT_MODEL T14).**
+
+- `schild_process_manager.ads`: `Generation_Counter` subtype (`0 .. 2**26 - 2`, so `New_Pid /= Null_PID` stays provable) + `Generation` field in `Process_Context`.
+- `schild_process_manager.adb`: `New_Pid` derivation + guarded generation advance on reap.
+- `schild_process_manager` remains PROVED (Level 4, 0 not-proved); full sweep 187 modules, 0 not-proved.
+
 ## v0.35 (2026-11-07) — fix: NetServer MCS budget 5000→50000 us (run_tests 8/23)
 
 **Validated: the P1(R10) IPC benchmark (11000 Call/Reply round-trips, op=4) exhausted the NetServer's 5 ms round-robin scheduling-context slice; the interrupted ReplyRecv occasionally lost the reply and the root task hung on Call_IPC (run_tests 8–12/23). A 50 ms slice absorbs the benchmark without budget exhaustion.**

@@ -189,8 +189,10 @@ These are the risks that remain even when every §7 check is green:
 8. **PID reuse without delay (CVE-2026-SCHILD-02 #005).** Process IDs are
    recycled immediately on termination with no cool-down window, so a signal or
    IPC message intended for a just-terminated process can reach an unrelated
-   successor that happens to reuse the same PID. Noted, not yet mitigated
-   (bound the window with a monotonically increasing PID or a reuse delay).
+   successor that happens to reuse the same PID. Mitigated (M1, 2026-11-08):
+   monotonic per-slot PID generation (`PID = Slot + Generation × Max_Processes`)
+   closes the immediate reuse; capability-based identity remains the long-term
+   preference.
 
 ---
 
@@ -425,7 +427,7 @@ with status "documented in TM §12" until either (a) code mitigates or
 
 **C-§3.2 AI-axis (concretize).** Split T1 into T1a (single malformed packet, parser memory safety — proven) and T1b (fuzzing-for-race, sequence of legitimate packets targeting connection state / parser state interactions). T1b is the AI-agent fuzzing scenario; not proven, contained by NetServer Ring 3 isolation.
 
-**C-§7 T14 (PID reuse).** Moved from §8.8 residual into the threat table as T14. Threat: P2 sends signal or IPC to a PID that was just recycled by an unrelated process. Status: **deferred to v0.2.0** (design in progress: monotonic PID or reuse delay; capability-based identity preferred long-term). Tracked in audit registry as M1.
+**C-§7 T14 (PID reuse).** Moved from §8.8 residual into the threat table as T14. Threat: P2 sends signal or IPC to a PID that was just recycled by an unrelated process. Status: **mitigated (M1, 2026-11-08)** — monotonic per-slot PID generation; capability-based identity remains the long-term preference. Tracked in audit registry as M1.
 
 **C-§7 T15 (FS metadata tamper, HMAC key placement).** The FS metadata is protected by CRC32 (integrity, not authenticity). P3 (malicious NVMe via DMA) or P4 (write access to disk) can tamper and recompute CRC32. Moving to HMAC-SHA256 requires answering: where does the key live? (a) NetServer (Tier B) — P2 can read it; HMAC protects only against P3. (b) Root task (Tier A) — FS must migrate to Tier A or verify HMAC over IPC per block. (c) Hardware key store — not available (no TPM, no HWRoT). Until decided, FS metadata tamper remains accepted residual (R18). Audit H61. **Status (2026-11-07):** resolved — variant (a) landed (H61): HMAC-SHA256 `Hmac_Key`/`Hmac_Tag` in the FS daemon's superblock, verified on mount and refreshed on every metadata commit. The hang was a misaligned FS-daemon stack (aligned-SSE `movaps`/`movdqa` → #GP), fixed with `andq $-16,%rsp` in `fs_daemon.S`. The key is currently deterministic (RDRAND deferred to Block 3 — linking the RNG modules shifts the shared ELF, H87). Residual: the key lives in the superblock (Tier B), so HMAC authenticates against P3 but not P2 (key readable by Tier B).
 
