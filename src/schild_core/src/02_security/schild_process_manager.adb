@@ -135,7 +135,10 @@ is
       end if;
 
       --  Populate the new slot and mark the process Ready.
-      New_Pid := Process_Id (Slot);
+      --  M1: monotonic PID = Slot + Generation * Max_Processes. A reaped slot
+      --  advances its generation, so a stale PID can never alias a successor.
+      New_Pid := Process_Id (Slot) +
+                 Process_Id (Table (Slot).Generation) * Process_Id (Max_Processes);
       Table (Slot).Pid        := New_Pid;
       Table (Slot).Parent_Pid := Parent_Pid;
       Table (Slot).Thread_Cap := Thread_Cap;
@@ -243,6 +246,11 @@ is
       if Table (Slot).State = Zombie then
          Table (Slot).State := Dead;
          Table (Slot).Pid   := Null_PID;   --  Free the PID on reap.
+         --  M1: advance the generation so the slot's next tenant gets a fresh
+         --  PID (no immediate reuse). Guarded at the subtype ceiling.
+         if Table (Slot).Generation < Generation_Counter'Last then
+            Table (Slot).Generation := Table (Slot).Generation + 1;
+         end if;
          Schild_Log.Put_Line ("Proc: process reaped (zombie → dead, PID freed)");
          Status := Success;
       elsif Table (Slot).State = Dead then

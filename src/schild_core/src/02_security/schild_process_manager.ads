@@ -21,6 +21,11 @@ is
    type Process_Id is mod 2**32;
    Null_PID : constant Process_Id := 0;
 
+   --  M1: monotonic PID generation counter. Bounded so that
+   --  PID = Slot + Generation * Max_Processes never reaches Null_PID
+   --  (hard ceiling: 2**26 - 2 reaps per slot).
+   subtype Generation_Counter is Interfaces.Unsigned_32 range 0 .. 2**26 - 2;
+
    --  Lifecycle states of a process.
    type Process_State is (Unborn, Ready, Running, Sleeping, Zombie, Dead);
 
@@ -34,6 +39,7 @@ is
    --  Per-process state: capabilities, descriptors, signals and MLS level.
    type Process_Context is record
       Pid          : Process_Id := Null_PID;
+      Generation   : Generation_Counter := 0;  -- M1: monotonic PID
       Parent_Pid   : Process_Id := Null_PID;
       Thread_Cap   : Cap_Id := Null_Cap;       -- seL4 TCB capability
       VSpace_Cap   : Cap_Id := Null_Cap;       -- Address space
