@@ -22,7 +22,7 @@ jobs:
       - name: Install Alire
         run: |
           mkdir -p "$HOME/.local/bin"
-          curl -fsSL -o alr.zip https://github.com/alire-project/alire/releases/download/v2.1.1/alr-2.1.1-bin-x86_64-linux.zip
+          curl -fsSL --retry 5 --retry-delay 10 --retry-all-errors -o alr.zip https://github.com/alire-project/alire/releases/download/v2.1.1/alr-2.1.1-bin-x86_64-linux.zip
           unzip -o alr.zip -d alr-dist
           ALR_BIN="$(find alr-dist -name alr -type f | head -1)"
           echo "alr at: $ALR_BIN"
@@ -95,7 +95,7 @@ jobs:
       - name: Install Alire
         run: |
           mkdir -p "$HOME/.local/bin"
-          curl -fsSL -o alr.zip https://github.com/alire-project/alire/releases/download/v2.1.1/alr-2.1.1-bin-x86_64-linux.zip
+          curl -fsSL --retry 5 --retry-delay 10 --retry-all-errors -o alr.zip https://github.com/alire-project/alire/releases/download/v2.1.1/alr-2.1.1-bin-x86_64-linux.zip
           unzip -o alr.zip -d alr-dist
           ALR_BIN="$(find alr-dist -name alr -type f | head -1)"
           echo "alr at: $ALR_BIN"
@@ -157,7 +157,7 @@ jobs:
       - name: Install Alire
         run: |
           mkdir -p "$HOME/.local/bin"
-          curl -fsSL -o alr.zip https://github.com/alire-project/alire/releases/download/v2.1.1/alr-2.1.1-bin-x86_64-linux.zip
+          curl -fsSL --retry 5 --retry-delay 10 --retry-all-errors -o alr.zip https://github.com/alire-project/alire/releases/download/v2.1.1/alr-2.1.1-bin-x86_64-linux.zip
           unzip -o alr.zip -d alr-dist
           ALR_BIN="$(find alr-dist -name alr -type f | head -1)"
           cp "$ALR_BIN" "$HOME/.local/bin/alr"
