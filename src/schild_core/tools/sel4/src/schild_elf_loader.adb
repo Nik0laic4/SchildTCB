@@ -68,7 +68,7 @@ package body Schild_Elf_Loader with SPARK_Mode => Off is
 
          --  Map into the daemon VSpace: RX for executable segments, RW otherwise.
          if Is_Executable (Ph) then
-            R := Page_Map_Rights (Frame_Slot, VSpace, VA, 1);  -- RO + NX (exec via code seg)
+            R := Page_Map_Rights (Frame_Slot, VSpace, VA, 2);  -- seL4_CanRead (RO) + exec
          else
             R := Page_Map_Rights (Frame_Slot, VSpace, VA, 3);  -- RW + NX
          end if;
