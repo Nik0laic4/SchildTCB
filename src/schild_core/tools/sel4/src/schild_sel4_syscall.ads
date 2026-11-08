@@ -468,9 +468,11 @@ is
    -- root task.  Access is serialized by the single-threaded root task, so the
    -- three VSpaces never touch the frame concurrently.
    FS_Shared_Frame_Copy_Slot : constant Cap_Ref := Slot_Base + 76;  -- 4172
-   -- FS image frames live above the Net image (Net starts +128; the image is
-   -- ~98 frames today).  +256 = 4352 keeps a gap to MMIO_Frame_Base (+512).
-   FS_Image_Frame_Base : constant Cap_Ref := Slot_Base + 256;  -- 4352
+   -- FS image frames live above the Net image (Net starts +128). The image grew
+   -- to ~131 frames with the mls blob (and will grow more with config/netserver
+   -- blobs), so +256 collided with the Net image minting (slot 4352 non-empty).
+   -- +384 = 4480 leaves room for the image while staying under MMIO (+512).
+   FS_Image_Frame_Base : constant Cap_Ref := Slot_Base + 384;  -- 4480
    -- H86: fallback base for the NVMe BAR0 frame caps in the FS daemon VSpace.
    -- In practice the root task continues from the dynamic Next_Free_Slot above
    -- the NIC MMIO frames: the BAR0 can sit hundreds of frames into the shared

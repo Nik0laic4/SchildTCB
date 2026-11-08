@@ -6,6 +6,14 @@
 > *pending* or *target* have not yet been validated. Formal-verification
 > coverage is stated per-module, never as an aggregate percentage.
 
+## v0.43 (2026-11-08) — H87: re-lay FS image frames for larger images (slot collision)
+
+**Validated: the FS image-frame base and the per-page mint offset are re-laid so the FS daemon's Load_Elf stays clear of the NetServer image minting as the embedded daemon blobs grow the root-task image.**
+
+- Boot-info slot measurement: image frames `0x16..0x91` (123) + untyped `0x91..0xF8`; the NetServer mints image frames at `Image_Frame_Base+I` (4224+), so a larger image (131 frames with the mls blob) overlapped `FS_Image_Frame_Base` (4352) → "Slot #4352 non-empty".
+- `schild_sel4_syscall.ads`: `FS_Image_Frame_Base` `Slot_Base+256` → `Slot_Base+384` (4480); `schild_elf_loader.adb`: mint offset `+200` → `+64` (keeps the mint below `MMIO_Frame_Base` 4608).
+- Gates: build OK; verify.sh "all proved"; run_tests 23/23 (boot-timeout flake intermittent).
+
 ## v0.42 (2026-11-08) — H87 closed: FS daemon genuinely boots its own ELF (23/23)
 
 **Validated: the FS daemon now runs `fs_daemon.elf` end-to-end — ELF header parse, frame retype/mint, per-segment RX/RW mapping, copy of `.data` + zero `.bss`, NVMe init + FS mount — and the CI SPARK-verify gate passes again.**

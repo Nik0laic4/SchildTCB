@@ -27,10 +27,11 @@ package body Schild_Elf_Loader with SPARK_Mode => Off is
    --  0x580000 is inside the image PT (0x400000..0x600000) and free (image ends
    --  0x468000; IPC=0x500000; shared DMA=0x520000).
    Scratch_VA : constant Word := 16#480000#;
-   --  Per-page mint destination = Frame_Slot + 200 (frames are retyped at
-   --  Frame_Slot..Frame_Slot+N, so +200 keeps the copy clear of the next frames).
-   --  A frame cap is single-mapped, so the daemon-VSpace map consumes the
-   --  "mapped" state and the scratch map needs its own (minted) copy.
+   --  Per-page mint destination = Frame_Slot + 64 (frames are retyped at
+   --  Frame_Slot..Frame_Slot+N; +64 keeps the copy clear of the next frames and
+   --  below MMIO_Frame_Base).  A frame cap is single-mapped, so the
+   --  daemon-VSpace map consumes the "mapped" state and the scratch map needs
+   --  its own (minted) copy.
 
    --  Load one PT_LOAD segment: retype a 4K frame per page, map it into the
    --  daemon VSpace (RX or RW), copy the file bytes via the scratch mapping,
@@ -59,7 +60,7 @@ package body Schild_Elf_Loader with SPARK_Mode => Off is
          end if;
 
          --  Mint an unmapped copy for the root-scratch mapping.
-         R := CNode_Mint (CNode, Frame_Slot + 200, 64, CNode, Frame_Slot, 64, 16#F#, 0);
+         R := CNode_Mint (CNode, Frame_Slot + 64, 64, CNode, Frame_Slot, 64, 16#F#, 0);
          if R /= 0 then
             Put_String ("[ELF] Mint FAIL "); Schild_Sel4_BootInfo.Put_Hex (R);
             Put_String (ASCII.CR & ASCII.LF);
@@ -79,7 +80,7 @@ package body Schild_Elf_Loader with SPARK_Mode => Off is
          end if;
 
          --  Map the copy into the root VSpace at the scratch VA so the copy can write it.
-         R := Page_Map (Frame_Slot + 200, Root_VSpace, Scratch_VA);
+         R := Page_Map (Frame_Slot + 64, Root_VSpace, Scratch_VA);
          if R /= 0 then
             Put_String ("[ELF] MapScratch FAIL "); Schild_Sel4_BootInfo.Put_Hex (R);
             Put_String (ASCII.CR & ASCII.LF);
