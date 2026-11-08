@@ -39,17 +39,21 @@ _Static_assert(sizeof(schild_recv_mr) == SCHILD_IPC_MR_BYTES,  "recv MR window m
 _Static_assert(sizeof(schild_reply_mr) == SCHILD_IPC_MR_BYTES, "reply MR window must be 32 bytes");
 
 void fs_daemon_main(void) {
-    u64 ep = fs_endpoint_cptr;
-    u64 reply = fs_reply_cptr;
+    /* H87: the endpoint/reply cptrs live in the shared DMA frame (0x52A000 in
+     * this VSpace) — the root task writes them there; the .bss globals belong
+     * to a different (root_task) ELF copy. */
+    volatile u64 *sh = (volatile u64 *)0x52A000;
+    u64 ep = sh[0];
+    u64 reply = sh[1];
 
     /* B1 fix pattern (from mls_server.c): no endpoint/reply → error flag + halt. */
     if (ep == 0 || reply == 0) {
-        fs_daemon_alive_flag = 0xFF;
+        sh[2] = 0xFF;
         for (;;) __asm__ volatile("pause");
     }
 
     /* Announce alive BEFORE Recv, so root task sees it after Yield. */
-    fs_daemon_alive_flag = 0x01;
+    sh[2] = 0x01;
 
     schild_sel4_recv(ep, reply);
 
@@ -144,6 +148,6 @@ extern void  fs_daemon_entry(void);
 extern char  fs_daemon_stack_top[];
 u64 schild_fs_daemon_entry_addr(void) { return (u64)(void*)fs_daemon_entry; }
 u64 schild_fs_daemon_stack_addr(void) { return (u64)fs_daemon_stack_top; }
-void schild_set_fs_endpoint(u64 ep)   { fs_endpoint_cptr = ep; }
-void schild_set_fs_reply(u64 rpl)     { fs_reply_cptr = rpl; }
-u64  schild_get_fs_alive(void)        { return fs_daemon_alive_flag; }
+void schild_set_fs_endpoint(u64 ep)   { ((volatile u64 *)0x52A000)[0] = ep; }
+void schild_set_fs_reply(u64 rpl)     { ((volatile u64 *)0x52A000)[1] = rpl; }
+u64  schild_get_fs_alive(void)        { return ((volatile u64 *)0x52A000)[2]; }

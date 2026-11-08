@@ -113,7 +113,7 @@ unsigned char schild_nvme_read_acq(unsigned int off) {
  * Schild_Fs_Server.Fs_Init ("schild_fs_init"). */
 static unsigned long long nvme_mmio_base = 0;
 void schild_nvme_set_mmio(unsigned long long base) { nvme_mmio_base = base; }
-unsigned long long schild_nvme_get_mmio(void) { return nvme_mmio_base; }
+unsigned long long schild_nvme_get_mmio(void) { return 0x620000; /* H87: NVMe BAR0 is always 0x620000 in the FS VSpace */ }
 
 /* ─── Stage 8.4: shared DMA frame (large-frame transfer, no MR limit) ──────
  * A 4KB frame is retyped by the Root Task and mapped at 0x520000 in BOTH the
