@@ -60,6 +60,14 @@ x86_64 повторяет этот паттерн, но для **четырёх*
 > (`mls_server_entry`, `netserver_entry`, `config_daemon_entry` и их `*_cptr`),
 > т.е. шов надо **расщепить per-daemon** (или сделать daemon-agnostic), прежде чем
 > каждый daemon станет отдельным ELF. Это основная работа шага 4–5.
+>
+> **Update (round 21–22):** C-шов расщеплён (аксессоры переехали в daemon-`.c`,
+> `schild_sel4_ipc.c` стал daemon-agnostic, `08111f4`). Полный набор для
+> `fs_daemon.elf` = ~15 объектов: собственные + syscall-шов + `schild_net_runtime`
+> + `schild_hmac_sha256` + `schild_pci_scanner` + `schild_audit_logger` +
+> `schild_uart_driver` + **стаб `rt_bootinfo_vptr`** (daemon'у boot-info не
+> передаётся — `message_info.c` требует символ, нужен `rt_bootinfo_vptr = 0`
+> в отдельном daemon-only файле).
 
 Каждый daemon-ELF линкуется со своим linker-скриптом `daemon_linker.ld`
 (RX-код, R-rodata, RW-data/bss, entry в `.text` @ 0x400000), затем
