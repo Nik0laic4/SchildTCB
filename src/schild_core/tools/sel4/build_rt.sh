@@ -173,6 +173,13 @@ done
     "$OBJ/schild_audit_logger.o" "$OBJ/schild_uart_driver.o" \
     "$OBJ/daemon_stubs.o" 2>&1
 
+# H87: build a separate mls_daemon.elf (the MLS policy daemon — no NVMe/DMA).
+"$TOOL/ld" -T src/daemon_linker.ld -o "$OBJ/mls_daemon.elf" \
+    "$OBJ/mls_server.o" "$OBJ/mls_server_c.o" \
+    "$OBJ/schild_mls_policy.o" "$OBJ/schild_config_daemon.o" \
+    "$OBJ/schild_sel4_ipc.o" "$OBJ/schild_sel4_syscalls.o" "$OBJ/message_info.o" \
+    "$OBJ/daemon_stubs.o" 2>&1
+
 # H87: embed fs_daemon.elf as a blob (kernel loads it above the kernel region).
 # Embed the ELF FILE (not objcopy -O binary) so the loader can parse its header.
 "$TOOL/ld" -r -b binary "$OBJ/fs_daemon.elf" -o "$OBJ/fs_daemon_blob.o" 2>&1
