@@ -473,3 +473,26 @@ with status "documented in TM §12" until either (a) code mitigates or
 
 **R20 — MCS Dashboard via tracing kernel (claim risk).** Reading sched-context usage via seL4 tracepoints requires a non-verified kernel config. Claim "verified seL4" would no longer hold for that build. Use manual accounting (daemon reports cycles via IPC) or accept claim weakening.
 
+
+### 12.13 H88 CLOSED — MLS IPC enforcement + R2 root bypass (2026-11-09)
+
+**C-§5 AS9 (new trusted assumption).** `Root task` (role=0, level=4/Top_Secret) bypasses the per-IPC MLS gate: `Authorize_IPC_Levels(sender_level, receiver_level, sender_is_root=True) = 1` unconditionally. Reason: root task is the TCB orchestrator (launches domains, calls init/poll/op=99 on each), strict BL would block orchestration (root 4 -> Net 1 = write-down). This is a deliberate trust boundary, not a hole: root task is in TCB by definition. Non-root senders (role != 0) are gated strictly.
+
+**C-§7 T21 (new threat) — cross-daemon IPC bypass.** Without enforcement, a compromised NetServer (P2) could call FS daemon directly and read/write Top_Secret files at its own level. H88 gate blocks this: `Authorize_IPC_Levels` denies cross-level IPC unless sender is root. Current non-root IPC = 0 (H91: HTTP static via 503, no FS call from NetServer), so gate is no-op in runtime, but the mechanism is in place for Phase 2 (user-file FS endpoint).
+
+**C-§7 T22 (new threat) — badge forgery (P1/P2).** Endpoint badge is set by the minter (root task). A compromised non-root daemon cannot mint a badge with `role=0` because it lacks the root CSpace cap for the badged endpoint. Badge forgery would require a cap leak from root CSpace, which T2 (capability model) already covers.
+
+**H88 CLOSED (2026-11-09).** Seven steps:
+1. `Authorize_IPC_Levels(Sender_Level, Receiver_Level, Sender_Is_Root)` in `schild_mls_policy` (SPARK On, 5 checks proved).
+2. Role/Level constants + 4 badged endpoint slots (`Root_*_EP_Badged_Slot` 4176-4179) in `schild_sel4_syscall.ads`.
+3. Badged endpoint mint in 4 `Launch_*` (badge=4, role=Root).
+4. `Call_IPC` in root task switched to badged slots (10 sites).
+5. Gate in 4 `.c` daemons (mls/net/config/fs), parse badge, `SCHILD_EMLSDENIED=13` on deny.
+6. Unit-test `[H88] Authorize_IPC_Levels: root=1 eq=1 up=0 dn=0` (run_tests marker required).
+7. Docs.
+
+**Level shift bug (discovered step 6, fixed).** First implementation used 1-based levels (Root=5), but `Security_Level` is 0-based enum (Public=0..Top_Secret=4). Level 5 hit the fail-closed guard, all unit-tests returned 0. Fixed: Root/MLS/Audit/FS=4, Config=3, Net=1, Guest=0.
+
+**Residuals.** R21 — NetServer(1)->FS(4) read-up is blocked (correct); HTTP static needs Phase 2 (user-file FS endpoint level=1, or per-file levels). R22 — badge values are not authenticated beyond cap possession (T22, contained by T2). Both documented, not blockers.
+
+**Phase 2 (Block 5, L).** Per-file levels in FS (level in dir entry), separate FS endpoint for user files (level=1), HTTP static via `fs_ep` (NetServer 1 <-> FS 1 OK, audit 1 -> 4 blocked). Out of scope for H88 Этап 1.
