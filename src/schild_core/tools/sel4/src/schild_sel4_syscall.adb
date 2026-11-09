@@ -400,6 +400,14 @@ is
        R := Retype_Object (UT1, Object_Endpoint, 0, CNode_Slot, 0, EP_Slot, 1);
        Put_Hex (R); Put_String (ASCII.CR & ASCII.LF);
 
+   --  H88: badged copy of MLS endpoint in root CSpace (badge=Role_Root*256+Level_Root=5, R2 root).
+   Put_String ("[H88] Mint badged MLS_EP @4176... ");
+   R := CNode_Mint (CNode_Slot, Root_MLS_EP_Badged_Slot, 64,
+                    CNode_Slot, EP_Slot, 64, 16#F#,
+                    Role_Root * 256 + Level_Root);
+   Put_Hex (R); Put_String (ASCII.CR & ASCII.LF);
+   if R /= 0 then return 2; end if;
+
        -- 2. Fault endpoint at slot MLS_Fault_Slot (fault handler MUST be an endpoint)
        Put_String ("[S7.7] FaultEP at 4097... ");
        R := Retype_Object (UT2, Object_Endpoint, 0, CNode_Slot, 0, Fault_Slot, 1);
@@ -544,6 +552,14 @@ is
        end if;
        R := Retype_Object (UT1, Object_Endpoint, 0, CNode_Slot, 0, EP_Slot, 1);
        if R /= 0 then return 2; end if;
+
+   --  H88: badged copy of Config endpoint in root CSpace (badge=Role_Root*256+Level_Root=5, R2 root).
+   Put_String ("[H88] Mint badged Config_EP @4178... ");
+   R := CNode_Mint (CNode_Slot, Root_Config_EP_Badged_Slot, 64,
+                    CNode_Slot, EP_Slot, 64, 16#F#,
+                    Role_Root * 256 + Level_Root);
+   Put_Hex (R); Put_String (ASCII.CR & ASCII.LF);
+   if R /= 0 then return 2; end if;
        R := Retype_Object (UT2, Object_Endpoint, 0, CNode_Slot, 0, Fault_Slot, 1);
        if R /= 0 then return 3; end if;
        R := Retype_Object (UT3, Object_TCB, 0, CNode_Slot, 0, TCB_Slot, 1);
@@ -1076,6 +1092,14 @@ is
        Put_Hex (R); Put_String (ASCII.CR & ASCII.LF);
        if R /= 0 then return 2; end if;
 
+   --  H88: badged copy of Net endpoint in root CSpace (badge=Role_Root*256+Level_Root=5, R2 root).
+   Put_String ("[H88] Mint badged Net_EP @4177... ");
+   R := CNode_Mint (CNode_Slot, Root_Net_EP_Badged_Slot, Root_CNode_Depth,
+                    CNode_Slot, Net_EP_Slot, Root_CNode_Depth, 16#F#,
+                    Role_Root * 256 + Level_Root);
+   Put_Hex (R); Put_String (ASCII.CR & ASCII.LF);
+   if R /= 0 then return 2; end if;
+
        -- 2. NetServer TCB at slot 201
        Put_String ("[S8.1D] NetTCB@4103... ");
        R := Retype_Object (UT3, Object_TCB, 0, CNode_Slot, 0, Net_TCB_Slot, 1);
@@ -1588,6 +1612,14 @@ is
       R := Retype_Object (UT_EP, Object_Endpoint, 0, CNode_Slot, 0, FS_EP_Slot, 1);
       Put_Hex (R); Put_String (ASCII.CR & ASCII.LF);
       if R /= 0 then return 2; end if;
+
+   --  H88: badged copy of FS endpoint in root CSpace (badge=Role_Root*256+Level_Root=5, R2 root).
+   Put_String ("[H88] Mint badged FS_EP @4179... ");
+   R := CNode_Mint (CNode_Slot, Root_FS_EP_Badged_Slot, Root_CNode_Depth,
+                    CNode_Slot, FS_EP_Slot, Root_CNode_Depth, 16#F#,
+                    Role_Root * 256 + Level_Root);
+   Put_Hex (R); Put_String (ASCII.CR & ASCII.LF);
+   if R /= 0 then return 2; end if;
 
       Put_String ("[FS] retype TCB@4141... ");
       R := Retype_Object (UT_TCB, Object_TCB, 0, CNode_Slot, 0, FS_TCB_Slot, 1);
