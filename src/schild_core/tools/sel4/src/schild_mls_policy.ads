@@ -129,4 +129,17 @@ is
       Target_Level : Unsigned_32) return Unsigned_32
    with Export, Convention => C, External_Name => "schild_mls_authorize_op";
 
+
+   --  H88: C-callable IPC gate with root-task bypass (R2).
+   --  Sender_Level, Receiver_Level: 0..4 (Public..Top_Secret).
+   --  Sender_Is_Root = True -> allowed (root task orchestrator, R2).
+   --  Out-of-range badge -> 0 (fail-closed).
+   --  Returns 1 = allowed, 0 = denied.
+   function Authorize_IPC_Levels
+     (Sender_Level   : Unsigned_32;
+      Receiver_Level : Unsigned_32;
+      Sender_Is_Root : Boolean) return Unsigned_32
+   with Export, Convention => C,
+        External_Name => "schild_mls_authorize_ipc_levels",
+        Post => Authorize_IPC_Levels'Result in 0 .. 1;
 end Schild_MLS_Policy;

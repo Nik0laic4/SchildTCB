@@ -135,4 +135,21 @@ is
       end if;
    end Mls_Authorize_Op;
 
+
+   --  H88: IPC gate with root-task bypass (R2).
+   function Authorize_IPC_Levels
+     (Sender_Level   : Unsigned_32;
+      Receiver_Level : Unsigned_32;
+      Sender_Is_Root : Boolean) return Unsigned_32
+   is
+   begin
+      if Sender_Level > 4 or Receiver_Level > 4 then
+         return 0;  --  malformed badge -> deny (fail-closed)
+      end if;
+      if Sender_Is_Root then
+         return 1;  --  R2: root task orchestrator bypasses the level check
+      end if;
+      return (if Can_IPC (Level_Map (Integer (Sender_Level)),
+                          Level_Map (Integer (Receiver_Level))) then 1 else 0);
+   end Authorize_IPC_Levels;
 end Schild_MLS_Policy;
