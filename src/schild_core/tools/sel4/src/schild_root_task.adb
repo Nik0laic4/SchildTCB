@@ -462,7 +462,7 @@ begin
    -- shared frame / VSpace plumbing for large-data ops is in place.
    if FS_EP_Slot > 0 then
       declare
-         R : Word := Schild_Sel4_Syscall.Call_IPC (FS_EP_Slot, 7, 0);
+         R : Word := Schild_Sel4_Syscall.Call_IPC (Schild_Sel4_Syscall.Root_FS_EP_Badged_Slot, 7, 0);
          M : Word := Schild_Sel4_Syscall.Read_IPC_MR0;
       begin
          if M = 0 then
@@ -507,11 +507,11 @@ begin
       R  : Word := 0;
    begin
       for J in 1 .. 1_000 loop          -- warm-up: prime endpoint + branch
-         R := Schild_Sel4_Syscall.Call_IPC (Net_EP_Slot, 4, 0);
+         R := Schild_Sel4_Syscall.Call_IPC (Schild_Sel4_Syscall.Root_Net_EP_Badged_Slot, 4, 0);
       end loop;
       T0 := RDTSC;
       for J in 1 .. N loop
-         R := Schild_Sel4_Syscall.Call_IPC (Net_EP_Slot, 4, 0);
+         R := Schild_Sel4_Syscall.Call_IPC (Schild_Sel4_Syscall.Root_Net_EP_Badged_Slot, 4, 0);
       end loop;
       T1 := RDTSC;
       Put_Str ("[BENCH] IPC Call/Reply:" & ASCII.CR & ASCII.LF);
@@ -535,7 +535,7 @@ begin
    if Fault_Slot > 0 then
       Put_Str ("[CONTAINMENT] injecting fault into NetServer (op=99)..." & ASCII.CR & ASCII.LF);
       declare
-         R : Word := Schild_Sel4_Syscall.Call_IPC (Net_EP_Slot, 99, 0);
+         R : Word := Schild_Sel4_Syscall.Call_IPC (Schild_Sel4_Syscall.Root_Net_EP_Badged_Slot, 99, 0);
       begin
          Put_Str ("[CONTAINMENT] fault armed (call returned "); Put_Hex (R);
          Put_Str (")" & ASCII.CR & ASCII.LF);
@@ -558,7 +558,7 @@ begin
    -- the root task catches it, and Health Monitoring restarts the domain.
    Put_Str ("[CONTAINMENT] injecting fault into MLS server (op=99)..." & ASCII.CR & ASCII.LF);
    declare
-      R : Word := Schild_Sel4_Syscall.Call_IPC (MLS_EP_Slot, 99, 0);
+      R : Word := Schild_Sel4_Syscall.Call_IPC (Schild_Sel4_Syscall.Root_MLS_EP_Badged_Slot, 99, 0);
    begin
       null;
    end;
@@ -577,7 +577,7 @@ begin
    -- (process level) to STOP (partition level).
    Put_Str ("[HM] injecting repeated MLS fault (op=99)..." & ASCII.CR & ASCII.LF);
    declare
-      R : Word := Schild_Sel4_Syscall.Call_IPC (MLS_EP_Slot, 99, 0);
+      R : Word := Schild_Sel4_Syscall.Call_IPC (Schild_Sel4_Syscall.Root_MLS_EP_Badged_Slot, 99, 0);
    begin
       null;
    end;
@@ -590,7 +590,7 @@ begin
 
    Put_Str ("[CONTAINMENT] injecting fault into Config Daemon (op=99)..." & ASCII.CR & ASCII.LF);
    declare
-      R : Word := Schild_Sel4_Syscall.Call_IPC (Config_EP_Slot, 99, 0);
+      R : Word := Schild_Sel4_Syscall.Call_IPC (Schild_Sel4_Syscall.Root_Config_EP_Badged_Slot, 99, 0);
    begin
       null;
    end;
@@ -610,7 +610,7 @@ begin
    if Fault_Slot > 0 then
       Put_Str ("[CONTAINMENT] injecting fault into FS daemon (op=99)..." & ASCII.CR & ASCII.LF);
       declare
-         R : Word := Schild_Sel4_Syscall.Call_IPC (FS_EP_Slot, 99, 0);
+         R : Word := Schild_Sel4_Syscall.Call_IPC (Schild_Sel4_Syscall.Root_FS_EP_Badged_Slot, 99, 0);
       begin
          null;
       end;
@@ -631,7 +631,7 @@ begin
    -- carrying the SC badge (3 = Config Daemon) in MR[0].
    Put_Str ("[TIMEOUT] injecting budget overrun into Config Daemon (op=98)..." & ASCII.CR & ASCII.LF);
    declare
-      R : Word := Schild_Sel4_Syscall.Call_IPC (Config_EP_Slot, 98, 0);
+      R : Word := Schild_Sel4_Syscall.Call_IPC (Schild_Sel4_Syscall.Root_Config_EP_Badged_Slot, 98, 0);
    begin
       null;
    end;
@@ -663,7 +663,7 @@ begin
                Put_Hex (Badge);
                Put_Str (")" & ASCII.CR & ASCII.LF);
                declare
-                  R : Word := Schild_Sel4_Syscall.Call_IPC (Net_EP_Slot, 1, 0);
+                  R : Word := Schild_Sel4_Syscall.Call_IPC (Schild_Sel4_Syscall.Root_Net_EP_Badged_Slot, 1, 0);
                begin
                   -- op=1 = poll_rx; reply MR0 = status (1=packet, 0=idle).
                   null;
