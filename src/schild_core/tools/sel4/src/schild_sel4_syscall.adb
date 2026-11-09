@@ -429,6 +429,18 @@ is
        R := Page_Map (IPC_Frame_Slot, VSpace_Slot, IPC_Buf_VAddr);
        Put_Hex (R); Put_String (ASCII.CR & ASCII.LF);
 
+       -- 5.1 H87 Stage 1: MLS shared frame @0x540000 for ep/reply. Retype a
+       -- second 4K from UT4 (already used for the IPC frame; UT4 is a >=1MB
+       -- RAM untyped, seL4 allows multiple retypes from one UT — same pattern
+       -- as FS page tables from UT_CN). A new untyped starved Launch_FS_Daemon
+       -- (NVMe I/O CQ FAILED in the first Stage 1 attempt).
+       Put_String ("[H87s1] Retype MLS shared frame@4180... ");
+       R := Retype_Object (UT4, Object_Frame, 0, CNode_Slot, 0, MLS_Shared_Frame_Slot, 1);
+       Put_Hex (R); Put_String (ASCII.CR & ASCII.LF);
+       if R /= 0 then return 2; end if;
+       R := Page_Map (MLS_Shared_Frame_Slot, VSpace_Slot, 16#540000#);
+       if R /= 0 then Put_String ("[H87s1] PageMap 0x540000 FAIL" & ASCII.CR & ASCII.LF); return 2; end if;
+
        -- 5.5 MCS: scheduling context + reply object, configure + bind.
        R := Setup_MCS_Thread (BI.all.SchedControl_Start, UT5, UT6,
                               SC_Slot, Reply_Slot, TCB_Slot,
@@ -451,18 +463,15 @@ is
        R := TCB_Write_Registers (TCB_Slot, MLS_Entry_Addr, MLS_Stack_Addr);
        Put_Hex (R); Put_String (ASCII.CR & ASCII.LF);
 
-       -- 9. Set endpoint CPtr + dedicated IPC buffer vaddr for MLS server
+       -- 9. H87 Stage 1: write ep/reply into the MLS shared frame @0x540000.
        declare
-          procedure Set_MLS_EP (EP : Word)
-            with Import, Convention => C, External_Name => "schild_set_mls_endpoint";
           procedure Set_MLS_IPC (Addr : Word)
             with Import, Convention => C, External_Name => "schild_set_mls_ipc_buf";
-          procedure Set_MLS_Reply (Rpl : Word)
-            with Import, Convention => C, External_Name => "schild_set_mls_reply";
+          procedure C_MLS_Shared_Write (EP, Reply : Word)
+            with Import, Convention => C, External_Name => "schild_mls_shared_write";
        begin
-          Set_MLS_EP (EP_Slot);
-          Set_MLS_IPC (IPC_Buf_VAddr);  -- dedicated IPC buffer at 0x500000
-          Set_MLS_Reply (Reply_Slot);   -- reply object CPtr for Recv/ReplyRecv
+          Set_MLS_IPC (IPC_Buf_VAddr);
+          C_MLS_Shared_Write (EP_Slot, Reply_Slot);
        end;
 
        -- 10. Resume MLS thread
