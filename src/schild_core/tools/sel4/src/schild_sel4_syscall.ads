@@ -490,12 +490,12 @@ is
    Role_Config  : constant Word := 4;
    Role_Net     : constant Word := 5;
 
-   Level_Root   : constant Word := 5;   -- Top_Secret (TCB orchestrator)
-   Level_MLS    : constant Word := 5;   -- Top_Secret (policy oracle)
-   Level_Audit  : constant Word := 5;   -- Top_Secret (audit sink)
-   Level_FS     : constant Word := 5;   -- Top_Secret (audit.log)
-   Level_Config : constant Word := 4;   -- Secret
-   Level_Net    : constant Word := 2;   -- Internal
+   Level_Root   : constant Word := 4;   -- Top_Secret (TCB orchestrator)
+   Level_MLS    : constant Word := 4;   -- Top_Secret (policy oracle)
+   Level_Audit  : constant Word := 4;   -- Top_Secret (audit sink)
+   Level_FS     : constant Word := 4;   -- Top_Secret (audit.log)
+   Level_Config : constant Word := 3;   -- Secret
+   Level_Net    : constant Word := 1;   -- Internal
 
    --  H88: badged copies of daemon endpoints in the root CSpace, so
    --  Call_IPC carries (role << 8) | level to the receiver. The original

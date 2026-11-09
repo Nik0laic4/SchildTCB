@@ -9,6 +9,7 @@ with Schild_Sel4_BootInfo; use Schild_Sel4_BootInfo;
 with Schild_HM_Model;      use type Schild_HM_Model.HM_Action;
 with Schild_Launch_Model;
 with Schild_Elf_Loader;    use Schild_Elf_Loader;
+with Schild_MLS_Policy;
 
 package body Schild_Sel4_Syscall
   with SPARK_Mode => Off
@@ -495,6 +496,19 @@ is
        R := Call_IPC (EP_Slot, 2, 5);   -- equal: Public != Top_Secret   -> 0
        Put_String ("[R3] MLS op=2 equal reply (expect 0): ");
        Put_Hex (Read_IPC_MR0); Put_String (ASCII.CR & ASCII.LF);
+
+       --  H88: unit-test Authorize_IPC_Levels (gate logic, no IPC).
+       --  Expected: root=1, eq=1, up=0, dn=0.
+       Put_String ("[H88] Authorize_IPC_Levels: ");
+       R := Word (Schild_MLS_Policy.Authorize_IPC_Levels (4, 4, True));
+       Put_String ("root=4/4="); Put_Hex (R);
+       R := Word (Schild_MLS_Policy.Authorize_IPC_Levels (4, 4, False));
+       Put_String (" eq=4/4="); Put_Hex (R);
+       R := Word (Schild_MLS_Policy.Authorize_IPC_Levels (1, 4, False));
+       Put_String (" up=1/4="); Put_Hex (R);
+       R := Word (Schild_MLS_Policy.Authorize_IPC_Levels (4, 1, False));
+       Put_String (" dn=4/1="); Put_Hex (R);
+       Put_String (ASCII.CR & ASCII.LF);
 
        Put_String ("[S7.7] MLS Server launched successfully" & ASCII.CR & ASCII.LF);
        Schild_HM_Model.Launch (HM_St, Schild_HM_Model.HM_MLS);

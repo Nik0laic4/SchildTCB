@@ -111,6 +111,7 @@ if [ "$SEL4_PRIMARY" = "1" ]; then
     "[TIMEOUT] Caught budget overrun"
     "[FS] daemon: OK"
     "[FS] Is_Mounted: OK"
+    "[H88] Authorize_IPC_Levels: root=4/4=0000000000000001 eq=4/4=0000000000000001 up=1/4=0000000000000000 dn=4/1=0000000000000000"
     "[NVME] Init OK — queues ready"
     "[NVFS] Read-back VERIFY OK"
     "==== Root Task ready ===="

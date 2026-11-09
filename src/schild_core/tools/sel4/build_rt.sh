@@ -167,6 +167,7 @@ done
 
 "$TOOL/ld" -T src/daemon_linker.ld -o "$OBJ/fs_daemon.elf" \
     "$OBJ/fs_daemon.o" "$OBJ/fs_daemon_c.o" \
+    "$OBJ/schild_mls_policy.o" \
     "$OBJ/schild_fs_server.o" "$OBJ/schild_schild_fs.o" "$OBJ/schild_fs_core.o" "$OBJ/schild_nvme.o" \
     "$OBJ/schild_sel4_ipc.o" "$OBJ/schild_sel4_syscalls.o" "$OBJ/message_info.o" \
     "$OBJ/schild_net_runtime.o" "$OBJ/schild_hmac_sha256.o" "$OBJ/schild_pci_scanner.o" \
