@@ -1,7 +1,7 @@
 with Interfaces; use Interfaces;
 
 package Schild_User_Irq with
-  SPARK_Mode => On
+  SPARK_Mode => Off  --  Scaffold (H99): not implemented, not in TCB, excluded from proof.
 is
 
    --  User IRQ vectors live in the 64..95 range.

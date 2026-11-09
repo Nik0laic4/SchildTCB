@@ -38,6 +38,20 @@ mkdir -p obj/proof
 # build artifact compiled only in the public profile, not a proof source, and it
 # is not listed in the proof project's Source_Dirs (gnatprove would fail on it).
 mapfile -t MODS < <(find src -name '*.adb' -not -path '*/null/*' -exec basename {} .adb \; | sort)
+
+# H99: exclude scaffold modules from proof (On spec + Off stub, not in TCB, not linked).
+# These modules are dead code in the repo; proving their Off stubs creates a
+# false guarantee (spec proved, body not checked).
+SCAFFOLD_MODULES=(schild_user_memory schild_user_reaper schild_net_crypto schild_stack_sanitizer schild_user_thread schild_user_vfs schild_user_quotas schild_user_irq)
+FILTERED=()
+for m in "${MODS[@]}"; do
+  skip=0
+  for s in "${SCAFFOLD_MODULES[@]}"; do
+    if [ "$m" = "$s" ]; then skip=1; break; fi
+  done
+  [ "$skip" = "0" ] && FILTERED+=("$m")
+done
+MODS=("${FILTERED[@]}")
 TOTAL=${#MODS[@]}
 echo "modules: $TOTAL" >&2
 

@@ -1,7 +1,7 @@
 with Interfaces; use Interfaces;
 
 package Schild_User_Thread with
-  SPARK_Mode => On
+  SPARK_Mode => Off  --  Scaffold (H99): not implemented, not in TCB, excluded from proof.
 is
 
    type Thread_Id_Type is new Interfaces.Unsigned_32 range 1 .. 65535;

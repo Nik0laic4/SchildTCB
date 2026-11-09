@@ -1,7 +1,7 @@
 with Interfaces; use Interfaces;
 
 package Schild_Net_Crypto with
-  SPARK_Mode => On
+  SPARK_Mode => Off  --  Scaffold (H99): not implemented, not in TCB, excluded from proof.
 is
 
    type Crypto_Payload_Length is new Interfaces.Unsigned_32 range 0 .. 1480; --  Max MTU-sized payload.

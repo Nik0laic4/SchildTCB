@@ -1,7 +1,7 @@
 with Interfaces; use Interfaces;
 
 package Schild_Stack_Sanitizer with
-  SPARK_Mode => On
+  SPARK_Mode => Off  --  Scaffold (H99): not implemented, not in TCB, excluded from proof.
 is
 
    type User_Stack_Pointer is new Interfaces.Unsigned_64;
