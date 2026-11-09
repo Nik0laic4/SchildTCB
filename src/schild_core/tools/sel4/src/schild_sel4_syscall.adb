@@ -556,10 +556,10 @@ is
        R := Call_IPC (EP_Slot, 0, 0);   -- read-down: Public >= Public  -> 1
        Put_String ("[R3] MLS op=0 read-down reply (expect 1): ");
        Put_Hex (Read_IPC_MR0); Put_String (ASCII.CR & ASCII.LF);
-       R := Call_IPC (EP_Slot, 1, 5);   -- write-up: Public <= Top_Secret -> 1
+       R := Call_IPC (EP_Slot, 1, 4);   -- write-up: Public(0) <= Top_Secret(4) -> 1
        Put_String ("[R3] MLS op=1 write-up reply (expect 1): ");
        Put_Hex (Read_IPC_MR0); Put_String (ASCII.CR & ASCII.LF);
-       R := Call_IPC (EP_Slot, 2, 5);   -- equal: Public != Top_Secret   -> 0
+       R := Call_IPC (EP_Slot, 2, 4);   -- equal: Public(0) != Top_Secret(4) -> 0
        Put_String ("[R3] MLS op=2 equal reply (expect 0): ");
        Put_Hex (Read_IPC_MR0); Put_String (ASCII.CR & ASCII.LF);
 
