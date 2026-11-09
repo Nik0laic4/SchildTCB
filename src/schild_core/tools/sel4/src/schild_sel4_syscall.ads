@@ -506,6 +506,21 @@ is
    Root_FS_EP_Badged_Slot     : constant Cap_Ref := Slot_Base + 83;  -- 4179
    --  H87 MLS Stage 1: dedicated shared frame for MLS ep/reply (before Load_Elf).
    MLS_Shared_Frame_Slot : constant Cap_Ref := Slot_Base + 84;  -- 4180
+   --  H87s1 fix: minted copy of MLS shared frame (frame cap maps once per cap).
+   --  +54 sits between MLS_Rings_Head_Mint (+49..+53) and FS_EP (+64);
+   --  +91 collides with Load_Elf image frames (base +90, ~9 pages for 33 KB ELF).
+   MLS_Shared_Frame_Copy_Slot : constant Cap_Ref := Slot_Base + 54;  -- 4150
+   --  H87 MLS Stage 2 (Phase B): separate PML4 + page tables + image frames.
+   MLS_PML4_Slot        : constant Cap_Ref := Slot_Base + 85;  -- 4181
+   MLS_PDPT_Slot        : constant Cap_Ref := Slot_Base + 86;  -- 4182
+   MLS_PD_Slot          : constant Cap_Ref := Slot_Base + 87;  -- 4183
+   MLS_PT_Lo_Slot       : constant Cap_Ref := Slot_Base + 88;  -- 4184
+   MLS_PT_Ipc_Slot      : constant Cap_Ref := Slot_Base + 89;  -- 4185
+   --  H87s1 fix: Load_Segment mints a copy at Frame_Slot+64 per page.
+   --  Base +90 (4186) -> minted 4250..4254 collides with Image_Frame_Base
+   --  (4224..4354 root image).  +55 (4151) -> minted 4215..4219 < 4224;
+   --  leaves 9 slots of headroom before FS_EP (+64).
+   MLS_Image_Frame_Base : constant Cap_Ref := Slot_Base + 55;  -- 4151
 
    function Launch_FS_Daemon return Word
      with Global => null;

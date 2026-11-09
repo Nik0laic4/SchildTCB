@@ -351,6 +351,11 @@ is
        Reply_Slot  : constant Cap_Ref := MLS_Reply_Slot;   -- MCS reply object
        IPC_Buf_VAddr  : constant Word := 16#500000#;
        R : Word;
+       Load_Status, Load_Entry : Word := 0;
+       function Mls_Daemon_Elf_Start return Word
+         with Import, Convention => C, External_Name => "schild_mls_daemon_elf_start";
+       function Mls_Daemon_Elf_Size return Word
+         with Import, Convention => C, External_Name => "schild_mls_daemon_elf_size";
     begin
        -- UT1..UT4: all MUST be RAM (non-device) untyped — kernel objects (TCB,
        -- endpoint, notification) and the IPC buffer frame cannot be retyped
@@ -424,9 +429,49 @@ is
        R := Retype_Object (UT4, Object_Frame, 0, CNode_Slot, 0, IPC_Frame_Slot, 1);
        Put_Hex (R); Put_String (ASCII.CR & ASCII.LF);
 
-       -- 5. Map the frame into the (shared) VSpace at 0x500000
+       -- 4.5 H87 Stage 2: MLS_PML4 + page tables + Load_Elf (Phase B).
+       -- 4 page tables (PML4/PDPT/PD/PT_Lo), all retyped from UT4 (already
+       -- holds IPC and shared frames; UT4 is a >=1MB RAM untyped, capacity
+       -- ~14 x 4K left). Image (0x400000), IPC buf (0x500000) and shared
+       -- frame (0x540000) are all in one 2 MB range, so PT_Lo at 0x400000
+       -- covers all three (FS pattern: PT_Lo @0x400000, IPC @0x530000).
+       -- A separate UT (7th scan) starved Launch_FS_Daemon in Stage 1.
+       Put_String ("[H87s2] retype MLS_PML4@4181... ");
+       R := Retype_Object (UT4, Object_PML4, 0, CNode_Slot, 0, MLS_PML4_Slot, 1);
+       Put_Hex (R); Put_String (ASCII.CR & ASCII.LF); if R /= 0 then return 2; end if;
+       Put_String ("[H87s2] retype MLS_PDPT@4182... ");
+       R := Retype_Object (UT4, Object_PDPT, 0, CNode_Slot, 0, MLS_PDPT_Slot, 1);
+       Put_Hex (R); Put_String (ASCII.CR & ASCII.LF); if R /= 0 then return 2; end if;
+       Put_String ("[H87s2] retype MLS_PD@4183... ");
+       R := Retype_Object (UT4, Object_PageDirectory, 0, CNode_Slot, 0, MLS_PD_Slot, 1);
+       Put_Hex (R); Put_String (ASCII.CR & ASCII.LF); if R /= 0 then return 2; end if;
+       Put_String ("[H87s2] retype MLS_PT_Lo@4184... ");
+       R := Retype_Object (UT4, Object_PageTable, 0, CNode_Slot, 0, MLS_PT_Lo_Slot, 1);
+       Put_Hex (R); Put_String (ASCII.CR & ASCII.LF); if R /= 0 then return 2; end if;
+       R := ASID_Pool_Assign (6, MLS_PML4_Slot);
+       if R /= 0 then Put_String ("[H87s2] ASID assign FAIL" & ASCII.CR & ASCII.LF); return 2; end if;
+       R := PDPT_Map (MLS_PDPT_Slot, MLS_PML4_Slot, 0);
+       if R /= 0 then Put_String ("[H87s2] PDPTMap FAIL" & ASCII.CR & ASCII.LF); return 2; end if;
+       R := Page_Directory_Map (MLS_PD_Slot, MLS_PML4_Slot, 0);
+       if R /= 0 then Put_String ("[H87s2] PDMap FAIL" & ASCII.CR & ASCII.LF); return 2; end if;
+       R := Page_Table_Map (MLS_PT_Lo_Slot, MLS_PML4_Slot, 16#400000#);
+       if R /= 0 then Put_String ("[H87s2] PTLoMap FAIL" & ASCII.CR & ASCII.LF); return 2; end if;
+       declare
+          Root_VSpace : constant Cap_Ref := 3;
+       begin
+          Load_Elf (Mls_Daemon_Elf_Start, Mls_Daemon_Elf_Size,
+                    MLS_PML4_Slot, Root_VSpace, UT4, CNode_Slot,
+                    MLS_Image_Frame_Base, Load_Status, Load_Entry);
+          if Load_Status /= 0 then
+             Put_String ("[H87s2] Load_Elf FAIL" & ASCII.CR & ASCII.LF);
+             return 2;
+          end if;
+       end;
+       Put_String ("[H87s2] Load_Elf OK entry=0x"); Put_Hex (Load_Entry); Put_String (ASCII.CR & ASCII.LF);
+
+       -- 5. Map the IPC frame into the MLS VSpace at 0x500000
        Put_String ("[S7.7] PageMap 0x500000... ");
-       R := Page_Map (IPC_Frame_Slot, VSpace_Slot, IPC_Buf_VAddr);
+       R := Page_Map (IPC_Frame_Slot, MLS_PML4_Slot, IPC_Buf_VAddr);
        Put_Hex (R); Put_String (ASCII.CR & ASCII.LF);
 
        -- 5.1 H87 Stage 1: MLS shared frame @0x540000 for ep/reply. Retype a
@@ -438,8 +483,20 @@ is
        R := Retype_Object (UT4, Object_Frame, 0, CNode_Slot, 0, MLS_Shared_Frame_Slot, 1);
        Put_Hex (R); Put_String (ASCII.CR & ASCII.LF);
        if R /= 0 then return 2; end if;
-       R := Page_Map (MLS_Shared_Frame_Slot, VSpace_Slot, 16#540000#);
+       R := Page_Map (MLS_Shared_Frame_Slot, MLS_PML4_Slot, 16#540000#);
        if R /= 0 then Put_String ("[H87s1] PageMap 0x540000 FAIL" & ASCII.CR & ASCII.LF); return 2; end if;
+       --  H87s1 fix: frame cap maps once per cap (FS round 42 pattern).
+       --  Mint a copy @4150 and map it into the root VSpace, because
+       --  schild_mls_shared_write() writes 0x540000 from the root task
+       --  before TCB_Resume.  VSpace_Slot (=3) is CapInitThreadVSpace.
+       Put_String ("[H87s1] Mint MLS shared frame copy@4150... ");
+       R := CNode_Mint (CNode_Slot, MLS_Shared_Frame_Copy_Slot, 64,
+                        CNode_Slot, MLS_Shared_Frame_Slot, 64, 16#F#, 0);
+       Put_Hex (R); Put_String (ASCII.CR & ASCII.LF);
+       if R /= 0 then return 2; end if;
+       R := Page_Map (MLS_Shared_Frame_Copy_Slot, VSpace_Slot, 16#540000#);
+       if R /= 0 then Put_String ("[H87s1] PageMap root 0x540000 FAIL" & ASCII.CR & ASCII.LF); return 2; end if;
+       Put_String ("[H87s1] PageMap root 0x540000 OK" & ASCII.CR & ASCII.LF);
 
        -- 5.5 MCS: scheduling context + reply object, configure + bind.
        R := Setup_MCS_Thread (BI.all.SchedControl_Start, UT5, UT6,
@@ -450,7 +507,7 @@ is
        -- 6. SetSpace (fault handler + cspace/vspace)
        Put_String ("[S7.7] SetSpace... ");
        R := TCB_Set_Fault_Handler (TCB_Slot, Fault_Slot,
-                                    CNode_Slot, 0, VSpace_Slot, 0);
+                                    CNode_Slot, 0, MLS_PML4_Slot, 0);
        Put_Hex (R); Put_String (ASCII.CR & ASCII.LF);
 
        -- 7. SetIPCBuffer: dedicate the 4K frame at 0x500000 to the MLS TCB
@@ -460,7 +517,7 @@ is
 
        -- 8. Write registers (RIP + RSP)
        Put_String ("[S7.7] WriteRegs... ");
-       R := TCB_Write_Registers (TCB_Slot, MLS_Entry_Addr, MLS_Stack_Addr);
+       R := TCB_Write_Registers (TCB_Slot, Load_Entry, 16#404018#);  -- stack top in mls_daemon.elf
        Put_Hex (R); Put_String (ASCII.CR & ASCII.LF);
 
        -- 9. H87 Stage 1: write ep/reply into the MLS shared frame @0x540000.
@@ -481,8 +538,8 @@ is
 
        -- Health Monitoring: remember MLS TCB/entry/stack for restart.
        MLS_TCB_Cap := TCB_Slot;
-       MLS_Entry    := MLS_Entry_Addr;
-       MLS_Stack    := MLS_Stack_Addr;
+       MLS_Entry    := Load_Entry;
+       MLS_Stack    := 16#404018#;
 
        -- 11. Yield CPU to let MLS server start its Recv loop
        Yield;
