@@ -22,6 +22,7 @@
  * signal a malformed IPC request to the caller. */
 #define SCHILD_EBADMSG   74   /* unrecognized operation code / invalid level  */
 #define SCHILD_EMSGSIZE  90   /* payload exceeds the shared-frame limit       */
+#define SCHILD_EMLSDENIED 13  /* H88: MLS IPC gate denied (EACCES-style)      */
 
 /* Static layout invariants shared with the Ada/SPARK side. */
 _Static_assert(sizeof(unsigned long long) == 8,  "message register must be 64-bit");

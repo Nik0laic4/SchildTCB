@@ -16,6 +16,7 @@ typedef          long long i64;
 extern i64 schild_sel4_recv(u64 src, u64 reply);
 extern i64 schild_sel4_replyrecv(u64 src, u64 info, u64 reply);
 extern i64 schild_sel4_reply_only(u64 reply, u64 info);
+extern unsigned int schild_mls_authorize_ipc_levels(unsigned int sender_level, unsigned int receiver_level, int sender_is_root);
 extern volatile u64 config_reply_cptr;
 extern volatile u64 schild_recv_mr[4];
 extern volatile u64 schild_reply_mr[4];
@@ -38,9 +39,19 @@ void config_daemon_main(void) {
         for (;;) __asm__ volatile("pause");
     }
 
-    schild_sel4_recv(endpoint, reply);
+    u64 badge = schild_sel4_recv(endpoint, reply);
 
     for (;;) {
+        u64 sender_role  = (badge >> 8) & 0xFF;
+        u64 sender_level = badge & 0xFF;
+        if (badge != 0 && sender_role != 0) {
+            if (!schild_mls_authorize_ipc_levels((unsigned int)sender_level, 4, 0)) {
+                schild_reply_mr[0] = SCHILD_EMLSDENIED;
+                schild_reply_mr[1] = 0; schild_reply_mr[2] = 0; schild_reply_mr[3] = 0;
+                badge = schild_sel4_replyrecv(endpoint, 1ULL, reply);
+                continue;
+            }
+        }
         u64 op    = schild_recv_mr[0];
         u64 level = schild_recv_mr[1];
 
@@ -88,7 +99,7 @@ void config_daemon_main(void) {
             for (;;) { }   /* exhaust the sporadic budget -> timeout fault */
         }
 
-        schild_sel4_replyrecv(endpoint, 1ULL, reply);  /* reply + next recv */
+        badge = schild_sel4_replyrecv(endpoint, 1ULL, reply);  /* reply + next recv */
     }
 }
 volatile u64 config_endpoint_cptr = 0;
