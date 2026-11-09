@@ -1,7 +1,7 @@
 with Interfaces; use Interfaces;
 
 package Schild_User_Memory with
-  SPARK_Mode => On
+  SPARK_Mode => Off  --  Scaffold (H99): not implemented, not in TCB, excluded from proof.
 is
 
    type User_Virtual_Address is new Interfaces.Unsigned_64;

@@ -2,7 +2,7 @@ with Interfaces; use Interfaces;
 with Schild_User_Thread;
 
 package Schild_User_Reaper with
-  SPARK_Mode => On
+  SPARK_Mode => Off  --  Scaffold (H99): not implemented, not in TCB, excluded from proof.
 is
 
    type Pid_Type is new Interfaces.Unsigned_32 range 0 .. 1024;

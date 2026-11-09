@@ -1,7 +1,7 @@
 with Interfaces; use Interfaces;
 
 package Schild_User_Vfs with
-  SPARK_Mode => On
+  SPARK_Mode => Off  --  Scaffold (H99): not implemented, not in TCB, excluded from proof.
 is
 
    --  A virtual path is a fixed 255-byte string plus its length.
