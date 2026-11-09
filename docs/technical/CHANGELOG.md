@@ -6,6 +6,16 @@
 > *pending* or *target* have not yet been validated. Formal-verification
 > coverage is stated per-module, never as an aggregate percentage.
 
+## v0.45 (2026-11-09) — H99 CLOSED: scaffold modules excluded from proof set
+
+**Validated: 8 userland modules with `SPARK_Mode => On` specs but `SPARK_Mode => Off` stub bodies (only set a flag, do nothing) are excluded from the proof set; `not-proved: 0` now covers 180 real modules instead of 188 (8 scaffold removed).**
+
+- `prove_kernel.sh`: `SCAFFOLD_MODULES` array (8 names) + filter after `mapfile`; the `find src -name *.adb` sweep no longer includes them.
+- 8 `.ads` (`schild_user_memory`, `schild_user_reaper`, `schild_net_crypto`, `schild_stack_sanitizer`, `schild_user_thread`, `schild_user_vfs`, `schild_user_quotas`, `schild_user_irq`): `SPARK_Mode => On` → `Off`, marked `Scaffold (H99): not implemented, not in TCB, excluded from proof`.
+- Verified: 0 call sites in `src/` and `tools/sel4/src/`; not linked into `root_task.elf` (`nm` empty); not in `verify.gpr` Main.
+- Gates: bare 184/0; seL4 Done; verify.sh all proved; prove_kernel 180 modules (132 proved / 48 skipped, not-proved: 0); run_tests 23/23.
+- Dev note: `CHANGELOG v0.39` and `RELEASE_NOTES_v0.22-pre` still say 188 — historical records, not rewritten. Current state in `ASSURANCE` and `ROADMAP` updated to 180.
+
 ## v0.44 (2026-11-08) — boot stability: raise Config daemon MCS budget 1000→5000 us
 
 **Validated: the Config daemon's 1000 us budget overran on slow QEMU (validate@Top_Secret then validate@Public stalled), producing intermittent 8-PASS boot-timeout flakes. 5000 us (5% CPU) makes the boot stable: 6× run_tests 23/23.**
