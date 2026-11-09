@@ -6,6 +6,20 @@
 > *pending* or *target* have not yet been validated. Formal-verification
 > coverage is stated per-module, never as an aggregate percentage.
 
+## v0.46 (2026-11-09) — H87-MLS Phase B: Load_Elf into own PML4 + history cleanup
+
+**Validated: the MLS daemon now runs `mls_daemon.elf` in its own PML4 (ELF header parse, page-table retype, `Load_Elf`, IPC + shared-frame mapping, `TCB_Resume`) and answers IPC (`[S7.7] MLS Server: OK`); 13 local commits with an `Approved-by: human` marker were rewritten out of `master`.**
+
+- `elf_blobs.c`: `schild_mls_daemon_elf_start/size` accessors for the embedded blob.
+- `schild_sel4_syscall.adb` `Launch_MLS_Server`: `MLS_PML4/PDPT/PD/PT_Lo` retype from UT4, ASID assign, `Load_Elf` (entry from ELF `e_entry` = 0x400000, stack 0x404018 = `mls_stack_top`); IPC buf @0x500000 mapped into `MLS_PML4`, not root; shared frame @0x540000 mapped into `MLS_PML4` + minted copy @4150 mapped into root VSpace (`C_MLS_Shared_Write` writes from root before `TCB_Resume`).
+- `MLS_Image_Frame_Base` `Slot_Base+90` (4186) → `Slot_Base+55` (4151). Root cause: `Load_Segment` mints a copy at `Frame_Slot+64` per page; base +90 → minted 4250..4254 collided with `Image_Frame_Base` 4224..4354 → `Destination not empty`, NetServer VSpace FAILED. Base +55 → minted 4215..4219 < 4224.
+- `MLS_Shared_Frame_Copy_Slot` `Slot_Base+54` (4150) — free between `MLS_Rings_Head_Mint` (+49..+53) and `FS_EP` (+64).
+- `MLS_PT_Ipc_Slot` removed (`9972da5`): unused, `PT_Lo @0x400000` covers image + IPC + shared in one 2 MB range.
+- `[R3]` fix (`9226f33`): target_level 5 → 4 (0-based). target=5 → `SCHILD_EBADMSG` (74=0x4A) before BL check; now op=0/1/2 → 1/1/0.
+- **History cleanup**: 13 commits with `Approved-by: human` rewritten via `git filter-branch --msg-filter` (`origin/master..HEAD`). `master` count = 0; `origin` and tags unchanged; `backup-before-approved-by-rewrite` kept until push.
+- **AGENT_RULES v3.1**: `Approved-by: human` not required (escalation informational). No code change.
+- Gates: build Done; run_tests 23/23; `[S7.7] MLS Server: OK`; `[S8.2] NetServer VSpace: OK`; `[S8.1D] NetServer: OK`; `[NVFS] VERIFY OK`; `[H88]` all four correct.
+
 ## v0.45 (2026-11-09) — H99 CLOSED: scaffold modules excluded from proof set
 
 **Validated: 8 userland modules with `SPARK_Mode => On` specs but `SPARK_Mode => Off` stub bodies (only set a flag, do nothing) are excluded from the proof set; `not-proved: 0` now covers 180 real modules instead of 188 (8 scaffold removed).**
