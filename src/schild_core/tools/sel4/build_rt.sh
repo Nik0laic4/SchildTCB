@@ -184,6 +184,7 @@ done
 # H87: embed fs_daemon.elf as a blob (kernel loads it above the kernel region).
 # Embed the ELF FILE (not objcopy -O binary) so the loader can parse its header.
 "$TOOL/ld" -r -b binary "$OBJ/fs_daemon.elf" -o "$OBJ/fs_daemon_blob.o" 2>&1
+"$TOOL/ld" -r -b binary "$OBJ/mls_daemon.elf" -o "$OBJ/mls_daemon_blob.o" 2>&1
 
 # Link
 "$TOOL/ld" -T src/rt_linker.ld -o root_task.elf \
@@ -229,7 +230,8 @@ done
     "$OBJ/schild_sel4_ipc.o" \
     "$OBJ/schild_net_runtime.o" \
     "$OBJ/elf_blobs.o" \
-    "$OBJ/fs_daemon_blob.o" 2>&1
+    "$OBJ/fs_daemon_blob.o" \
+    "$OBJ/mls_daemon_blob.o" 2>&1
 
 echo "  [RT] root_task.elf: $(wc -c < root_task.elf) bytes"
 
