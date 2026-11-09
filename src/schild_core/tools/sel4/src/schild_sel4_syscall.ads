@@ -479,6 +479,32 @@ is
    -- device-untyped, so a fixed window between +256 and +512 is too small.
    FS_Nvme_Frame_Base  : constant Cap_Ref := Slot_Base + 1024;  -- fallback
 
+
+   --  H88: MLS IPC enforcement — role/level for endpoint badges.
+   --  Badge = (role << 8) | level. Role_Root=0 triggers R2 bypass
+   --  in Authorize_IPC_Levels (root task orchestrator).
+   Role_Root    : constant Word := 0;
+   Role_MLS     : constant Word := 1;
+   Role_Audit   : constant Word := 2;
+   Role_FS      : constant Word := 3;
+   Role_Config  : constant Word := 4;
+   Role_Net     : constant Word := 5;
+
+   Level_Root   : constant Word := 5;   -- Top_Secret (TCB orchestrator)
+   Level_MLS    : constant Word := 5;   -- Top_Secret (policy oracle)
+   Level_Audit  : constant Word := 5;   -- Top_Secret (audit sink)
+   Level_FS     : constant Word := 5;   -- Top_Secret (audit.log)
+   Level_Config : constant Word := 4;   -- Secret
+   Level_Net    : constant Word := 2;   -- Internal
+
+   --  H88: badged copies of daemon endpoints in the root CSpace, so
+   --  Call_IPC carries (role << 8) | level to the receiver. The original
+   --  endpoints (unbadged) remain in the daemon CSpace.
+   Root_MLS_EP_Badged_Slot    : constant Cap_Ref := Slot_Base + 80;  -- 4176
+   Root_Net_EP_Badged_Slot    : constant Cap_Ref := Slot_Base + 81;  -- 4177
+   Root_Config_EP_Badged_Slot : constant Cap_Ref := Slot_Base + 82;  -- 4178
+   Root_FS_EP_Badged_Slot     : constant Cap_Ref := Slot_Base + 83;  -- 4179
+
    function Launch_FS_Daemon return Word
      with Global => null;
 
