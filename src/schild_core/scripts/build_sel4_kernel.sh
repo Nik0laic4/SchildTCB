@@ -48,6 +48,10 @@ for p in "$PATCH_DIR"/*.patch; do
     echo "Skipping $(basename "$p") (SKIP_DRHU_PATCH=1) ..."
     continue
   fi
+  if [ "${SKIP_SMAP_PATCH:-0}" = "1" ] && [[ "$p" == *"smap"* ]]; then
+    echo "Skipping $(basename "$p") (SKIP_SMAP_PATCH=1) ..."
+    continue
+  fi
   echo "Applying $(basename "$p") ..."
   patch -p1 < "$p"
 done
@@ -82,14 +86,18 @@ cmake -C ../configs/X64_verified.cmake \
 # Force CONFIG_PRINTING=1 after cmake, before ninja (required for boot logs).
 # seL4's generated config disables it as `/* disabled: CONFIG_PRINTING */`.
 GEN_CFG=gen_config/kernel/gen_config.h
-if [ -f "$GEN_CFG" ]; then
-  if grep -q 'disabled: CONFIG_PRINTING' "$GEN_CFG"; then
-    sed -i -E 's|/\* disabled: CONFIG_PRINTING \*/|#define CONFIG_PRINTING 1|' "$GEN_CFG"
-  else
-    sed -i -E 's/#define CONFIG_PRINTING[[:space:]]+[01]/#define CONFIG_PRINTING 1/' "$GEN_CFG"
+if [ "${KERNEL_PRINTING:-1}" = "1" ]; then
+  if [ -f "$GEN_CFG" ]; then
+    if grep -q 'disabled: CONFIG_PRINTING' "$GEN_CFG"; then
+      sed -i -E 's|/\* disabled: CONFIG_PRINTING \*/|#define CONFIG_PRINTING 1|' "$GEN_CFG"
+    else
+      sed -i -E 's/#define CONFIG_PRINTING[[:space:]]+[01]/#define CONFIG_PRINTING 1/' "$GEN_CFG"
+    fi
+    grep -q '#define CONFIG_PRINTING 1' "$GEN_CFG" \
+      || { echo "ERROR: failed to enable CONFIG_PRINTING" >&2; exit 1; }
   fi
-  grep -q '#define CONFIG_PRINTING 1' "$GEN_CFG" \
-    || { echo "ERROR: failed to enable CONFIG_PRINTING" >&2; exit 1; }
+else
+  echo "KERNEL_PRINTING=0: CONFIG_PRINTING left disabled (upstream SMAP path)"
 fi
 
 ninja kernel.elf
