@@ -504,6 +504,8 @@ is
    Root_Net_EP_Badged_Slot    : constant Cap_Ref := Slot_Base + 81;  -- 4177
    Root_Config_EP_Badged_Slot : constant Cap_Ref := Slot_Base + 82;  -- 4178
    Root_FS_EP_Badged_Slot     : constant Cap_Ref := Slot_Base + 83;  -- 4179
+   --  H87 MLS Stage 1: dedicated shared frame for MLS ep/reply (before Load_Elf).
+   MLS_Shared_Frame_Slot : constant Cap_Ref := Slot_Base + 84;  -- 4180
 
    function Launch_FS_Daemon return Word
      with Global => null;

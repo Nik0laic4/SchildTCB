@@ -15,7 +15,6 @@ extern i64 schild_sel4_recv(u64 src, u64 reply);
 extern i64 schild_sel4_replyrecv(u64 src, u64 info, u64 reply);
 extern i64 schild_sel4_reply_only(u64 reply, u64 info);
 extern unsigned int schild_mls_authorize_ipc_levels(unsigned int sender_level, unsigned int receiver_level, int sender_is_root);
-extern volatile u64 mls_reply_cptr;
 
 /* IPC buffer address — set by Root Task via schild_set_mls_ipc_buf.
  * NOTE: on x86_64 seL4, MR[0..3] are delivered in hardware registers
@@ -35,10 +34,11 @@ _Static_assert(sizeof(schild_recv_mr) == SCHILD_IPC_MR_BYTES,  "recv MR window m
 _Static_assert(sizeof(schild_reply_mr) == SCHILD_IPC_MR_BYTES, "reply MR window must be 32 bytes");
 
 void mls_server_main(void) {
-    u64 endpoint = 0;
-    extern volatile u64 mls_endpoint_cptr;
-    endpoint = mls_endpoint_cptr;
-    u64 reply = mls_reply_cptr;
+    /* H87 Stage 1: ep/reply live in the shared frame @0x540000 (root task
+     * writes them there; .bss globals belong to a different ELF copy). */
+    volatile u64 *sh = (volatile u64 *)0x540000ULL;
+    u64 endpoint = sh[0];
+    u64 reply    = sh[1];
 
     /* B1 fix: if no endpoint/reply configured, signal error and halt */
     if (endpoint == 0 || reply == 0) {
@@ -107,13 +107,9 @@ void mls_server_main(void) {
         badge = schild_sel4_replyrecv(endpoint, 1ULL, reply);  /* reply + recv */
     }
 }
-volatile u64 mls_endpoint_cptr = 0;
-volatile u64 mls_reply_cptr = 0;
 
 /* H87: MLS entry/stack/cptr accessors (moved from schild_sel4_ipc.c — shim split). */
 extern void mls_server_entry(void);
 extern char mls_stack_top[];
 u64 schild_mls_entry_addr(void)  { return (u64)(void*)mls_server_entry; }
 u64 schild_mls_stack_addr(void)  { return (u64)mls_stack_top; }
-void schild_set_mls_endpoint(u64 ep) { mls_endpoint_cptr = ep; }
-void schild_set_mls_reply(u64 r)     { mls_reply_cptr = r; }

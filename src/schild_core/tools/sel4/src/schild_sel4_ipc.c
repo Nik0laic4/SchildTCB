@@ -264,6 +264,15 @@ i64 schild_sel4_x86_page_get_address(u64 page) {
 /* Dedicated IPC buffer address for the MLS server thread.
  * Set by Ada code before MLS thread is resumed. */
 volatile u64 mls_ipc_buf_addr = 0;
+
+/* H87 MLS Stage 1: write ep/reply into the MLS shared frame at 0x540000. */
+void schild_mls_shared_write(u64 ep, u64 reply) {
+    volatile u64 *sh = (volatile u64 *)0x540000ULL;
+    sh[0] = ep;
+    sh[1] = reply;
+    sh[2] = 0;
+}
+
 void schild_set_mls_ipc_buf(u64 addr) { mls_ipc_buf_addr = addr; }
 
 /* Return root task's IPC buffer virtual address (for sharing). */
