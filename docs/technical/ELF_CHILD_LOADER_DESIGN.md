@@ -108,6 +108,20 @@ x86_64 повторяет этот паттерн, но для **четырёх*
 > Зацепка: `UT_ELF` = 64 МБ (`Size_Bits=26`), free-index = `MAX_FREE_INDEX` (конец),
 > поэтому первый retype через `resetUntypedCap` чистит все 64 МБ; но второй
 > (reset=false, без очистки) всё равно виснет — причина не выяснена.
+>
+> **Update (v0.46, 2026-11-09 — решено):** настоящая причина не во втором
+> `Retype_Object`, а в **коллизии mint-копии** в `Load_Segment`: каждая страница
+> минтится в `Frame_Slot + 64`. При `MLS_Image_Frame_Base +90` (4186) mint
+> давал 4250..4254 → накрывал `Image_Frame_Base` 4224..4354 → `Destination not
+> empty` (не hang retype). Фикс: база `+90 → +55` (4151), mint 4215..4219 < 4224.
+> Так же `[R3]` target_level 5→4 (0-based). MLS daemon теперь на своём ELF,
+> run_tests 24/24.
+>
+> **Config/NetServer (pending):** `config_daemon.elf` (33 КБ ≈ 9 стр.) и
+> `netserver.elf` собираются + блобы встроены, но **Load_Elf-обвязка не сделана**
+> — слот-раскладка: mint `+64` требует `Image_Frame_Base < 4160`, а низкие слоты
+> `+49..+63` заняты (MLS rings/shared copy/image frames). Нужен либо перенос
+> слотов, либо параметризация mint-offset в `Load_Segment`.
 
 Каждый daemon-ELF линкуется со своим linker-скриптом `daemon_linker.ld`
 (RX-код, R-rodata, RW-data/bss, entry в `.text` @ 0x400000), затем
