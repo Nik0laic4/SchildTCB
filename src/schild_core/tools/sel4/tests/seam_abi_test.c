@@ -21,6 +21,11 @@
 #define MSG_LABEL_SHIFT     12u  /* bits 12..63 */
 #define MSG_MAX_LENGTH      120u /* seL4_MsgMaxLength (x86_64) */
 
+/* IPC-buffer word offsets (schild_sel4_ipc.c). */
+#define MR_BASE             1u   /* MR[n]      at word offset 1+n          */
+#define EXTRA_BASE          122u /* extra cap n at word offset 122+n        */
+#define MSG_MAX_EXTRACAPS   3u   /* extraCaps field is 2 bits (0..3)        */
+
 typedef uint64_t u64;
 
 static u64 pack(u64 label, u64 capsUnwrapped, u64 extraCaps, u64 length)
@@ -87,6 +92,20 @@ int main(void)
         CHECK(raw == 127u);                 /* 7-bit field maximum */
         CHECK(MSG_MAX_LENGTH == 120u);      /* caller-side cap */
         CHECK(raw > MSG_MAX_LENGTH);        /* out-of-window is detectable */
+    }
+
+    /* 5. IPC-buffer offsets: the MR window and the extra-cap window must not
+     * overlap (a malformed extraCaps must not clobber the MR window). */
+    {
+        /* MR window: MR[0..MSG_MAX_LENGTH-1] at offsets MR_BASE .. MR_BASE+119. */
+        u64 mr_hi = MR_BASE + MSG_MAX_LENGTH - 1u;   /* 120 */
+        /* Extra-cap window: extra cap 0..MSG_MAX_EXTRACAPS at EXTRA_BASE.. */
+        u64 ec_lo = EXTRA_BASE;                       /* 122 */
+        u64 ec_hi = EXTRA_BASE + MSG_MAX_EXTRACAPS;   /* 125 */
+        CHECK(mr_hi == 120u);
+        CHECK(ec_lo == 122u);
+        CHECK(mr_hi < ec_lo);                          /* no overlap: 120 < 122 */
+        CHECK(ec_hi - ec_lo == MSG_MAX_EXTRACAPS);     /* window size = max extra caps */
     }
 
     printf("seam-abi: %s (%d failures)\n", failures ? "FAIL" : "PASS", failures);
