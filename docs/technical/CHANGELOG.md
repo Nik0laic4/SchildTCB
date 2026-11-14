@@ -6,6 +6,16 @@
 > *pending* or *target* have not yet been validated. Formal-verification
 > coverage is stated per-module, never as an aggregate percentage.
 
+## v0.48 (2026-11-14) — netserver.elf links standalone (NetServer cross-daemon deps resolved)
+
+**Validated: `netserver.elf` now links with no FS/NVMe dragged in — the NetServer's remaining cross-daemon couplings are removed architecturally (not stubbed with dead FS objects).**
+
+- `schild_audit_render`: split `daemon_stubs.c` (now only `rt_bootinfo_vptr`) from new `audit_stub.c` (no-op for FS/MLS/Config only); the NetServer keeps the real `/debug` bridge in `schild_net_server.adb`.
+- `schild_http_server`: `Local_FS` → compile-time constant `False`; the dead static-file branch and its FS-typed locals moved into an unreachable nested block (static requests answer 503).
+- `schild_e1000e`: `Flush_Log_To_Nvme` → local no-op (audit log via IPC `Persist_Audit_Log` → FS op=5 Append).
+- `netserver.elf`: 2 segments (RX `0x400000`, RW `0x40f000`), e1000e + TCP/IP + HTTP only.
+- Gates: build 184/0; run_tests 24/24; check_build_lists PASS.
+
 ## v0.47 (2026-11-14) — H86 residual: net_stack stops writing FS-daemon NVMe directly
 
 **Validated: the net stack no longer calls `Schild_Nvme.Flush_Log_To_Nvme` directly (an H86 leftover — the NVMe belongs to the FS daemon); the audit log persists via IPC (`Persist_Audit_Log` → FS op=5 Append).**
