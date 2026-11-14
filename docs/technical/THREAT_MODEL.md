@@ -231,7 +231,7 @@ This document is the **input** to the contract-strengthening phase. The method:
    loop invariants) and prove at Level 4.
 3. **Anti-strangling rule.** `Pre` must accept *all* legitimate inputs; `Post`
    states the security property. *Liveness* — that legitimate data still flows —
-   is validated by runtime tests (QEMU 23/23, KAT), not by proof.
+   is validated by runtime tests (QEMU 24/24, KAT), not by proof.
 4. **No vacuity.** A `Post => True` or an impossible `Pre` proves nothing and is
    rejected. gnatprove vacuity checks are on.
 5. **No escape hatches.** Keep `pragma Assume` = 0 and no `pragma Annotate`

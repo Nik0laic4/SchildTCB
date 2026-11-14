@@ -28,7 +28,7 @@
 | Firewall (порт-блокировка + контракты) | ✅ доказано | `gnatprove` (`schild_firewall` 7 подпрограмм, `not-proved: 0`); encryption — scaffold |
 | Bare-metal boot + сеть | ✅ T580 + QEMU | `run_tests.sh` (`SEL4_PRIMARY=0`); HTTP на T580 (IRQ-driven RX) |
 | seL4 ветка — сборка | ✅ | `SEL4_PRIMARY=1 ./build.sh` |
-| seL4 ветка — QEMU | ✅ 23/23 маркеров | `run_tests.sh` (`SEL4_PRIMARY=1`) |
+| seL4 ветка — QEMU | ✅ 24/24 маркеров | `run_tests.sh` (`SEL4_PRIMARY=1`) |
 | seL4 ветка — T580 (32 ГБ) | ✅ `Root Task ready` | прошивка `sel4_primary.iso` → T580 |
 | seL4 MCS | ✅ QEMU-валидирован | `MCS_MIGRATION.md` |
 | IOMMU (VT-d) | ⛔ experimental/flaky | upstream sporadic SC race (x86_64 MCS) |
