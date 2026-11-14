@@ -1,10 +1,18 @@
 -- Schild TCB e1000e Driver — TX + RX rings, packet send
 with System; with System.Machine_Code; with Interfaces;
 
-with Schild_Uart_Driver; with Schild_Pci_Scanner; with Schild_Nvme;
+with Schild_Uart_Driver; with Schild_Pci_Scanner;
 
 package body Schild_E1000e with SPARK_Mode => Off is
    use Interfaces;
+
+   -- H86/H87: the NVMe belongs to the FS daemon; the audit log persists via IPC
+   -- (Persist_Audit_Log -> FS op=5 Append). The e1000e driver must not write the
+   -- FS daemon's NVMe directly, so this local flush is a no-op.
+   procedure Flush_Log_To_Nvme is
+   begin
+      null;
+   end Flush_Log_To_Nvme;
 
    -- C helpers for address conversion (bare-metal: no System.Storage_Elements)
    function C_Addr (A : System.Address) return Unsigned_64;
@@ -100,7 +108,7 @@ package body Schild_E1000e with SPARK_Mode => Off is
    begin
       MMIO := MMIO_VAddr;
       C_Putln (Msg_Mapped'Address, Msg_Mapped'Length);
-      Schild_Nvme.Flush_Log_To_Nvme;
+      Flush_Log_To_Nvme;
 
       -- Device reset sequence
       C := Mmio_Read (16#0000#);
@@ -109,14 +117,14 @@ package body Schild_E1000e with SPARK_Mode => Off is
       begin
          C_Putln (M'Address, M'Length);
       end;
-      Schild_Nvme.Flush_Log_To_Nvme;
+      Flush_Log_To_Nvme;
       Mmio_Write (16#0000#, C or 16#04000000#);
       declare
          M : constant String := "[E1000E] reset: write OK";
       begin
          C_Putln (M'Address, M'Length);
       end;
-      Schild_Nvme.Flush_Log_To_Nvme;
+      Flush_Log_To_Nvme;
       for I in 1..100000 loop null; end loop;
 
       -- Wait for reset completion (CTRL.RST clears; STATUS.FD is not the reset bit)
@@ -124,7 +132,7 @@ package body Schild_E1000e with SPARK_Mode => Off is
          exit when (Mmio_Read (16#0000#) and 16#04000000#) = 0;
          for J in 1..1000 loop null; end loop;
       end loop;
-      Schild_Nvme.Flush_Log_To_Nvme;
+      Flush_Log_To_Nvme;
 
       -- Wait for the EEPROM auto-read to complete (EEC.EE_DONE bit 1): the
       -- device will not transmit until the EEPROM (MAC/config) has loaded.
@@ -132,7 +140,7 @@ package body Schild_E1000e with SPARK_Mode => Off is
          exit when (Mmio_Read (16#0014#) and 16#00000002#) /= 0;
          for J in 1 .. 1000 loop null; end loop;
       end loop;
-      Schild_Nvme.Flush_Log_To_Nvme;
+      Flush_Log_To_Nvme;
 
       -- Set SLU + clear FRCSPD/FRCDPX (allow auto-negotiation), matching Linux
       -- e1000_setup_copper_link_ich8lan.
@@ -185,7 +193,7 @@ package body Schild_E1000e with SPARK_Mode => Off is
             exit when C_Rdtsc - T0 > 8_000_000_000;  -- ~4 s @ 2 GHz
          end loop;
       end;
-      Schild_Nvme.Flush_Log_To_Nvme;
+      Flush_Log_To_Nvme;
 
       -- Setup TX descriptor ring: mark all descriptors as done
       for I in 0 .. NUM_DESC - 1 loop
@@ -261,7 +269,7 @@ package body Schild_E1000e with SPARK_Mode => Off is
          Msg_OK : constant String := "[E1000E] Init OK";
       begin
          C_Putln (Msg_OK'Address, Msg_OK'Length);
-         Schild_Nvme.Flush_Log_To_Nvme;
+         Flush_Log_To_Nvme;
       end;
    end Init_MMIO;
 
@@ -273,7 +281,7 @@ package body Schild_E1000e with SPARK_Mode => Off is
       Msg_Found: constant String := "[E1000E] Device found, MMIO mapped";
    begin
       C_Putln (Msg_Scan'Address, Msg_Scan'Length);
-      Schild_Nvme.Flush_Log_To_Nvme;
+      Flush_Log_To_Nvme;
       --  NOTE (validation status): the register model has been validated only
       --  against QEMU's Intel 82540EM (e1000, device 100E) — the path that
       --  reaches "Init OK" and completes TX/RX. The 82574L (10D3, QEMU's
@@ -302,7 +310,7 @@ package body Schild_E1000e with SPARK_Mode => Off is
          return;
       end if;
       C_Putln (Msg_Found'Address, Msg_Found'Length);
-      Schild_Nvme.Flush_Log_To_Nvme;
+      Flush_Log_To_Nvme;
 
       -- Enable PCI bus-mastering so the NIC DMA engine can read descriptors and
       -- write back status (DD bit). Without this the MMIO registers respond but

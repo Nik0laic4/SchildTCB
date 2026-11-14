@@ -164,6 +164,9 @@ done
 "$TOOL/gcc" -m64 -nostdlib -nostdinc -fno-builtin -std=gnu11 \
     -fno-stack-protector -mno-red-zone -ffreestanding -mgeneral-regs-only "${PREFIX_MAP_C[@]}" \
     -c -o "$OBJ/daemon_stubs.o" src/daemon_stubs.c 2>&1
+"$TOOL/gcc" -m64 -nostdlib -nostdinc -fno-builtin -std=gnu11 \
+    -fno-stack-protector -mno-red-zone -ffreestanding -mgeneral-regs-only "${PREFIX_MAP_C[@]}" \
+    -c -o "$OBJ/audit_stub.o" src/audit_stub.c 2>&1
 
 "$TOOL/ld" -T src/daemon_linker.ld -o "$OBJ/fs_daemon.elf" \
     "$OBJ/fs_daemon.o" "$OBJ/fs_daemon_c.o" \
@@ -172,20 +175,36 @@ done
     "$OBJ/schild_sel4_ipc.o" "$OBJ/schild_sel4_syscalls.o" "$OBJ/message_info.o" \
     "$OBJ/schild_net_runtime.o" "$OBJ/schild_hmac_sha256.o" "$OBJ/schild_pci_scanner.o" \
     "$OBJ/schild_audit_logger.o" "$OBJ/schild_uart_driver.o" \
-    "$OBJ/daemon_stubs.o" 2>&1
+    "$OBJ/daemon_stubs.o" \
+    "$OBJ/audit_stub.o" 2>&1
 
 # H87: build a separate mls_daemon.elf (the MLS policy daemon — no NVMe/DMA).
 "$TOOL/ld" -T src/daemon_linker.ld -o "$OBJ/mls_daemon.elf" \
     "$OBJ/mls_server.o" "$OBJ/mls_server_c.o" \
     "$OBJ/schild_mls_policy.o" "$OBJ/schild_config_daemon.o" \
     "$OBJ/schild_sel4_ipc.o" "$OBJ/schild_sel4_syscalls.o" "$OBJ/message_info.o" \
-    "$OBJ/daemon_stubs.o" 2>&1
+    "$OBJ/daemon_stubs.o" \
+    "$OBJ/audit_stub.o" 2>&1
 
 # H87: build a separate config_daemon.elf (the Junos-style config daemon).
 "$TOOL/ld" -T src/daemon_linker.ld -o "$OBJ/config_daemon.elf" \
     "$OBJ/config_daemon.o" "$OBJ/config_daemon_c.o" \
     "$OBJ/schild_mls_policy.o" "$OBJ/schild_config_daemon.o" \
     "$OBJ/schild_sel4_ipc.o" "$OBJ/schild_sel4_syscalls.o" "$OBJ/message_info.o" \
+    "$OBJ/daemon_stubs.o" \
+    "$OBJ/audit_stub.o" 2>&1
+
+# H87: build a separate netserver.elf (e1000e + TCP/IP + HTTP; no FS chain —
+# Local_FS is a compile-time False, so the static-file branch is removed).
+"$TOOL/ld" -T src/daemon_linker.ld -o "$OBJ/netserver.elf" \
+    "$OBJ/netserver.o" "$OBJ/netserver_c.o" \
+    "$OBJ/schild_net_server.o" "$OBJ/schild_e1000e.o" \
+    "$OBJ/schild_arp_handler.o" "$OBJ/schild_ipv4_handler.o" "$OBJ/schild_tcp_handler.o" \
+    "$OBJ/schild_http_core.o" "$OBJ/schild_http_server.o" "$OBJ/schild_net_stack.o" "$OBJ/schild_net_config.o" \
+    "$OBJ/schild_pci_scanner.o" "$OBJ/schild_net_runtime.o" "$OBJ/schild_hmac_sha256.o" \
+    "$OBJ/schild_mls_policy.o" "$OBJ/schild_config_daemon.o" \
+    "$OBJ/schild_sel4_ipc.o" "$OBJ/schild_sel4_syscalls.o" "$OBJ/message_info.o" \
+    "$OBJ/schild_audit_logger.o" "$OBJ/schild_uart_driver.o" \
     "$OBJ/daemon_stubs.o" 2>&1
 
 # H87: embed fs_daemon.elf as a blob (kernel loads it above the kernel region).

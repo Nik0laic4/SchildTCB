@@ -25,8 +25,8 @@ package body Schild_Net_Server with SPARK_Mode => Off is
       end if;
       -- H86/H91: NVMe belongs to the FS daemon, so this process has no local
       -- filesystem inside its VSpace.  Static HTTP requests must not reach the
-      -- FS body (it would read the unmapped BAR0 at 0x620000) and answer 503.
-      Schild_Http_Server.Set_Local_FS (False);
+      -- FS body (it would read the unmapped BAR0 at 0x620000) and answer 503
+      -- (Local_FS is a compile-time False in the NetServer).
       Schild_Net_Stack.Init;
       return 0;
    end Net_Init;

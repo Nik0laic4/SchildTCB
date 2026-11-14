@@ -18,12 +18,10 @@ package body Schild_Http_Server with SPARK_Mode => Off is
    -- address space).  False in the seL4 NetServer, where the FS daemon owns the
    -- controller: the FS body would read 0x620000 in a VSpace that never mapped
    -- it, so the request handler must not call it at all.
-   Local_FS : Boolean := True;
-
-   procedure Set_Local_FS (Enabled : Boolean) is
-   begin
-      Local_FS := Enabled;
-   end Set_Local_FS;
+   -- H87: the HTTP server is NetServer-only; the NetServer never owns the NVMe,
+   -- so Local_FS is a compile-time constant False and the static-file branch is
+   -- removed. Static requests answer 503 (a future IPC path may serve them).
+   Local_FS : constant Boolean := False;
 
    -- Stage 9: network debug observability — C-bridge into the audit log.
    -- The real renderer lives in the NetServer runtime; the standalone kernel
@@ -41,10 +39,6 @@ package body Schild_Http_Server with SPARK_Mode => Off is
       Success   :    out Boolean)
    is
       Path    : Schild_Http_Core.Path_String := (others => ' ');
-      File    : Schild_Schild_Fs.File_Info;
-      FS_OK   : Boolean;
-      Data_Buf: Schild_Schild_Fs.Unsigned_8_Array (0 .. 4095);
-      Data_Len: Unsigned_32;
       Idx     : Integer := Reply_Buf'First;
       Body_Start : Integer;
       Http_200 : constant String := "HTTP/1.0 200 OK" & ASCII.CR & ASCII.LF
@@ -170,6 +164,12 @@ package body Schild_Http_Server with SPARK_Mode => Off is
          return;
       end if;
 
+      declare
+         File    : Schild_Schild_Fs.File_Info;
+         FS_OK   : Boolean;
+         Data_Buf: Schild_Schild_Fs.Unsigned_8_Array (0 .. 4095);
+         Data_Len: Unsigned_32;
+      begin
       if not Schild_Schild_Fs.Is_Mounted then
          Schild_Schild_Fs.Init (FS_OK);
       end if;
@@ -202,6 +202,7 @@ package body Schild_Http_Server with SPARK_Mode => Off is
          end loop;
          exit when Idx >= Reply_Buf'Last - 50;
       end loop;
+      end;
 
       -- Fix Content-Length
       declare
