@@ -6,6 +6,14 @@
 > *pending* or *target* have not yet been validated. Formal-verification
 > coverage is stated per-module, never as an aggregate percentage.
 
+## v0.49 (2026-11-14) — AS6 step 1: seam-abi host unit (msgInfo ABI fuzzing)
+
+**Validated: the seL4 msgInfo encoding round-trips losslessly and its IPC-buffer windows do not overlap (SYSCALL_SEAM_ABI_SPEC.md §8, C4 fuzzing).**
+
+- `tests/seam_abi_test.c` + `tests/run_seam_abi.sh` (host-side, QEMU-free, CI job `seam-abi`).
+- Properties: label (52-bit) / extraCaps (0..3) / capsUnwrapped (0..1) / length (0..120) round-trip; length field cap 127 vs caller cap 120; MR window [1,120] vs extra-cap window [122,125] no overlap.
+- Gates: `seam-abi: PASS (0 failures)`.
+
 ## v0.48 (2026-11-14) — netserver.elf links standalone (NetServer cross-daemon deps resolved)
 
 **Validated: `netserver.elf` now links with no FS/NVMe dragged in — the NetServer's remaining cross-daemon couplings are removed architecturally (not stubbed with dead FS objects).**
