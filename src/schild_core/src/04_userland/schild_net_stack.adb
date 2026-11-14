@@ -5,7 +5,6 @@ with System; with Interfaces; with Schild_Net_Types;
 with Schild_Uart_Driver; with Schild_E1000e;
 with Schild_Arp_Handler; with Schild_Ipv4_Handler;
 with Schild_Tcp_Handler; with Schild_Http_Server;
-with Schild_Nvme;
 
 package body Schild_Net_Stack with SPARK_Mode => Off is
    use Interfaces;
@@ -42,7 +41,10 @@ package body Schild_Net_Stack with SPARK_Mode => Off is
 
    procedure Flush_Log_To_Nvme is
    begin
-      Schild_Nvme.Flush_Log_To_Nvme;
+      --  H86: the NVMe moved to the FS daemon. The audit log is persisted via IPC
+      --  (Persist_Audit_Log -> FS op=5 Append), so the net stack must not write
+      --  the FS daemon's NVMe directly. No-op keeps the netserver.elf link clean.
+      null;
    end Flush_Log_To_Nvme;
 
    procedure B_to_E (Src : B; Dst : out E; Len : Integer) is
