@@ -18,7 +18,7 @@
 - `[R3]` fix (`9226f33`): target_level 5 → 4 (0-based). target=5 → `SCHILD_EBADMSG` (74=0x4A) before BL check; now op=0/1/2 → 1/1/0.
 - **History cleanup**: 13 commits with `Approved-by: human` rewritten via `git filter-branch --msg-filter` (`origin/master..HEAD`). `master` count = 0; `origin` and tags unchanged; `backup-before-approved-by-rewrite` kept until push.
 - **AGENT_RULES v3.1**: `Approved-by: human` not required (escalation informational). No code change.
-- Gates: build Done; run_tests 23/23; `[S7.7] MLS Server: OK`; `[S8.2] NetServer VSpace: OK`; `[S8.1D] NetServer: OK`; `[NVFS] VERIFY OK`; `[H88]` all four correct.
+- Gates: build Done; run_tests 24/24; `[S7.7] MLS Server: OK`; `[S8.2] NetServer VSpace: OK`; `[S8.1D] NetServer: OK`; `[NVFS] VERIFY OK`; `[H88]` all four correct.
 
 ## v0.45 (2026-11-09) — H99 CLOSED: scaffold modules excluded from proof set
 
