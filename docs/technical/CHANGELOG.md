@@ -6,6 +6,14 @@
 > *pending* or *target* have not yet been validated. Formal-verification
 > coverage is stated per-module, never as an aggregate percentage.
 
+## v0.47 (2026-11-14) — H86 residual: net_stack stops writing FS-daemon NVMe directly
+
+**Validated: the net stack no longer calls `Schild_Nvme.Flush_Log_To_Nvme` directly (an H86 leftover — the NVMe belongs to the FS daemon); the audit log persists via IPC (`Persist_Audit_Log` → FS op=5 Append).**
+
+- `schild_net_stack.adb`: drop `with Schild_Nvme`; `Flush_Log_To_Nvme` is now a no-op (the net stack must not touch the FS daemon's NVMe). Unblocks a clean `netserver.elf` link.
+- H87 prep: `config_daemon.elf` builds + embeds as a blob with accessors (`70c32fb`, `1285a9a`) — Config → Load_Elf Stage 1–2 still pending (not wired).
+- Gates: build 184/0; run_tests 24/24.
+
 ## v0.46 (2026-11-09) — H87-MLS Phase B: Load_Elf into own PML4 + history cleanup
 
 **Validated: the MLS daemon now runs `mls_daemon.elf` in its own PML4 (ELF header parse, page-table retype, `Load_Elf`, IPC + shared-frame mapping, `TCB_Resume`) and answers IPC (`[S7.7] MLS Server: OK`); 13 local commits with an `Approved-by: human` marker were rewritten out of `master`.**
