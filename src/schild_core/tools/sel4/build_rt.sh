@@ -181,6 +181,13 @@ done
     "$OBJ/schild_sel4_ipc.o" "$OBJ/schild_sel4_syscalls.o" "$OBJ/message_info.o" \
     "$OBJ/daemon_stubs.o" 2>&1
 
+# H87: build a separate config_daemon.elf (the Junos-style config daemon).
+"$TOOL/ld" -T src/daemon_linker.ld -o "$OBJ/config_daemon.elf" \
+    "$OBJ/config_daemon.o" "$OBJ/config_daemon_c.o" \
+    "$OBJ/schild_mls_policy.o" "$OBJ/schild_config_daemon.o" \
+    "$OBJ/schild_sel4_ipc.o" "$OBJ/schild_sel4_syscalls.o" "$OBJ/message_info.o" \
+    "$OBJ/daemon_stubs.o" 2>&1
+
 # H87: embed fs_daemon.elf as a blob (kernel loads it above the kernel region).
 # Embed the ELF FILE (not objcopy -O binary) so the loader can parse its header.
 "$TOOL/ld" -r -b binary "$OBJ/fs_daemon.elf" -o "$OBJ/fs_daemon_blob.o" 2>&1
