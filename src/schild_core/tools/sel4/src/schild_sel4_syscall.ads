@@ -542,6 +542,20 @@ is
    Net_Shared_Frame_Copy_Slot : constant Cap_Ref := Slot_Base + 357; -- 4453
    Net_Mint_Offset           : constant Cap_Ref := 3200;
 
+   --  H87-L (Phase B): mini-bootstrap slots for the root task's own VSpace.
+   --  CNode 14 (16384 slots) freed the window above the Net mint (7651).
+   --  root_task.elf = ~1087 pages (7660..8746); mint (offset 1200) -> 8860..9946.
+   Bootstrap_PML4_Slot      : constant Cap_Ref := Slot_Base + 3556;  -- 7652
+   Bootstrap_PDPT_Slot      : constant Cap_Ref := Slot_Base + 3557;  -- 7653
+   Bootstrap_PD_Slot        : constant Cap_Ref := Slot_Base + 3558;  -- 7654
+   Bootstrap_PT_Lo_Slot     : constant Cap_Ref := Slot_Base + 3559;  -- 7655
+   Bootstrap_TCB_Slot       : constant Cap_Ref := Slot_Base + 3560;  -- 7656
+   Bootstrap_SC_Slot        : constant Cap_Ref := Slot_Base + 3561;  -- 7657
+   Bootstrap_Reply_Slot     : constant Cap_Ref := Slot_Base + 3562;  -- 7658
+   Bootstrap_IPC_Frame_Slot : constant Cap_Ref := Slot_Base + 3563;  -- 7659
+   Bootstrap_Image_Frame_Base : constant Cap_Ref := Slot_Base + 3564; -- 7660
+   Bootstrap_Mint_Offset    : constant Cap_Ref := 1200;
+
    function Launch_FS_Daemon return Word
      with Global => null;
 
