@@ -48,15 +48,30 @@ procedure Schild_Root_Task with SPARK_Mode => On is
    Grace_Until : array (1 .. 4) of Word := (others => 0);
    Grace_Ms    : constant array (1 .. 4) of Word := (1000, 1000, 1000, 5000);
    Last_Check  : Word := 0;  -- throttle: last health-check timestamp
-   -- TSC cycles per microsecond. Fixed estimate for QEMU (~2.5 GHz); TODO:
-   -- calibrate at boot (PIT/HPET busy-wait) for real hardware.
-   Cycles_Per_Us : constant Word := 2500;
+   -- TSC cycles per microsecond. Calibrated via CPUID leaf 0x15 at boot;
+   -- fixed 2500 (~2.5 GHz) fallback if the leaf is unsupported.
+   Cycles_Per_Us : Word := 2500;
    function RDTSC return Word
      with Import, Convention => C, External_Name => "schild_rdtsc",
+          Global => null;
+   function TSC_Hz return Word
+     with Import, Convention => C, External_Name => "schild_tsc_hz",
           Global => null;
 begin
    Get_BootInfo_Copy (BI, Unsigned_64 (BootInfo'Size / System.Storage_Unit));
    Put_Str (ASCII.CR & ASCII.LF);
+
+   -- C9: calibrate the TSC frequency (CPUID leaf 0x15) for the health threshold.
+   declare
+      Hz : Word := TSC_Hz;
+   begin
+      if Hz > 0 then
+         Cycles_Per_Us := Hz / 1_000_000;
+      end if;
+      Put_Str ("[C9] TSC "); Put_Dec (Hz);
+      Put_Str (" Hz -> "); Put_Dec (Cycles_Per_Us);
+      Put_Str (" cycles/us" & ASCII.CR & ASCII.LF);
+   end;
    Put_Str ("==== Schild TCB Root Task (Ada/SPARK 2022) ====" & ASCII.CR & ASCII.LF);
    Put_Str ("==== Stage 7: Config Daemon + A/B Boot Manager ====" & ASCII.CR & ASCII.LF);
    Put_Str ("Node: "); Put_Dec (BI.Node_ID); Put_Str (" / "); Put_Dec (BI.Num_Nodes); Put_Str (ASCII.CR & ASCII.LF);

@@ -502,5 +502,26 @@ u64 schild_rdtsc(void) {
     return ((u64)hi << 32) | lo;
 }
 
+/* C9: TSC frequency (Hz) via CPUID. Leaf 0x15 (TSC/APERF ratio + crystal) is
+ * preferred; leaf 0x16 (base frequency MHz) is the fallback. Returns 0 if
+ * neither is exposed (caller falls back to a fixed estimate). */
+u64 schild_tsc_hz(void) {
+    unsigned int max_leaf, eax, ebx, ecx, edx;
+    __asm__ volatile("cpuid" : "=a"(max_leaf) : "a"(0) : "ebx","ecx","edx");
+    if (max_leaf >= 0x15) {
+        __asm__ volatile("cpuid" : "=a"(eax), "=b"(ebx), "=c"(ecx), "=d"(edx)
+                         : "a"(0x15), "c"(0));
+        if (eax != 0 && ecx != 0)
+            return ((u64)ecx * ebx) / eax;   /* crystal Hz * ratio_den / ratio_num */
+    }
+    if (max_leaf >= 0x16) {
+        __asm__ volatile("cpuid" : "=a"(eax), "=b"(ebx), "=c"(ecx), "=d"(edx)
+                         : "a"(0x16), "c"(0));
+        if (eax != 0)
+            return (u64)eax * 1000000ULL;    /* base frequency MHz -> Hz */
+    }
+    return 0;
+}
+
 
 /* (FS-daemon entry/stack/alive/cptr accessors moved to fs_daemon.c — H87 shim split) */
