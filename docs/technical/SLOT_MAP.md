@@ -23,6 +23,9 @@
 | Image_Frame_Base | +128 (4224) | **мёртвая константа** (NetServer больше не минтит образ — Load_Elf, v0.51) |
 | **Bootstrap (H87-L, v0.53)** | 7652..7667 | PML4/PDPT/PD/PT_Lo/PT_Hi/TCB/SC/Reply/IPC/Fault_EP/PT_Hi2/BootInfo×2 + copy slots |
 | Bootstrap Image_Frame_Base | +3567 (7663→7667 после расширения) | образ root task (~1087 кадров) + mint offset 1200 |
+| **C9 ping ntfn (v0.54)** | 4173/4174/4175/4185 | по одному notification на домен (Net/MLS/Config/FS), badge-OR safe |
+| C9 MLS/Config badged ping | 4186/4187 | badged копии (badge=1) для MLS/Config (root CNode) |
+| **C9 HPET frame** | 4188 | device frame 0xFED00000 → 0x4C2000 (калибровка TSC) |
 
 ## 3. Примечания
 

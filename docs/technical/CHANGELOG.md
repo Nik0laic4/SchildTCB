@@ -6,6 +6,15 @@
 > *pending* or *target* have not yet been validated. Formal-verification
 > coverage is stated per-module, never as an aggregate percentage.
 
+## v0.54 (2026-11-15) — C9 heartbeat (liveness) + FS/MLS audit closure
+
+**Validated: FS/MLS audit closure (H107/H109/H110/H111/M20/H112 + `Sender_Is_Root` removal) and the C9 heartbeat health probe (detect, not recover) — `run_tests 24/24`, `verify.sh` 0 errors.**
+
+- **FS audit:** H109 (`Fs_Init` now returns `St_Io_Error` on self-test failure), H110 (explicit `Dir_Table` scan bound), H111 (full 512-byte read-back verify).
+- **MLS audit:** `Authorize_IPC_Levels` is now a pure 2-arg equal-clearance predicate (Pre `0..4`, Post `= Can_IPC`, no bypass branch); the root bypass is caller-side (`sender_role=0`); `Mls_Authorize_Op` unchanged. `Get_Root_VSpace` added earlier.
+- **C9 heartbeat:** 4 per-domain ping notifications (badge-OR safe), root NBWait × 4 + `Last_Seen` + grace period (FS 5s), throttled health check (100 ms), IRQ-poll gated on `Health_Ok[Net]`, HPET `cycles/us` calibration (QEMU source=HPET, 2029 cycles/us), MLS functional probe (gated + 5 s throttle). Boot-manager `Health_Status` renamed `NetServer_Alive`/`MLS_Alive` (heartbeat ≠ functional). Residual: detect-not-recover (H90) and `H112` (MLS/Config CSpace isolation) remain.
+- **gates:** build 0 errors, run_tests 24/24, verify.sh 0.
+
 ## v0.53 (2026-11-15) — Root task as ELF-child (L-work B1–B3 complete)
 
 **Validated: the root task now boots as an ELF-child via a mini-bootstrap — `run_tests 24/24` with `bootstrap.elf` as the GRUB module (all four daemons launch and pass containment).**
