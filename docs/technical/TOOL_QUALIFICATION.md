@@ -1,53 +1,41 @@
-# Schild TCB — План квалификации инструментов
+# Schild TCB — Tool Qualification (Assurance Case, Block 4)
 
-**Version:** v1.0 | **Date:** 2026-10-31
-**Цель:** зафиксировать версии и детерминизм цепочки «компиляция → формальное доказательство»
-как шаг к квалификации инструментов (DO-330 / DO-333). Полная сертификация не начинается без
-реального органа/заказчика (см. `DEVELOPMENT_VECTORS.md` §2).
+**Version:** v0.1 (draft) | **Date:** 2026-11-15
+**Scope:** какие инструменты входят в доверенный вычислительный базис (TCB) и как
+они квалифицированы (доказаны / доверены / runtime-tested). Это заготовка финального
+Assurance Case; дополняется по мере готовности Блока 4.
 
----
+## 1. Классификация инструментов
 
-## 1. Инструменты и версии
-
-| Инструмент | Версия (Alire) | Роль |
+| Инструмент | Роль | Квалификация |
 |---|---|---|
-| GNAT (gcc/gnat1) | `gnat_native_14.2.1_06bb3def` | компилятор Ada 2022 (`-gnat2022`) |
-| gnatprove | `gnatprove_14.1.1_f6ca6f8c` | SPARK Level 4 (flow analysis + proof) |
-| Проверы | Alt-Ergo / CVC5 / Z3 (внутри gnatprove release) | SMT-решатели |
-| gprbuild | 22.0 | сборка проектов |
-| seL4 toolchain | см. `SEL4_INTEGRATION.md` | сборка ядра |
+| **GNAT Pro compiler** (`gnat_native_14.2.1_06bb3def`) | сборка Ada/SPARK root task + daemons | доверен; код Ada — `SPARK_Mode => On` (доказан gnatprove) |
+| **gnatprove** | верификация SPARK (контракты, `not-proved: 0`) | доверен (уровень 4 для ядра политики) |
+| **gcc / ld** (`-m64 -ffreestanding -nostdlib`) | C-шимы + линковка | доверен; C-шимы runtime-tested (run_tests 24/24) |
+| **seL4 kernel** (7 локальных патчей) | ядро (ring-0), CSpace/VSpace/scheduler | доказан upstream; патчи — `SEL4_PATCHES_ANALYSIS.md` (только `object-zeroing` затрагивает доказанный `createObject`, остальные — boot/MMIO/framebuffer) |
+| **mkschildfs.py** | генерация FS-образа | доверен (offline, host) |
+| **QEMU** (i440fx, e1000 82540EM) | runtime-валидация | доверен как test-harness (не TCB) |
 
----
+## 2. Граница TCB (что входит в доверенный базис)
 
-## 2. Детерминизм (уже реализовано)
+```
+ring 0:  seL4 kernel + boot.S + IDT/APIC + GNAT Rcheck (fail-stop) + mmio-map/phys-write
+ring 3:  Ada root task (SPARK On где возможно) + 4 daemon ELF (H87, own PML4/CSpace)
+         + C-шимы (syscall seam, SPARK_Mode => Off — доверенная аксиоматика)
+```
 
-- `SOURCE_DATE_EPOCH` — pin `__DATE__`/`__TIME__` (в `build_rt.sh`/`build.sh`).
-- `-fdebug-prefix-map` / `-fmacro-prefix-map` — пути → относительный префикс (reproducible build).
-- Детерминированный backend GNAT `-14`.
-- Классификатор proof-отчёта детерминирован: `scripts/classify_gnatprove.py` (один проход, awk заменён).
+## 3. Замечания по квалификации
 
----
+- **GNAT** — компилятор не верифицирован формально; доверие переносится на
+  **SPARK-контракты + gnatprove** (проверка контрактов, а не корректность кода).
+- **seL4 патчи** — 6/7 не затрагивают доказанный код; `object-zeroing` затрагивает
+  `createObject` (жизненный цикл объекта, security-relevant) — см. `SEL4_PATCHES_ANALYSIS.md`
+  §5/§7. Альтернатива — «root task как ELF-child» (L-работа).
+- **C-шимы** — `SPARK_Mode => Off`, доверены как аксиоматика (`SYSCALL_SEAM_ABI_SPEC.md`),
+  валидированы runtime (run_tests + host-KAT `seam-abi`/`elf-kat`/`fs-core-kat`).
 
-## 3. Известный недетерминизм
+## 4. Что осталось для финальной версии (Block 4)
 
-- `gnatprove -j8` флипает PROVED/out-of-proof для ~2 модулей
-  (`schild_execution_fabric`, `schild_sentinel`). Стабильно только **`not-proved: 0`**;
-  число «proved» флуктуирует (W11-прогон: 130) — **не хардкодить** (сноска в `ASSURANCE.md` §2.2).
-
----
-
-## 4. Что нужно для формальной квалификации (DO-330/DO-333)
-
-1. Заморозить версии инструментов (частично — Alire index).
-2. Валидационные тесты инструмента: KAT HMAC/SHA-256 (`run_hmac_kat.sh`), протокольный
-   host-side юнит (`proto_test.c` + gcov).
-3. Задокументировать ограничения проверов (таймауты, memlimit, шаги).
-4. «Qualification build»: записать точные версии/хэши инструментов в артефакт сборки.
-
----
-
-## 5. Статус
-
-- Версии + детерминизм: ✅ зафиксированы (этот документ).
-- Валидационные тесты инструмента: ✅ частично (HMAC KAT, proto_test).
-- Полная квалификация: ⛔ не начинаем без органа/заказчика.
+- `gnatcov` покрытие (statement/decision) для Ada + `gcov` для C-шимов.
+- Фиксация **точных версий** инструментов (sha256) в `RELEASE_NOTES` при v1.0.0.
+- Ревью каждого пункта §1 перед включением в Assurance Case.
