@@ -21,15 +21,31 @@ procedure Schild_Bootstrap with SPARK_Mode => Off is
    function Root_Task_Elf_Size return Unsigned_64
      with Import, Convention => C, External_Name => "bootstrap_root_task_elf_size";
 
+   -- Debug marker (single char via seL4_DebugPutChar) — Phase B bring-up.
+   procedure Debug_Put (C : Unsigned_64)
+     with Import, Convention => C, External_Name => "schild_sel4_debug_putchar";
+
    BI : Schild_Sel4_BootInfo.BootInfo;
    R : Unsigned_64;
    Load_Status : Unsigned_64;
    Load_Entry  : Unsigned_64;
    UT : Cap_Ref := 0;
-   CNode_Slot : constant Cap_Ref := 1;
+   CNode_Slot : constant Cap_Ref := 2;   -- seL4_CapInitThreadCNode
    Root_VSpace : constant Cap_Ref := 3;
 begin
    Get_BootInfo_Copy (BI, Unsigned_64 (Schild_Sel4_BootInfo.BootInfo'Size / System.Storage_Unit));
+
+   -- CRITICAL: set the IPC buffer address (schild_ipc_buf_addr) from the boot
+   -- info, else set_mr/set_ec write to NULL+offset (same as the root task's
+   -- Init_IPC in schild_sel4_syscall.adb).
+   declare
+      function Get_BI_Frame return Unsigned_64
+        with Import, Convention => C, External_Name => "schild_get_bootinfo_frame";
+      procedure Dump_Raw_BI (Frame : Unsigned_64)
+        with Import, Convention => C, External_Name => "schild_dump_raw_bootinfo";
+   begin
+      Dump_Raw_BI (Get_BI_Frame);
+   end;
 
    -- Find a large RAM untyped for the root task's VSpace objects + image
    -- frames (~1087 pages, MemSiz ~4.25 MB) — needs Size_Bits >= 23 (8 MB).
@@ -73,6 +89,7 @@ begin
    if Load_Status /= 0 then
       return;
    end if;
+   Debug_Put (76);  -- 'L': Load_Elf OK
 
    -- Phase B part 2: retype TCB + SchedContext + Reply + IPC frame, MCS
    -- configure + bind, fault handler + IPC buffer, write registers + resume.
@@ -101,4 +118,5 @@ begin
    if R /= 0 then return; end if;
    R := TCB_Resume (Bootstrap_TCB_Slot);
    if R /= 0 then return; end if;
+   Debug_Put (83);  -- 'S': Resume OK
 end Schild_Bootstrap;

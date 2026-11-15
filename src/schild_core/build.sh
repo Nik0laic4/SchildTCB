@@ -164,8 +164,13 @@ if [ "${SEL4_PRIMARY:-0}" = "1" ]; then
    echo "  Building Root Task..."
    TOOL="$TOOL" SCHILD_IOMMU="${KERNEL_IOMMU:-0}" bash tools/sel4/build_rt.sh 2>&1 | grep -v 'warning:' | tail -2
    RT_ELF="tools/sel4/root_task.elf"
+   BOOT_ELF="tools/sel4/obj/root_task/bootstrap.elf"
    if [ ! -f "$RT_ELF" ]; then
       echo "  ERROR: root task build failed"
+      exit 1
+   fi
+   if [ ! -f "$BOOT_ELF" ]; then
+      echo "  ERROR: bootstrap build failed"
       exit 1
    fi
 
