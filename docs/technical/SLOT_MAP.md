@@ -21,6 +21,8 @@
 | MMIO (e1000e + NVMe BAR0) | 4608..~7455 (Offset_Frames+32) | PCI-окно, device-untyped |
 | FS_Nvme_Frame_Base | +1024 (5120, fallback) | резерв (перекрыт MMIO-окном) |
 | Image_Frame_Base | +128 (4224) | **мёртвая константа** (NetServer больше не минтит образ — Load_Elf, v0.51) |
+| **Bootstrap (H87-L, v0.53)** | 7652..7667 | PML4/PDPT/PD/PT_Lo/PT_Hi/TCB/SC/Reply/IPC/Fault_EP/PT_Hi2/BootInfo×2 + copy slots |
+| Bootstrap Image_Frame_Base | +3567 (7663→7667 после расширения) | образ root task (~1087 кадров) + mint offset 1200 |
 
 ## 3. Примечания
 
