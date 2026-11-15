@@ -48,11 +48,17 @@ GRUB → kernel (seL4) → mini-bootstrap (маленький ELF-child) → Loa
 
 ## 4. Патчи, которые снимаются
 
-| Патч | Почему снимается |
-|---|---|
-| `max-num-drhu` | GRUB больше не кладёт root-task модуль в зону memzero — модуль уходит в userspace |
-| `load-image` | kernel не копирует модуль из `mods_end_paddr` — грузит только себя |
-| `bootinfo-8k` | module placement больше не нужен (остаётся только под untyped caps) |
+> **Уточнение (после B3, 24/24):** патчи НЕ снимаются напрямую — bootstrap сам
+> является GRUB-модулем (~1.6 MB, содержит blob root task), поэтому
+> `max-num-drhu`/`load-image` всё ещё нужны для загрузки bootstrap, а
+> `bootinfo-8k` нужен под 500 untyped caps. Чтобы их снять, bootstrap надо
+> встроить в kernel (не модуль) или сократить untyped caps. Фаза C переосмыслена.
+
+| Патч | Почему *задумывалось* снять | Статус после B3 |
+|---|---|---|
+| `max-num-drhu` | root-task модуль уходит в userspace | ❌ всё ещё нужен (bootstrap — модуль) |
+| `load-image` | kernel не копирует root-task модуль | ❌ всё ещё нужен (копирует bootstrap) |
+| `bootinfo-8k` | module placement не нужен | ⚠️ нужен под 500 untyped caps |
 
 ## 5. План реализации (фазы)
 
@@ -60,8 +66,9 @@ GRUB → kernel (seL4) → mini-bootstrap (маленький ELF-child) → Loa
    `mini-bootstrap` (заглушка-загрузчик). Kernel стартует bootstrap вместо root task.
 2. **Фаза B** — bootstrap ретайпит PML4 + `Load_Elf(root_task.elf)` + `TCB_Resume`.
    Проверить: run_tests 24/24 (все даемоны под root task работают).
-3. **Фаза C** — убрать три патча ядра (`max-num-drhu`, `load-image`, `bootinfo-8k`),
-   пересобрать kernel + root task, прогнать полный набор тестов.
+3. **Фаза C** — *(пересмотрено)* снять три патча ядра: требует встроить bootstrap
+   в kernel (не GRUB-модуль) и/или сократить `MaxNumBootinfoUntypedCaps` < 500.
+   Отдельная крупная работа.
 
 ## 6. Риски
 
