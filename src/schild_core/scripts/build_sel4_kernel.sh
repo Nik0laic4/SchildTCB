@@ -79,6 +79,7 @@ cmake -C ../configs/X64_verified.cmake \
   -DKernelSupportPCID=OFF \
   -DKernelFastpath="${KERNEL_FASTPATH:-OFF}" \
   -DKernelMaxNumBootinfoUntypedCaps=500 \
+  -DKernelRootCNodeSizeBits="${KERNEL_ROOT_CNODE_SIZE_BITS:-14}" \
   -DKernelIsMCS="${KERNEL_MCS:-ON}" \
   -DKernelMaxNumNodes="${KERNEL_SMP:-1}" \
   -DKernelMultibootGFXMode="${KERNEL_GFX:-linear}" \
