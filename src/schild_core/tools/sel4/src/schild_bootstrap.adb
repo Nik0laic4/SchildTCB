@@ -121,6 +121,8 @@ begin
    if R /= 0 then return; end if;
    R := Retype_Object (UT, Object_Frame, 0, CNode_Slot, 0, Bootstrap_IPC_Frame_Slot, 1);
    if R /= 0 then return; end if;
+   R := Retype_Object (UT, Object_Endpoint, 0, CNode_Slot, 0, Bootstrap_Fault_EP_Slot, 1);
+   if R /= 0 then return; end if;
 
    R := SchedControl_ConfigureFlags (BI.SchedControl_Start, Bootstrap_SC_Slot,
                                      50_000, 50_000, 0, 0, 0);
@@ -129,7 +131,7 @@ begin
    if R /= 0 then return; end if;
    R := TCB_Set_Timeout_Endpoint (Bootstrap_TCB_Slot, Timeout_EP_Slot);
    if R /= 0 then return; end if;
-   R := TCB_Set_Fault_Handler (Bootstrap_TCB_Slot, Root_Fault_EP_Slot,
+   R := TCB_Set_Fault_Handler (Bootstrap_TCB_Slot, Bootstrap_Fault_EP_Slot,
                                CNode_Slot, 0, Bootstrap_PML4_Slot, 0);
    if R /= 0 then return; end if;
    R := TCB_Set_IPC_Buffer (Bootstrap_TCB_Slot, Bootstrap_IPC_Frame_Slot, 16#500000#);
