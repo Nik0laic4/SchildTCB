@@ -29,6 +29,19 @@
 | H62/H63 — CRC32 + per-file CRC | `Schild_Fs_Core.CRC32` | host-KAT `fs-core-kat` (0xCBF43926) |
 | H61 — HMAC-SHA256 superblock | `Schild_HMAC_SHA256` | host-KAT `hmac_kat` + `[NVFS] VERIFY OK` |
 
+### 2.1 Ключевые T/AS/R/C требования (THREAT_MODEL)
+
+| Требование | Код | Тест/доказательство |
+|---|---|---|
+| AS6/R10 — syscall seam (Off, 1767 стр.) | `Schild_Sel4_Syscall` + C-шимы | `seam-abi` PASS + `SYSCALL_SEAM_ABI_SPEC.md` (спека) |
+| R9 — ring-0 C, no containment | `RING0_C_AUDIT.md` + `schild_uart_putc_raw` | аудит + run_tests 24/24 |
+| T15/R18 — FS metadata tamper (CRC32→HMAC) | `Schild_HMAC_SHA256` (H61) | `hmac_kat` + `[NVFS] VERIFY OK` |
+| T14/M1 — PID reuse | monotonic per-slot PID (M1) | gnatprove + run_tests |
+| C-§7 H93 — FS containment | 4-й домен в `schild_hm_model`/`schild_launch_model` | `[CONTAINMENT] FS daemon contained` + SPARK |
+| C-§4 golden rule H65 — Persist via IPC | `Persist_Audit_Log` → `fs_ep` op=5 Append | run_tests `[FS] daemon: OK` |
+| C-§7 H91 — HTTP→FS regression | `schild_http_server` `Local_FS=False` | run_tests 24/24 (503 вместо fault) |
+| C-§9 — seL4 patches scope | `SEL4_PATCHES_ANALYSIS.md` | аудит (только `object-zeroing` в доказанном коде) |
+
 ## 3. Открытые (⏳) — не включаются в Assurance Case до закрытия
 
 | Требование | Причина |
