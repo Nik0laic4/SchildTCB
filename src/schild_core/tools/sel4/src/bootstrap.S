@@ -1,24 +1,29 @@
-# Schild TCB — mini-bootstrap (root task as ELF-child, Phase A skeleton)
-# First userspace thread; Phase B will Load_Elf(root_task.elf) + TCB_Resume.
-.section .text
-.global bootstrap_entry
-bootstrap_entry:
-    leaq    bootstrap_stack_top(%rip), %rsp
-    call    bootstrap_main
-    ud2
+/*
+ * Schild TCB — mini-bootstrap startup stub (root task as ELF-child, Phase B).
+ * Same shape as rt_start.S: saves RDI (BootInfo ptr), sets up a stack, calls
+ * the Ada entry (_ada_schild_bootstrap). Linked at 0x400000.
+ */
 
 .section .bss
 .align 16
+.space 65536              /* 64KB stack */
+bootstrap_stack_top:
 
-/* Aliveness flag — BEFORE stack to prevent overwrite */
-.globl bootstrap_alive_flag
-bootstrap_alive_flag:
+/* Store seL4's RDI (BootInfo frame vptr) for the Ada/C code */
+.globl rt_bootinfo_vptr
+.align 8
+rt_bootinfo_vptr:
     .space 8
 
-.globl bootstrap_stack_bottom
-bootstrap_stack_bottom:
-    .space 4096
-.globl bootstrap_stack_top
-bootstrap_stack_top:
+.section .text
+.globl _start
+_start:
+    movq    %rdi, rt_bootinfo_vptr(%rip)
+    leaq    bootstrap_stack_top(%rip), %rsp
+    call    _ada_schild_bootstrap
+
+    /* Should never return */
+1:  pause
+    jmp     1b
 
 .section .note.GNU-stack,"",@progbits

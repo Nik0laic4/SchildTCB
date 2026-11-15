@@ -1,8 +1,8 @@
-/* Schild TCB — mini-bootstrap (root task as ELF-child, Phase A skeleton).
+/* Schild TCB — mini-bootstrap (root task as ELF-child).
  *
- * First userspace thread.  Phase A is only a stub: signal aliveness then halt.
- * Phase B will retype a PML4 + page tables and Load_Elf(root_task.elf) via the
- * existing loader, then TCB_Resume the root task (ROOT_TASK_ELF_CHILD_DESIGN.md).
+ * The Ada body (schild_bootstrap.adb) is the loader: it reads BootInfo, retypes
+ * a PML4 + page tables, Load_Elf(root_task.elf) and TCB_Resume's the root task.
+ * This C file only exposes the embedded blob's start/size accessors.
  */
 
 /* Embedded root_task.elf blob (ld -r -b binary) — Phase B Load_Elf input. */
@@ -16,10 +16,4 @@ unsigned long bootstrap_root_task_elf_start(void) {
 unsigned long bootstrap_root_task_elf_size(void) {
     return (unsigned long)(_binary_root_task_elf_end -
                            _binary_root_task_elf_start);
-}
-
-void bootstrap_main(void) {
-    extern char bootstrap_alive_flag;
-    bootstrap_alive_flag = 0x01;  /* aliveness marker */
-    for (;;) __asm__ volatile("pause");
 }

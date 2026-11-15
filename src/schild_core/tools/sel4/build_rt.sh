@@ -77,7 +77,7 @@ if ! "$TOOL/gcc" -c --RTS="$(pwd)/../../bare_runtime" -gnat2022 -gnatwa -gnato -
     exit 1
 fi
 
-for src in schild_mls_policy schild_audit_logger schild_config_daemon schild_boot_manager schild_hm_model schild_launch_model schild_watchdog schild_root_task schild_sel4_syscall schild_sel4_bootinfo schild_net_server schild_elf_loader; do
+for src in schild_mls_policy schild_audit_logger schild_config_daemon schild_boot_manager schild_hm_model schild_launch_model schild_watchdog schild_root_task schild_sel4_syscall schild_sel4_bootinfo schild_net_server schild_elf_loader schild_bootstrap; do
     SF="src/${src}.adb"
     [ -f "$OVERLAY/${src}.adb" ] && SF="$OVERLAY/${src}.adb"
     if ! "$TOOL/gcc" -c --RTS="$(pwd)/../../bare_runtime" -gnat2022 -gnatwa -gnato -gnatVa -g -O0 "${PREFIX_MAP_ADA[@]}" \
@@ -274,11 +274,55 @@ echo "  [RT] root_task.elf: $(wc -c < root_task.elf) bytes"
 # H87-L (Phase A): embed root_task.elf as a blob and link the mini-bootstrap
 # (root task as ELF-child stub). The bootstrap will Load_Elf this blob in Phase B.
 "$TOOL/ld" -r -b binary root_task.elf -o "$OBJ/root_task_blob.o" 2>&1
-"$TOOL/ld" -T src/daemon_linker.ld -o "$OBJ/bootstrap.elf" \
+"$TOOL/ld" -T src/rt_linker.ld -o "$OBJ/bootstrap.elf" \
     "$OBJ/bootstrap.o" \
+    "$OBJ/schild_bootstrap.o" \
+    "$OBJ/schild_hmac_sha256.o" \
+    "$OBJ/schild_mls_policy.o" \
+    "$OBJ/schild_audit_logger.o" \
+    "$OBJ/schild_config_daemon.o" \
+    "$OBJ/schild_boot_manager.o" \
+    "$OBJ/schild_hm_model.o" \
+    "$OBJ/schild_launch_model.o" \
+    "$OBJ/schild_watchdog.o" \
+    "$OBJ/schild_sel4_syscall.o" \
+    "$OBJ/schild_sel4_bootinfo.o" \
+    "$OBJ/schild_net_server.o" \
+    "$OBJ/schild_elf_loader.o" \
+    "$OBJ/schild_uart_driver.o" \
+    "$OBJ/schild_pci_scanner.o" \
+    "$OBJ/schild_e1000e.o" \
+    "$OBJ/schild_nvme.o" \
+    "$OBJ/schild_arp_handler.o" \
+    "$OBJ/schild_ipv4_handler.o" \
+    "$OBJ/schild_tcp_handler.o" \
+    "$OBJ/schild_http_core.o" \
+    "$OBJ/schild_http_server.o" \
+    "$OBJ/schild_fs_core.o" \
+    "$OBJ/schild_elf_core.o" \
+    "$OBJ/schild_schild_fs.o" \
+    "$OBJ/schild_net_stack.o" \
+    "$OBJ/schild_fs_server.o" \
+    "$OBJ/schild_net_config.o" \
+    "$OBJ/schild_sel4_syscalls.o" \
+    "$OBJ/message_info.o" \
+    "$OBJ/schild_sel4_ipc.o" \
+    "$OBJ/schild_net_runtime.o" \
+    "$OBJ/mls_server.o" \
+    "$OBJ/mls_server_c.o" \
+    "$OBJ/config_daemon.o" \
+    "$OBJ/config_daemon_c.o" \
+    "$OBJ/netserver.o" \
+    "$OBJ/netserver_c.o" \
+    "$OBJ/fs_daemon.o" \
+    "$OBJ/fs_daemon_c.o" \
+    "$OBJ/elf_blobs.o" \
+    "$OBJ/fs_daemon_blob.o" \
+    "$OBJ/mls_daemon_blob.o" \
+    "$OBJ/config_daemon_blob.o" \
+    "$OBJ/netserver_blob.o" \
     "$OBJ/bootstrap_c.o" \
-    "$OBJ/root_task_blob.o" \
-    "$OBJ/daemon_stubs.o" 2>&1
+    "$OBJ/root_task_blob.o" 2>&1
 
 # Post-build path sanitization: strip host-absolute paths from root-task artifacts.
 bash ../../scripts/sanitize_paths.sh || true
