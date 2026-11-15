@@ -191,4 +191,16 @@ schild_sel4_nbwait:
     movq    %r11, %rax        /* badge → RAX (return value)                  */
     ret
 
+/* Send — invoke a capability via SysSend (-5). Used for seL4_Signal(ntfn):
+ * the C9 heartbeat ping (0-length message). RDI = dest, RSI = info. */
+.globl schild_sel4_send
+schild_sel4_send:
+    pushq   %rbx
+    movq    %rsp, %rbx
+    movq    $-5, %rdx         /* seL4_SysSend = -5 (MCS)                     */
+    syscall
+    movq    %rbx, %rsp
+    popq    %rbx
+    ret
+
 .section .note.GNU-stack,"",@progbits

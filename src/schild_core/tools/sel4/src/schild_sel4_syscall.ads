@@ -113,6 +113,13 @@ is
           Global => null,
           Pre => Src > 0;
 
+   -- Send a 0-length message (seL4_Signal) to a notification — the C9 heartbeat
+   -- ping. Dest is the badged ping_ntfn cap in the daemon's CSpace.
+   function Send (Dest : Cap_Ref) return Word
+     with Import, Convention => C, External_Name => "schild_sel4_send",
+          Global => null,
+          Pre => Dest > 0;
+
    procedure Debug_Put_Char (C : Unsigned_32)
      with Import, Convention => C, External_Name => "schild_sel4_debug_putchar",
           Global => null;
