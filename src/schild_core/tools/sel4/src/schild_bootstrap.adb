@@ -70,6 +70,10 @@ begin
    if R /= 0 then return; end if;
    R := Retype_Object (UT, Object_PageTable, 0, CNode_Slot, 0, Bootstrap_PT_Lo_Slot, 1);
    if R /= 0 then return; end if;
+   R := Retype_Object (UT, Object_PageTable, 0, CNode_Slot, 0, Bootstrap_PT_Hi_Slot, 1);
+   if R /= 0 then return; end if;
+   R := Retype_Object (UT, Object_PageTable, 0, CNode_Slot, 0, Bootstrap_PT_Hi2_Slot, 1);
+   if R /= 0 then return; end if;
 
    -- Assign an ASID and map the page tables (root task image at 0x400000).
    R := ASID_Pool_Assign (6, Bootstrap_PML4_Slot);
@@ -80,11 +84,22 @@ begin
    if R /= 0 then return; end if;
    R := Page_Table_Map (Bootstrap_PT_Lo_Slot, Bootstrap_PML4_Slot, 16#400000#);
    if R /= 0 then return; end if;
-
-   -- Map the BootInfo frame (cap 9) into the root task's VSpace at 0x580000,
-   -- so the root task can read BootInfo even though its RDI is unset (ELF-child).
-   R := Page_Map (9, Bootstrap_PML4_Slot, 16#580000#);
+   R := Page_Table_Map (Bootstrap_PT_Hi_Slot, Bootstrap_PML4_Slot, 16#600000#);
    if R /= 0 then return; end if;
+   R := Page_Table_Map (Bootstrap_PT_Hi2_Slot, Bootstrap_PML4_Slot, 16#800000#);
+   if R /= 0 then return; end if;
+   Debug_Put (77);  -- 'M': page tables mapped
+
+   -- Map the BootInfo frame (cap 9) into the root task's VSpace at 0x900000
+   -- (above the ~4.25 MB root-task image), so the root task can read BootInfo
+   -- even though its RDI is unset (ELF-child). The BootInfo frame is already
+   -- mapped in the init VSpace, so mint a copy first.
+   R := CNode_Mint (CNode_Slot, Bootstrap_BootInfo_Copy_Slot, 64,
+                    CNode_Slot, 9, 64, 16#F#, 0);
+   if R /= 0 then return; end if;
+   R := Page_Map (Bootstrap_BootInfo_Copy_Slot, Bootstrap_PML4_Slot, 16#900000#);
+   if R /= 0 then return; end if;
+   Debug_Put (66);  -- 'B': BootInfo mapped
 
    -- Load the root task ELF into its new VSpace.
    Schild_Elf_Loader.Load_Elf (Root_Task_Elf_Start, Root_Task_Elf_Size,
@@ -124,4 +139,8 @@ begin
    R := TCB_Resume (Bootstrap_TCB_Slot);
    if R /= 0 then return; end if;
    Debug_Put (83);  -- 'S': Resume OK
+   Yield;           -- let the scheduler switch to the root task's TCB
+   loop
+      null;
+   end loop;
 end Schild_Bootstrap;

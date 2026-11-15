@@ -25,7 +25,7 @@ void schild_get_bootinfo_copy(void *dest, unsigned long long nbytes) {
      * maps the BootInfo frame at 0x580000; fall back to it when rt_bootinfo_vptr
      * is 0. Direct boot keeps the RDI-provided vptr. */
     const unsigned char *s = (const unsigned char *)
-        (rt_bootinfo_vptr ? rt_bootinfo_vptr : 0x580000UL);
+        (rt_bootinfo_vptr ? rt_bootinfo_vptr : 0x900000UL);
     unsigned long long i;
     for (i = 0; i < nbytes; i++) d[i] = s[i];
 }

@@ -553,7 +553,10 @@ is
    Bootstrap_SC_Slot        : constant Cap_Ref := Slot_Base + 3561;  -- 7657
    Bootstrap_Reply_Slot     : constant Cap_Ref := Slot_Base + 3562;  -- 7658
    Bootstrap_IPC_Frame_Slot : constant Cap_Ref := Slot_Base + 3563;  -- 7659
-   Bootstrap_Image_Frame_Base : constant Cap_Ref := Slot_Base + 3564; -- 7660
+   Bootstrap_PT_Hi_Slot     : constant Cap_Ref := Slot_Base + 3564;  -- 7660
+   Bootstrap_PT_Hi2_Slot    : constant Cap_Ref := Slot_Base + 3565;  -- 7661
+   Bootstrap_BootInfo_Copy_Slot : constant Cap_Ref := Slot_Base + 3566; -- 7662
+   Bootstrap_Image_Frame_Base : constant Cap_Ref := Slot_Base + 3567; -- 7663
    Bootstrap_Mint_Offset    : constant Cap_Ref := 1200;
 
    function Launch_FS_Daemon return Word
