@@ -142,7 +142,24 @@ begin
    R := TCB_Resume (Bootstrap_TCB_Slot);
    if R /= 0 then return; end if;
    Debug_Put (83);  -- 'S': Resume OK
-   Yield;           -- let the scheduler switch to the root task's TCB
+   -- Block on the fault EP to catch the root task's fault, then dump the
+   -- fault address (MR[0]) as 5 bytes (hex, big-endian).
+   declare
+      function Recv (Src : Cap_Ref; Reply : Cap_Ref) return Unsigned_64
+        with Import, Convention => C, External_Name => "schild_sel4_recv";
+      function Read_MR0 return Unsigned_64
+        with Import, Convention => C, External_Name => "schild_read_recv_mr0";
+      FA : Unsigned_64;
+   begin
+      R := Recv (Bootstrap_Fault_EP_Slot, Bootstrap_Reply_Slot);
+      Debug_Put (70);  -- 'F': fault received
+      FA := Read_MR0;
+      Debug_Put (Shift_Right (FA, 32) and 16#FF#);
+      Debug_Put (Shift_Right (FA, 24) and 16#FF#);
+      Debug_Put (Shift_Right (FA, 16) and 16#FF#);
+      Debug_Put (Shift_Right (FA, 8) and 16#FF#);
+      Debug_Put (FA and 16#FF#);
+   end;
    loop
       null;
    end loop;
