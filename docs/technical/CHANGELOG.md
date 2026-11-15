@@ -6,6 +6,17 @@
 > *pending* or *target* have not yet been validated. Formal-verification
 > coverage is stated per-module, never as an aggregate percentage.
 
+## v0.52 (2026-11-15) — Block 4 docs + L-work Phase A (mini-bootstrap skeleton)
+
+**Validated: added the Block-4 assurance docs, slot-layout checks, and the first code step of the "root task as ELF-child" L-work (mini-bootstrap stub).**
+
+- Assurance docs: `TRACEABILITY.md` (T/AS/R/C matrix), `TOOL_QUALIFICATION.md`, `FINAL_AUDIT.md`, `INDEX.md`, `SLOT_MAP.md` (unified CSpace slot table).
+- `check_slot_layout.sh`: build-time check — no duplicate static slot offsets + daemon window dump.
+- `ROOT_TASK_ELF_CHILD_DESIGN.md`: design for removing `max-num-drhu`/`load-image`/`bootinfo-8k`.
+- Phase A: `bootstrap.S`/`bootstrap.c` stub + `bootstrap.elf` build (kernel still boots root task; no runtime change).
+- Tools: `gnatcov` 22.0.1 + `gprbuild` 22.0.0 installed (Alire); coverage **not run** (toolchain mismatch: source-instrumentation emits no trace; binary-trace needs `-fpreserve-control-flow` (absent in GNAT 14.2.1) + valgrind).
+- Gates: build 184/0; run_tests 24/24.
+
 ## v0.51 (2026-11-15) — NetServer daemon → Load_Elf (H87 4/4 — code isolation complete)
 
 **Validated: the NetServer now boots its own `netserver.elf` (own VSpace/CSpace) — H87 code isolation is complete for all four daemons.**
