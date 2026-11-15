@@ -32,10 +32,19 @@ GRUB → kernel (seL4) → mini-bootstrap (маленький ELF-child) → Loa
 
 ## 3. mini-bootstrap (что это)
 
-- Минимальный Ada/C-заглушка (не полный root task): ретайп PML4/PDPT/PD/PT + ASID,
+- Минимальная **Ada**-заглушка (не полный root task): ретайп PML4/PDPT/PD/PT + ASID,
   вызов `Load_Elf(root_task_elf_start, size, PML4, ...)`, `TCB_Resume(entry)`.
+- **Почему Ada, а не C:** `Load_Elf` живёт в `Schild_Elf_Loader`/`Schild_Sel4_Syscall` (Ada).
+  C-шиммы (`schild_sel4_ipc.c`) дают только низкоуровневый `UntypedRetype`/`TCBSetSpace`;
+  C-заглушке пришлось бы дублировать весь `Load_Elf` (ELF-парсер + retype + map + memcpy).
+  Ada-заглушка переиспользует готовый `Load_Elf` без дублирования.
 - Практически повторяет `Launch_MLS_Server`/`Map_NetServer_VSpace` (механизм уже есть).
 - Root task после этого — обычный ELF-child со своим PML4/CSpace, как даемоны (H87).
+
+**Boot-цепочка (проверено):** GRUB грузит kernel + root_task.elf как модуль; kernel
+(`boot.c create_initial_thread`) стартует модуль на `ui_v_entry = 0x400000`. Для Phase B
+модуль = `bootstrap.elf` (в нём blob `root_task.elf`), kernel-код НЕ меняется — только
+сборка/GRUB: модуль = bootstrap, который `Load_Elf`'ит встроенный root task.
 
 ## 4. Патчи, которые снимаются
 
