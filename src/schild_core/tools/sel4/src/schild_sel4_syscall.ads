@@ -175,6 +175,10 @@ is
    function Init_Fault_Handler return Word
      with Global => null;
 
+   -- C9 heartbeat: retype the ping notification + MLS/Config badged copies.
+   function Init_Heartbeat return Word
+     with Global => null;
+
    function Retype_Object
      (Untyped_Cap : Cap_Ref;
       Object_Type : Word;
@@ -515,9 +519,9 @@ is
    -- C9 heartbeat ping notification: the shared root cap + badged copies for
    -- the MLS/Config daemons (they run in the root CNode). Net/FS get their own
    -- CSpace CPtr (Net_Ping_Ntfn_Cn / FS_Ping_Ntfn_Cn = 2).
-   Ping_Ntfn_Slot              : constant Cap_Ref := Slot_Base + 89;  -- 4185
-   MLS_Ping_Ntfn_Badged_Slot   : constant Cap_Ref := Slot_Base + 90;  -- 4186
-   Config_Ping_Ntfn_Badged_Slot : constant Cap_Ref := Slot_Base + 91; -- 4187
+   Ping_Ntfn_Slot              : constant Cap_Ref := Slot_Base + 77;  -- 4173
+   MLS_Ping_Ntfn_Badged_Slot   : constant Cap_Ref := Slot_Base + 78;  -- 4174
+   Config_Ping_Ntfn_Badged_Slot : constant Cap_Ref := Slot_Base + 79; -- 4175
    --  H87 MLS Stage 1: dedicated shared frame for MLS ep/reply (before Load_Elf).
    MLS_Shared_Frame_Slot : constant Cap_Ref := Slot_Base + 84;  -- 4180
    --  H87s1 fix: minted copy of MLS shared frame (frame cap maps once per cap).

@@ -324,6 +324,20 @@ begin
       end if;
    end;
 
+   -- C9 heartbeat: retype the ping notification + MLS/Config badged copies.
+   Put_Str ("----- C9: Init heartbeat -----" & ASCII.CR & ASCII.LF);
+   declare
+      HB_R : Word := Schild_Sel4_Syscall.Init_Heartbeat;
+   begin
+      if HB_R = 0 then
+         Put_Str ("[C9] heartbeat notification: OK" & ASCII.CR & ASCII.LF);
+      else
+         Put_Str ("[C9] heartbeat init FAILED (code=");
+         Put_Dec (HB_R);
+         Put_Str (")" & ASCII.CR & ASCII.LF);
+      end if;
+   end;
+
    -- Stage 7.7: Launch MLS server (IPC buffer already set up by Stage 6)
    Put_Str ("----- Stage 7.7: Launching MLS Server -----" & ASCII.CR & ASCII.LF);
    declare

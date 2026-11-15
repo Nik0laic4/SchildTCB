@@ -338,6 +338,44 @@ is
       return 1;
    end Init_Fault_Handler;
 
+   --  C9 heartbeat: retype the shared ping notification + badged copies for the
+   --  MLS/Config daemons (they run in the root CNode). Net/FS mint their own
+   --  CPtr=2 into their CSpace inside Launch_NetServer / Launch_FS_Daemon.
+   function Init_Heartbeat return Word is
+      BI            : constant BI_Access := Get_BootInfo;
+      Min_Size_Bits : constant Word := 20;
+      Depth         : constant Word := 64;   -- root CNode depth (wordBits)
+      UT : Cap_Ref := 0;
+      R  : Word;
+   begin
+      for I in 1 .. N_UNTYPED loop
+         if BI.all.Untyped_List (I).Size_Bits > 0
+           and then Word (BI.all.Untyped_List (I).Size_Bits) >= Min_Size_Bits
+           and then BI.all.Untyped_List (I).PAddr >= 16#800000#
+           and then BI.all.Untyped_List (I).PAddr <  16#20000000#
+           and then BI.all.Untyped_List (I).Is_Device = 0
+         then
+            UT := BI.all.Untyped_Start + Word (I - 1);
+            exit;
+         end if;
+      end loop;
+      if UT = 0 then
+         return 1;
+      end if;
+
+      R := Retype_Object (UT, Object_Notification, 0, CNode_Slot, 0, Ping_Ntfn_Slot, 1);
+      if R /= 0 then return 2; end if;
+
+      -- Badged copies: badge = domain-id (MLS=2, Config=3) for NBWait demux.
+      R := CNode_Mint (CNode_Slot, MLS_Ping_Ntfn_Badged_Slot, Depth,
+                       CNode_Slot, Ping_Ntfn_Slot, Depth, 16#F#, 2);
+      if R /= 0 then return 3; end if;
+      R := CNode_Mint (CNode_Slot, Config_Ping_Ntfn_Badged_Slot, Depth,
+                       CNode_Slot, Ping_Ntfn_Slot, Depth, 16#F#, 3);
+      if R /= 0 then return 4; end if;
+      return 0;
+   end Init_Heartbeat;
+
     -- MLS address helpers (from C)
     function MLS_Entry_Addr return Word
       with Import, Convention => C, External_Name => "schild_mls_entry_addr";
@@ -1190,6 +1228,7 @@ is
        Root_CNode_Depth : constant Word := 64;  -- wordBits (guardSize 45 + radix 19)
        Net_EP_Cn    : constant Word := 1;       -- mint dest slot index (net_ep)
        Net_Reply_Cn : constant Word := 3;       -- mint dest slot index (reply)
+       Net_Ping_Ntfn_Cn : constant Word := 2;   -- C9 heartbeat ping (badged ntfn)
        -- NetServer CSpace CPtrs: a retyped CNode has guardSize=0, so its slots
        -- are addressed from the top bits (slot N == CPtr N << 60).
        Net_EP_CPtr    : constant Word := 16#1000_0000_0000_0000#;  -- 1 << 60
@@ -1288,6 +1327,12 @@ is
         Put_String ("[S8.1D] Mint reply into Net CSpace slot 3... ");
         R := CNode_Mint (Net_CSpace_Slot, Net_Reply_Cn, Net_CSpace_Bits,
                          CNode_Slot, Net_Reply_Slot, Root_CNode_Depth, 16#F#, 0);
+        Put_Hex (R); Put_String (ASCII.CR & ASCII.LF);
+        if R /= 0 then return 2; end if;
+
+        -- C9: badged ping_ntfn (badge=1, domain-id) into the Net CSpace CPtr=2.
+        R := CNode_Mint (Net_CSpace_Slot, Net_Ping_Ntfn_Cn, Net_CSpace_Bits,
+                         CNode_Slot, Ping_Ntfn_Slot, Root_CNode_Depth, 16#F#, 1);
         Put_Hex (R); Put_String (ASCII.CR & ASCII.LF);
         if R /= 0 then return 2; end if;
 
@@ -1698,6 +1743,7 @@ is
       Root_CNode_Depth : constant Word := 64;
       FS_EP_Cn    : constant Word := 1;
       FS_Reply_Cn : constant Word := 3;
+      FS_Ping_Ntfn_Cn : constant Word := 2;  -- C9 heartbeat ping (badged ntfn)
       FS_EP_CPtr    : constant Word := 16#1000_0000_0000_0000#;  -- 1 << 60
       FS_Reply_CPtr : constant Word := 16#3000_0000_0000_0000#;  -- 3 << 60
       R : Word;
@@ -1878,6 +1924,12 @@ is
       Put_String ("[FS] mint reply... ");
       R := CNode_Mint (FS_CSpace_Slot, FS_Reply_Cn, FS_CSpace_Bits,
                        CNode_Slot, FS_Reply_Slot, Root_CNode_Depth, 16#F#, 0);
+      Put_Hex (R); Put_String (ASCII.CR & ASCII.LF);
+      if R /= 0 then return 2; end if;
+
+      -- C9: badged ping_ntfn (badge=4, domain-id) into the FS CSpace CPtr=2.
+      R := CNode_Mint (FS_CSpace_Slot, FS_Ping_Ntfn_Cn, FS_CSpace_Bits,
+                       CNode_Slot, Ping_Ntfn_Slot, Root_CNode_Depth, 16#F#, 4);
       Put_Hex (R); Put_String (ASCII.CR & ASCII.LF);
       if R /= 0 then return 2; end if;
 
