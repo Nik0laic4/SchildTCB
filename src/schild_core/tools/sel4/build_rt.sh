@@ -139,6 +139,7 @@ done
 "$TOOL/as" --64 -o "$OBJ/config_daemon.o" src/config_daemon.S
 "$TOOL/as" --64 -o "$OBJ/netserver.o" src/netserver.S
 "$TOOL/as" --64 -o "$OBJ/fs_daemon.o" src/fs_daemon.S
+"$TOOL/as" --64 -o "$OBJ/bootstrap.o" src/bootstrap.S
 
 # C compilation (MLS server thread)
 "$TOOL/gcc" -m64 -nostdlib -nostdinc -fno-builtin -std=gnu11 \
@@ -154,6 +155,11 @@ done
 "$TOOL/gcc" -m64 -nostdlib -nostdinc -fno-builtin -std=gnu11 \
     -fno-stack-protector -mno-red-zone -ffreestanding -mgeneral-regs-only "${PREFIX_MAP_C[@]}" \
     -c -o "$OBJ/netserver_c.o" src/netserver.c 2>&1
+
+# C compilation (mini-bootstrap — root task as ELF-child, Phase A stub)
+"$TOOL/gcc" -m64 -nostdlib -nostdinc -fno-builtin -std=gnu11 \
+    -fno-stack-protector -mno-red-zone -ffreestanding -mgeneral-regs-only "${PREFIX_MAP_C[@]}" \
+    -c -o "$OBJ/bootstrap_c.o" src/bootstrap.c 2>&1
 
 "$TOOL/gcc" -m64 -nostdlib -nostdinc -fno-builtin -std=gnu11 \
     -fno-stack-protector -mno-red-zone -ffreestanding -mgeneral-regs-only "${PREFIX_MAP_C[@]}" \
@@ -205,6 +211,12 @@ done
     "$OBJ/schild_mls_policy.o" "$OBJ/schild_config_daemon.o" \
     "$OBJ/schild_sel4_ipc.o" "$OBJ/schild_sel4_syscalls.o" "$OBJ/message_info.o" \
     "$OBJ/schild_audit_logger.o" "$OBJ/schild_uart_driver.o" \
+    "$OBJ/daemon_stubs.o" 2>&1
+
+# H87-L (Phase A): build the mini-bootstrap ELF (root task as ELF-child stub).
+"$TOOL/ld" -T src/daemon_linker.ld -o "$OBJ/bootstrap.elf" \
+    "$OBJ/bootstrap.o" \
+    "$OBJ/bootstrap_c.o" \
     "$OBJ/daemon_stubs.o" 2>&1
 
 # H87: embed fs_daemon.elf as a blob (kernel loads it above the kernel region).
