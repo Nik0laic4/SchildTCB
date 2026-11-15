@@ -46,13 +46,13 @@ is
       Both_Locked       : Boolean;      -- bricked: no bootable slot remains
    end record;
 
-   -- System health inputs for the health-gated commit (W9.2). Obtained from
-   -- hardware/daemons before the active slot is committed:
-   --   Network_Up — NIC link is up and the driver is ready;
-   --   MLS_Valid  — the MLS policy daemon validated its configuration.
+   -- System health inputs for the health-gated commit (W9.2). After C9 these
+   -- are heartbeat liveness, not functional probes:
+   --   NetServer_Alive — NetServer heartbeat within threshold (not network up);
+   --   MLS_Alive       — MLS heartbeat + functional Authorize probe.
    type Health_Status is record
-      Network_Up : Boolean;
-      MLS_Valid  : Boolean;
+      NetServer_Alive : Boolean;
+      MLS_Alive  : Boolean;
    end record;
 
    -- The active slot is committed only when the system is healthy (network up
@@ -60,7 +60,7 @@ is
    -- commit of the slot.
    function Health_Ok (Status : Health_Status) return Boolean
    with
-     Post => Health_Ok'Result = (Status.Network_Up and Status.MLS_Valid);
+     Post => Health_Ok'Result = (Status.NetServer_Alive and Status.MLS_Alive);
 
    -- Non-volatile projection of the boot manager (W9 Load/Save shim, logic).
    -- RAM-level counterpart of the NVMe counter block in BOOT_COUNTER_DESIGN.md

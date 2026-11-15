@@ -48,6 +48,7 @@ procedure Schild_Root_Task with SPARK_Mode => On is
    Grace_Until : array (1 .. 4) of Word := (others => 0);
    Grace_Ms    : constant array (1 .. 4) of Word := (1000, 1000, 1000, 5000);
    Last_Check  : Word := 0;  -- throttle: last health-check timestamp
+   Last_Mls_Probe : Word := 0;  -- throttle: last MLS functional probe timestamp
    function RDTSC return Word
      with Import, Convention => C, External_Name => "schild_rdtsc",
           Global => null;
@@ -188,7 +189,7 @@ begin
           Initialize (BM_H);
 
           -- T6a: network down -> failover (no commit).
-          Commit_If_Healthy (BM_U, (Network_Up => False, MLS_Valid => True));
+          Commit_If_Healthy (BM_U, (NetServer_Alive => False, MLS_Alive => True));
           if not BM_U.Verified and then BM_U.Failed_Boot_Count = 1 then
              Put_Str ("[S7] T6a PASS: unhealthy (net down) -> failover, no commit" & ASCII.CR & ASCII.LF);
           else
@@ -196,7 +197,7 @@ begin
           end if;
 
           -- T6b: healthy -> commit.
-          Commit_If_Healthy (BM_H, (Network_Up => True, MLS_Valid => True));
+          Commit_If_Healthy (BM_H, (NetServer_Alive => True, MLS_Alive => True));
           if BM_H.Verified and then BM_H.Boot_Count = 1 then
              Put_Str ("[S7] T6b PASS: healthy (net+MLS) -> commit" & ASCII.CR & ASCII.LF);
           else
@@ -770,6 +771,30 @@ begin
             end loop;
          end if;
       end;
+
+      -- C9 MLS functional probe (gated + throttled): Call_IPC(MLS_EP, op=2,
+      -- target=4) must reply 1 (equal-clearance 4=4). Blocking, so it runs only
+      -- when the MLS heartbeat is alive and at most every 5 s (residual: full
+      -- mitigation needs H90 timeout-on-Call).
+      if Health_Ok (2) and then RDTSC > Grace_Until (2) then
+         declare
+            Probe_Interval : constant Word :=
+              5_000_000 * Schild_Sel4_Syscall.Get_Cycles_Per_Us;  -- 5 s
+            Now : Word := RDTSC;
+         begin
+            if Last_Mls_Probe = 0 or else Now - Last_Mls_Probe > Probe_Interval then
+               Last_Mls_Probe := Now;
+               declare
+                  R : Word := Schild_Sel4_Syscall.Call_IPC
+                    (Schild_Sel4_Syscall.Root_MLS_EP_Badged_Slot, 2, 4);
+               begin
+                  if Schild_Sel4_Syscall.Read_IPC_MR0 /= 1 then
+                     Health_Ok (2) := False;
+                  end if;
+               end;
+            end if;
+         end;
+      end if;
 
       -- Cooperatively yield the CPU so the other domains (NetServer, MLS
       -- server, Config Daemon) get scheduled on the single core. The previous
