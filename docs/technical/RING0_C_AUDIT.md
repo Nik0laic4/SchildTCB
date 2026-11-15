@@ -47,10 +47,13 @@ ring 3:  UART driver + framebuffer driver + debug render               [isolated
 
 ## 4. Оценка влияния и порядок
 
-1. **Сначала** — перевести raw-UART debug на единый канал (удалить дубль из
-   `interrupt_handlers.c`), не меняя ring-0 семантики.
-2. **Затем** — ring-3 UART/framebuffer драйвер (Ada, MMIO через существующий
-   `schild_map_mmio_2mb`, право map через корневой CSpace), ring-0 оставляет только fail-stop.
-3. **Port I/O** — либо TSS I/O bitmap, либо оставить AS8 (43 строки).
+1. **✅ (v0.50)** — перевести raw-UART debug на единый канал (удалить дубль из
+   `interrupt_handlers.c`), не меняя ring-0 семантики. Сделано: `schild_uart_putc_raw`
+   экспортирован из `runtime_stubs.c`, `interrupt_handlers.c` делит его (fail-stop lock-free).
+2. **Premature** — ring-3 UART/framebuffer драйвер: **bare-metal профиль не имеет ring-3
+   пользовательского пространства**, а в seL4-профиле UART уже в ring-3 (root task).
+   Отложено до появления ring-3 в bare-профиле; для seL4 это отдельная задача.
+3. **Port I/O** — либо TSS I/O bitmap, либо оставить AS8 (43 строки). При отсутствии
+   ring-3 в bare — оставить AS8.
 
 Каждый шаг — отдельный коммит с gates (build + run_tests + host-KAT).
