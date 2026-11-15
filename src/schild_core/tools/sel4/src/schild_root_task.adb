@@ -37,6 +37,13 @@ procedure Schild_Root_Task with SPARK_Mode => On is
    Timeout_EP_Slot   : Schild_Sel4_Syscall.Cap_Ref := Schild_Sel4_Syscall.Timeout_EP_Slot;
    -- H82: audit logger hoisted so Persist can run after the FS daemon launches.
    AL : Audit_Logger;
+
+   -- C9 heartbeat: last-seen RDTSC per domain (Net=1, MLS=2, Config=3, FS=4).
+   -- Initialized to the boot timestamp at each launch (grace period).
+   Last_Seen : array (1 .. 4) of Word := (others => 0);
+   function RDTSC return Word
+     with Import, Convention => C, External_Name => "schild_rdtsc",
+          Global => null;
 begin
    Get_BootInfo_Copy (BI, Unsigned_64 (BootInfo'Size / System.Storage_Unit));
    Put_Str (ASCII.CR & ASCII.LF);
@@ -690,6 +697,19 @@ begin
             end if;
          end;
       end if;
+
+      -- C9 heartbeat: poll each domain's ping notification (badge=1 => alive).
+      declare
+         N : Word := Schild_Sel4_Syscall.NBWait (Schild_Sel4_Syscall.Net_Ping_Ntfn_Slot);
+         M : Word := Schild_Sel4_Syscall.NBWait (Schild_Sel4_Syscall.MLS_Ping_Ntfn_Slot);
+         C : Word := Schild_Sel4_Syscall.NBWait (Schild_Sel4_Syscall.Config_Ping_Ntfn_Slot);
+         F : Word := Schild_Sel4_Syscall.NBWait (Schild_Sel4_Syscall.FS_Ping_Ntfn_Slot);
+      begin
+         if N > 0 then Last_Seen (1) := RDTSC; end if;
+         if M > 0 then Last_Seen (2) := RDTSC; end if;
+         if C > 0 then Last_Seen (3) := RDTSC; end if;
+         if F > 0 then Last_Seen (4) := RDTSC; end if;
+      end;
 
       -- Cooperatively yield the CPU so the other domains (NetServer, MLS
       -- server, Config Daemon) get scheduled on the single core. The previous

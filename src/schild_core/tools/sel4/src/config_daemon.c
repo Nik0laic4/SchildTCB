@@ -46,7 +46,7 @@ void config_daemon_main(void) {
 
     for (;;) {
         /* C9 heartbeat: signal the ping_ntfn (badged slot 4187, domain Config). */
-        schild_sel4_send(4175ULL, 0ULL);
+        schild_sel4_send(4187ULL, 0ULL);
         u64 sender_role  = (badge >> 8) & 0xFF;
         u64 sender_level = badge & 0xFF;
         if (badge != 0 && sender_role != 0) {

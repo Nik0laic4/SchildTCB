@@ -52,7 +52,7 @@ void mls_server_main(void) {
 
     for (;;) {
         /* C9 heartbeat: signal the ping_ntfn (badged slot 4186, domain MLS). */
-        schild_sel4_send(4174ULL, 0ULL);
+        schild_sel4_send(4186ULL, 0ULL);
         u64 sender_level = badge & 0xFF;
         u64 sender_role  = (badge >> 8) & 0xFF;
         /* H88: MLS IPC gate. badge=0 -> legacy path (self-tests, policy-only).

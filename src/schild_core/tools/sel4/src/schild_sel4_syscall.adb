@@ -363,16 +363,22 @@ is
          return 1;
       end if;
 
-      R := Retype_Object (UT, Object_Notification, 0, CNode_Slot, 0, Ping_Ntfn_Slot, 1);
+      R := Retype_Object (UT, Object_Notification, 0, CNode_Slot, 0, Net_Ping_Ntfn_Slot, 1);
       if R /= 0 then return 2; end if;
-
-      -- Badged copies: badge = domain-id (MLS=2, Config=3) for NBWait demux.
-      R := CNode_Mint (CNode_Slot, MLS_Ping_Ntfn_Badged_Slot, Depth,
-                       CNode_Slot, Ping_Ntfn_Slot, Depth, 16#F#, 2);
+      R := Retype_Object (UT, Object_Notification, 0, CNode_Slot, 0, MLS_Ping_Ntfn_Slot, 1);
       if R /= 0 then return 3; end if;
-      R := CNode_Mint (CNode_Slot, Config_Ping_Ntfn_Badged_Slot, Depth,
-                       CNode_Slot, Ping_Ntfn_Slot, Depth, 16#F#, 3);
+      R := Retype_Object (UT, Object_Notification, 0, CNode_Slot, 0, Config_Ping_Ntfn_Slot, 1);
       if R /= 0 then return 4; end if;
+      R := Retype_Object (UT, Object_Notification, 0, CNode_Slot, 0, FS_Ping_Ntfn_Slot, 1);
+      if R /= 0 then return 5; end if;
+
+      -- Badged copies (badge=1) for MLS/Config in the root CNode.
+      R := CNode_Mint (CNode_Slot, MLS_Ping_Ntfn_Badged_Slot, Depth,
+                       CNode_Slot, MLS_Ping_Ntfn_Slot, Depth, 16#F#, 1);
+      if R /= 0 then return 6; end if;
+      R := CNode_Mint (CNode_Slot, Config_Ping_Ntfn_Badged_Slot, Depth,
+                       CNode_Slot, Config_Ping_Ntfn_Slot, Depth, 16#F#, 1);
+      if R /= 0 then return 7; end if;
       return 0;
    end Init_Heartbeat;
 
@@ -1332,7 +1338,7 @@ is
 
         -- C9: badged ping_ntfn (badge=1, domain-id) into the Net CSpace CPtr=2.
         R := CNode_Mint (Net_CSpace_Slot, Net_Ping_Ntfn_Cn, Net_CSpace_Bits,
-                         CNode_Slot, Ping_Ntfn_Slot, Root_CNode_Depth, 16#F#, 1);
+                         CNode_Slot, Net_Ping_Ntfn_Slot, Root_CNode_Depth, 16#F#, 1);
         Put_Hex (R); Put_String (ASCII.CR & ASCII.LF);
         if R /= 0 then return 2; end if;
 
@@ -1929,7 +1935,7 @@ is
 
       -- C9: badged ping_ntfn (badge=4, domain-id) into the FS CSpace CPtr=2.
       R := CNode_Mint (FS_CSpace_Slot, FS_Ping_Ntfn_Cn, FS_CSpace_Bits,
-                       CNode_Slot, Ping_Ntfn_Slot, Root_CNode_Depth, 16#F#, 4);
+                       CNode_Slot, FS_Ping_Ntfn_Slot, Root_CNode_Depth, 16#F#, 1);
       Put_Hex (R); Put_String (ASCII.CR & ASCII.LF);
       if R /= 0 then return 2; end if;
 
