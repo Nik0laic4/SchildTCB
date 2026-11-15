@@ -6,6 +6,17 @@
 > *pending* or *target* have not yet been validated. Formal-verification
 > coverage is stated per-module, never as an aggregate percentage.
 
+## v0.53 (2026-11-15) — Root task as ELF-child (L-work B1–B3 complete)
+
+**Validated: the root task now boots as an ELF-child via a mini-bootstrap — `run_tests 24/24` with `bootstrap.elf` as the GRUB module (all four daemons launch and pass containment).**
+
+- `mini-bootstrap` (`schild_bootstrap.adb` + `bootstrap.S`/`bootstrap.c`): reads BootInfo, retypes a PML4 + 3 page tables, copies the full BootInfo (base + extra BI) into writable frames, `Load_Elf(root_task.elf)` into the new VSpace, `TCB_Set_Space`/`Write_Registers`/`Resume`.
+- `Get_Root_VSpace` (init VSpace 3 vs `Bootstrap_PML4_Slot` 7652) replaces the hardcoded `VSpace_Slot=3` in all shared-frame/ECAM/MMIO mappings.
+- CNode enlarged to 14 (16384 slots) for the root-task image window; bootstrap slots 7652..7667.
+- `schild_get_bootinfo_copy` falls back to 0x4C0000 (ELF-child); `schild_is_elf_child`/`schild_set_qword` shims added.
+- Phase C (removing `max-num-drhu`/`load-image`/`bootinfo-8k`) **reassessed**: the bootstrap is itself a GRUB module, so those patches remain; full removal needs embedding the bootstrap in the kernel.
+- Gates: build 184/0; run_tests 24/24 (bootstrap module).
+
 ## v0.52 (2026-11-15) — Block 4 docs + L-work Phase A (mini-bootstrap skeleton)
 
 **Validated: added the Block-4 assurance docs, slot-layout checks, and the first code step of the "root task as ELF-child" L-work (mini-bootstrap stub).**
