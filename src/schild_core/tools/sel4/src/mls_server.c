@@ -55,8 +55,8 @@ void mls_server_main(void) {
         /* H88: MLS IPC gate. badge=0 -> legacy path (self-tests, policy-only).
          * badge!=0 && sender_role=0 -> root task (R2 bypass). Otherwise strict
          * BL via Authorize_IPC_Levels; deny on mismatch. */
-        if (badge != 0 && sender_role != 0) {
-            if (!schild_mls_authorize_ipc_levels((unsigned int)sender_level, 4, 0)) {
+        if (badge != 0) {
+            if (!schild_mls_authorize_ipc_levels((unsigned int)sender_level, 4, (sender_role == 0))) {
                 schild_reply_mr[0] = SCHILD_EMLSDENIED;
                 schild_reply_mr[1] = 0; schild_reply_mr[2] = 0; schild_reply_mr[3] = 0;
                 badge = schild_sel4_replyrecv(endpoint, 1ULL, reply);

@@ -61,8 +61,8 @@ void fs_daemon_main(void) {
     for (;;) {
         u64 sender_role  = (badge >> 8) & 0xFF;
         u64 sender_level = badge & 0xFF;
-        if (badge != 0 && sender_role != 0) {
-            if (!schild_mls_authorize_ipc_levels((unsigned int)sender_level, 4, 0)) {
+        if (badge != 0) {
+            if (!schild_mls_authorize_ipc_levels((unsigned int)sender_level, 4, (sender_role == 0))) {
                 schild_reply_mr[0] = SCHILD_EMLSDENIED;
                 schild_reply_mr[1] = 0; schild_reply_mr[2] = 0; schild_reply_mr[3] = 0;
                 badge = schild_sel4_replyrecv(ep, 2ULL, reply);
