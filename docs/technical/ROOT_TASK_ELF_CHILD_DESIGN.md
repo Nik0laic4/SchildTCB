@@ -69,6 +69,7 @@ GRUB → kernel (seL4) → mini-bootstrap (маленький ELF-child) → Loa
 - **Slot-раскладка** — root task как ELF-child занимает слоты (PML4/PDPT/PD/PT + image + mint ~274), а свободное окно после демонов узкое (Image_Frame_Base 4224..4430 = 207). Нужно либо переиспользовать демон-окна (bootstrap работает ДО root task, потом они освобождаются), либо пересмотреть mint-offset. Координация слотов bootstrap↔root task обязательна (см. `SLOT_MAP.md`).
 - **Занятость CSpace** — bootstrap временно держит капы (PML4/VSpace), которые после `TCB_Resume` могут не освободиться — продумать передачу или переиспользование.
 - **VSpace root task** — root task сейчас бежит в init VSpace (`VSpace_Slot=3`); как ELF-child он бежит в НОВОМ PML4, поэтому `Schild_Root_Task` должен использовать новый VSpace (не слот 3) для маппинга shared-фреймов даемонов.
+- **Размер root task (~1087 кадров)** — `root_task.elf` имеет 2 PT_LOAD сегмента, суммарный MemSiz ≈ 4.25 MB (≈1087 кадров, в основном Ada-`.bss`). Это **жёсткий блокер**: свободного непрерывного окна в CSpace (CapInitThreadCNode) такого размера нет (MMIO 4608..7455 + демоны занимают почти всё). Решение — **увеличить CNode** (`CONFIG_ROOT_CNODE_SIZE_BITS`, фаза C) либо сократить `.bss` root task. Без этого Phase B невыполнима.
 
 ## 7. Оценка
 
