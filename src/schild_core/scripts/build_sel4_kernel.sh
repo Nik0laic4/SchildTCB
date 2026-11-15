@@ -33,11 +33,14 @@ SEL4_DIR="${SEL4_DIR:-/tmp/seL4}"
 PATCH_DIR="$ROOT_DIR/../../patches"
 
 if [ ! -d "$SEL4_DIR/.git" ]; then
-  git clone --depth 1 https://github.com/seL4/seL4.git "$SEL4_DIR"
+  git clone https://github.com/seL4/seL4.git "$SEL4_DIR"
 fi
 
 cd "$SEL4_DIR"
 git checkout -- . 2>/dev/null || true
+# Pin the seL4 commit for reproducible builds (mirrors the vendored .sel4-src).
+git fetch --depth 1 origin 355680d63fb9aee69715de10ea7ab00f536a9a55 2>/dev/null || true
+git checkout 355680d63fb9aee69715de10ea7ab00f536a9a55 2>/dev/null || true
 
 if [ ! -d "$PATCH_DIR" ]; then
   echo "ERROR: patches dir not found: $PATCH_DIR" >&2
@@ -76,7 +79,7 @@ cmake -C ../configs/X64_verified.cmake \
   -DKernelSupportPCID=OFF \
   -DKernelFastpath="${KERNEL_FASTPATH:-OFF}" \
   -DKernelMaxNumBootinfoUntypedCaps=500 \
-  -DKernelIsMCS="${KERNEL_MCS:-OFF}" \
+  -DKernelIsMCS="${KERNEL_MCS:-ON}" \
   -DKernelMaxNumNodes="${KERNEL_SMP:-1}" \
   -DKernelMultibootGFXMode="${KERNEL_GFX:-linear}" \
   ${IOMMU_FLAG} \
