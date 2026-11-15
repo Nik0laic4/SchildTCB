@@ -117,11 +117,14 @@ x86_64 повторяет этот паттерн, но для **четырёх*
 > Так же `[R3]` target_level 5→4 (0-based). MLS daemon теперь на своём ELF,
 > run_tests 24/24.
 >
-> **Config/NetServer (pending):** `config_daemon.elf` (33 КБ ≈ 9 стр.) и
-> `netserver.elf` собираются + блобы встроены, но **Load_Elf-обвязка не сделана**
-> — слот-раскладка: mint `+64` требует `Image_Frame_Base < 4160`, а низкие слоты
-> `+49..+63` заняты (MLS rings/shared copy/image frames). Нужен либо перенос
-> слотов, либо параметризация mint-offset в `Load_Segment`.
+> **Config (v0.50, 2026-11-15 — готово):** `Launch_Config_Daemon` грузит
+> `config_daemon.elf` через `Load_Elf` в свой `Config_PML4`, shared frame @0x550000
+> (ep/reply), `TCB_Resume(Load_Entry)`. Слоты: `Config_Image_Frame_Base +300` (4396),
+> mint `+364..+372` (4460..4468) — свободное окно 4391..4479 (корневой образ ~167
+> кадров, заканчивается ~4390; `FS_Image_Frame_Base` 4480). run_tests 24/24.
+> **NetServer (pending):** `netserver.elf` ≈ 162 КБ ≈ **40 кадров**, mint `+64`
+> ⇒ ~86 слотов нужно, а после Config свободного окна осталось ~65. Требуется
+> параметризация mint-offset в `Load_Segment` (Tier A) либо расширение окна.
 
 Каждый daemon-ELF линкуется со своим linker-скриптом `daemon_linker.ld`
 (RX-код, R-rodata, RW-data/bss, entry в `.text` @ 0x400000), затем
