@@ -87,6 +87,11 @@ shared/ECAM 4125–4127, MLS-rings 4130–4149, image frames 4224+, MMIO 4608+.
 
 ## 8. План фаззинга (C4)
 
+**Статус (v0.50, 2026-11-15):** шаги 1–2 выполнены — host-юнит `seam-abi`
+(`tests/seam_abi_test.c` + `run_seam_abi.sh`) проверяет round-trip
+label/extraCaps/capsUnwrapped/length, clamp `MsgMaxLength=120` и non-overlap
+MR-окна [1,120] vs extra-cap [122,125]. `seam-abi: PASS (0 failures)`.
+
 Цель — поймать рассинхрон «Ada-контракт ↔ реальный ABI», не трогая тело.
 
 1. **Единичный харнесс** (host-side, как `proto_test.c` для net-стека):
