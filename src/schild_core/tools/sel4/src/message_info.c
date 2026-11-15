@@ -37,6 +37,9 @@ void schild_set_qword(unsigned long long addr, unsigned long long val) {
     *(volatile unsigned long long *)addr = val;
 }
 
+/* ELF-child boot detection: true when the root task's RDI (boot info vptr) is 0. */
+unsigned long long schild_is_elf_child(void) { return rt_bootinfo_vptr == 0; }
+
 /* ─── GNAT runtime check stubs — safe fallback for Ring 3 user space ─── */
 /* These are linked when -gnatp is NOT used.  They trap into an infinite   */
 /* pause loop to prevent silent crashes in production.                     */

@@ -36,6 +36,19 @@ is
 
    CNode_Slot : constant Cap_Ref := 2;
 
+   -- Root task's own VSpace: init VSpace (slot 3) in the direct boot, the
+   -- bootstrap's new PML4 (Bootstrap_PML4_Slot) in the ELF-child boot.
+   function Get_Root_VSpace return Cap_Ref is
+      function Is_Elf_Child return Word
+        with Import, Convention => C, External_Name => "schild_is_elf_child";
+   begin
+      if Is_Elf_Child /= 0 then
+         return Bootstrap_PML4_Slot;
+      else
+         return 3;
+      end if;
+   end Get_Root_VSpace;
+
    -- Health Monitoring: per-domain restart state (populated at launch).
    Net_TCB_Cap : Cap_Ref := 0;
    Net_Entry    : Word := 0;
@@ -342,7 +355,7 @@ is
        Min_Size_Bits : constant Word := 20;  -- 1MB (skip tiny RAM chunks)
        UT1, UT2, UT3, UT4, UT5, UT6 : Cap_Ref := 0;
        Found    : Natural := 0;
-       VSpace_Slot : constant Cap_Ref := 3;
+       VSpace_Slot : constant Cap_Ref := Get_Root_VSpace;
        EP_Slot     : constant Cap_Ref := MLS_EP_Slot;
        TCB_Slot    : constant Cap_Ref := MLS_TCB_Slot;
        Fault_Slot  : constant Cap_Ref := MLS_Fault_Slot;
@@ -457,7 +470,7 @@ is
        R := Page_Table_Map (MLS_PT_Lo_Slot, MLS_PML4_Slot, 16#400000#);
        if R /= 0 then Put_String ("[H87s2] PTLoMap FAIL" & ASCII.CR & ASCII.LF); return 2; end if;
        declare
-          Root_VSpace : constant Cap_Ref := 3;
+          Root_VSpace : constant Cap_Ref := Get_Root_VSpace;
        begin
           Load_Elf (Mls_Daemon_Elf_Start, Mls_Daemon_Elf_Size,
                     MLS_PML4_Slot, Root_VSpace, UT4, CNode_Slot,
@@ -593,7 +606,7 @@ is
        Min_Size_Bits : constant Word := 20;  -- 1MB (skip tiny RAM chunks)
        UT1, UT2, UT3, UT4, UT5, UT6 : Cap_Ref := 0;
        Found : Natural := 0;
-       VSpace_Slot : constant Cap_Ref := 3;
+       VSpace_Slot : constant Cap_Ref := Get_Root_VSpace;
        EP_Slot     : constant Cap_Ref := Config_EP_Slot;
        TCB_Slot    : constant Cap_Ref := Config_TCB_Slot;
        Fault_Slot  : constant Cap_Ref := Config_Fault_Slot;
@@ -672,7 +685,7 @@ is
        R := Page_Table_Map (Config_PT_Lo_Slot, Config_PML4_Slot, 16#400000#);
        if R /= 0 then return 2; end if;
        declare
-          Root_VSpace : constant Cap_Ref := 3;
+          Root_VSpace : constant Cap_Ref := Get_Root_VSpace;
        begin
           Load_Elf (Config_Daemon_Elf_Start, Config_Daemon_Elf_Size,
                     Config_PML4_Slot, Root_VSpace, UT4, CNode_Slot,
@@ -825,7 +838,7 @@ is
    function Map_Ecam return Word is
       BI          : constant BI_Access := Get_BootInfo;
       Ecam_Phys   : constant Word := 16#F000_0000#;
-      Root_VSpace : constant Cap_Ref := 3;
+      Root_VSpace : constant Cap_Ref := Get_Root_VSpace;
       Dev_UT      : Cap_Ref := 0;
       R           : Word;
    begin
@@ -1044,7 +1057,7 @@ is
       -- 5. H87: Load_Elf netserver.elf into the NetServer VSpace (replaces the
       -- shared-image minting) + shared frame @0x560000 for ep/reply.
       declare
-         Root_VSpace : constant Cap_Ref := 3;
+         Root_VSpace : constant Cap_Ref := Get_Root_VSpace;
       begin
          Load_Elf (NetServer_Elf_Start, NetServer_Elf_Size,
                    PML4_Slot, Root_VSpace, RAM_UT, CNode_Slot,
@@ -1514,7 +1527,7 @@ is
     -- ==========================================================================
     function Init_Mls_Rings return Word is
        BI : constant BI_Access := Get_BootInfo;
-       Root_VSpace : constant Cap_Ref := 3;    -- seL4_CapInitThreadVSpace
+       Root_VSpace : constant Cap_Ref := Get_Root_VSpace;    -- seL4_CapInitThreadVSpace
        Net_VSpace  : constant Cap_Ref := Net_PML4_Slot;  -- NetServer PML4
        Root_Depth  : constant Word := 64;
        -- seL4 VM-rights word (CapRights layout): bit0=Write, bit1=Read.
@@ -1815,7 +1828,7 @@ is
 
       -- H87: load the fs_daemon.elf (embedded blob) into the FS VSpace.
       declare
-         Root_VSpace : constant Cap_Ref := 3;  -- seL4_CapInitThreadVSpace
+         Root_VSpace : constant Cap_Ref := Get_Root_VSpace;  -- seL4_CapInitThreadVSpace
       begin
          Load_Elf (Fs_Daemon_Elf_Start, Fs_Daemon_Elf_Size,
                    FS_PML4_Slot, Root_VSpace, UT_ELF, CNode_Slot,
