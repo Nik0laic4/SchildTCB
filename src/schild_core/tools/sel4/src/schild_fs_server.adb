@@ -52,6 +52,7 @@ package body Schild_Fs_Server with SPARK_Mode => Off is
            (0=>78,1=>101,2=>118,3=>97,4=>79,5=>83,
             6=>32,7=>119,8=>114,9=>105,10=>116,11=>101,
             12=>115,13=>116,14=>33,15=>10, others=> 0);
+         Self_Test_Ok : Boolean := False;
       begin
          -- Audit H77: open first, create only if missing.
          Schild_Schild_Fs.Open ("test.txt", F, Ok);
@@ -67,13 +68,26 @@ package body Schild_Fs_Server with SPARK_Mode => Off is
                   C_Putln (Msg_Write'Address, Msg_Write'Length);
                   F.Curr_Off := 0;
                   Schild_Schild_Fs.Read (F, Buf, Len, Ok);
-                  if Ok and then Len >= 2
-                    and then Buf (0) = 78 and then Buf (1) = 101
-                  then
-                     C_Putln (Msg_Read'Address, Msg_Read'Length);
+                  -- Audit H111: verify the full 16-byte payload (was 2 bytes,
+                  -- a misleading "VERIFY OK" marker).
+                  if Ok and then Len >= 16 then
+                     Self_Test_Ok := True;
+                     for I in 0 .. 15 loop
+                        if Buf (I) /= Data (I) then
+                           Self_Test_Ok := False;
+                           exit;
+                        end if;
+                     end loop;
                   end if;
                end if;
             end if;
+         end if;
+         if Self_Test_Ok then
+            C_Putln (Msg_Read'Address, Msg_Read'Length);
+         else
+            -- Audit H109: propagate the storage self-test failure instead of
+            -- returning St_Ok (silent data loss).
+            return St_Io_Error;
          end if;
       end;
 
@@ -89,6 +103,9 @@ package body Schild_Fs_Server with SPARK_Mode => Off is
       Idx  : Unsigned_32 := 0;
    begin
       loop
+         -- Audit H110: explicit upper bound (Dir_Table 0..13) so the scan
+         -- cannot run past the directory table.
+         exit when Idx > 13;
          Schild_Schild_Fs.Get_Entry (Idx, Ent, Ok);
          exit when not Ok;
          if Ent.Start_LBA = Handle then

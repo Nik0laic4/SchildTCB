@@ -496,3 +496,17 @@ with status "documented in TM §12" until either (a) code mitigates or
 **Residuals.** R21 — NetServer(1)->FS(4) read-up is blocked (correct); HTTP static needs Phase 2 (user-file FS endpoint level=1, or per-file levels). R22 — badge values are not authenticated beyond cap possession (T22, contained by T2). Both documented, not blockers.
 
 **Phase 2 (Block 5, L).** Per-file levels in FS (level in dir entry), separate FS endpoint for user files (level=1), HTTP static via `fs_ep` (NetServer 1 <-> FS 1 OK, audit 1 -> 4 blocked). Out of scope for H88 Этап 1.
+
+### 12.14 FS self-test + MLS policy refinement (audit 2026-11-15)
+
+**H109 (silent data loss — fixed).** `Fs_Init` used to return `St_Ok` even when the storage self-test (write → read-back) failed, so a broken FS looked healthy to the root task. Now the self-test failure returns `St_Io_Error` (`schild_fs_server.adb`), so `[NVFS] Init OK` implies the read-back verified.
+
+**H111 (misleading marker — fixed).** The self-test read-back verified only 2 bytes and still printed `[NVFS] Read-back VERIFY OK`. Now it verifies the full 16-byte payload ("NovaOS writes!!").
+
+**H110 (scan bound — fixed).** `Find_By_Start_LBA` now has an explicit `exit when Idx > 13` (Dir_Table 0..13), so the handle lookup cannot run past the directory table.
+
+**M20 (test-only fault injection).** `op=99` (crash-containment fault injection) is compiled unconditionally in every daemon and reachable by any caller holding that endpoint cap (currently only root). For production it must be compiled out (`#ifdef SCHILD_TEST_FAULT` / debug build) or gated by a dedicated test badge. Recorded as a test-only path; DoS surface is low because only root holds the cap.
+
+**H107 / H88 policy refinement (residual R23).** The MLS gate (`Authorize_IPC_Levels`) is a *communication-level* check (`Can_IPC`, strict equal-clearance), not a *per-file / per-operation* check: it cannot distinguish `Fs_Open("user.txt")` from `Fs_Open("audit.log")` at the same level, nor read from write. For the single-level prototype this is safe because the only non-root caller has no FS-EP cap (the attack does not exist); multi-level requires per-file levels + an operation-aware gate (Phase 2, Block 5 L).
+
+**R2 root bypass (residual R24).** `sender_role = 0` (root task) skips the MLS gate entirely; the third `Authorize_IPC_Levels` argument (`Sender_Is_Root`) is always `False` in the daemons, so the bypass is implemented by the role check, not that argument. Consequence (must stay explicit): **compromise of the root task bypasses all MLS gates** — MLS enforcement is meaningless under root compromise. Accepted given the threat model (root is in the TCB, seam trusted-not-proven); residual, not a blocker.
