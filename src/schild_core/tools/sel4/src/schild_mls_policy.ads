@@ -23,6 +23,10 @@ is
    -- Reuse security levels from Config Daemon
    subtype Clearance is Security_Level;
 
+   --  C-level 0..4 -> security level mapping (used by the C-callable gates).
+   Level_Map : constant array (0 .. 4) of Clearance :=
+     (Public, Internal, Confidential, Secret, Top_Secret);
+
    -- Process identifier
    type Process_ID is mod 2**16;
 
@@ -141,5 +145,13 @@ is
       Sender_Is_Root : Boolean) return Unsigned_32
    with Export, Convention => C,
         External_Name => "schild_mls_authorize_ipc_levels",
-        Post => Authorize_IPC_Levels'Result in 0 .. 1;
+        Post =>
+          (if Sender_Level > 4 or Receiver_Level > 4 then
+              Authorize_IPC_Levels'Result = 0
+           elsif Sender_Is_Root then
+              Authorize_IPC_Levels'Result = 1
+           else
+              Authorize_IPC_Levels'Result =
+                (if Can_IPC (Level_Map (Integer (Sender_Level)),
+                             Level_Map (Integer (Receiver_Level))) then 1 else 0));
 end Schild_MLS_Policy;

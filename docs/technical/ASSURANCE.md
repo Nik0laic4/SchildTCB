@@ -326,5 +326,14 @@ bash scripts/verify.sh                                      # Level-4 gnatprove 
 bash scripts/prove_kernel.sh                                # full SPARK sweep → not-proved: 0
 ```
 
+---
+
+## 9. Accepted residuals (2026-11-15)
+
+- **H107 / H88 policy (R23):** the MLS gate (`Authorize_IPC_Levels`) is communication-level (strict equal-clearance), not per-file and not per-operation. A non-root Top_Secret peer (e.g. `Audit_Logger`) could `Fs_Delete("audit.log")`; a lower-clearance domain cannot even `Fs_Is_Mounted`. Safe for the single-level prototype (only root holds the FS-EP cap); multi-level requires per-file levels + an operation-aware gate.
+- **R2 root bypass (R24):** root task (`sender_role = 0`) bypasses all MLS gates by design; MLS enforcement is meaningless under root compromise. Accepted (root is in the TCB).
+- **M20 (test-only fault injection):** `op=99` is compiled unconditionally; must be compiled out for production.
+- **C4 (syscall seam):** Tier A security properties hold conditional on seam correctness, which is trusted, not proven (1475 lines SPARK_Off + C shims). This is the main residual of the Tier A claims.
+
 
 

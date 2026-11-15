@@ -46,7 +46,7 @@ package body Schild_Fs_Server with SPARK_Mode => Off is
       -- describe what the owner did, not what the former owner used to do.
       declare
          F    : Schild_Schild_Fs.File_Info;
-         Buf  : Schild_Schild_Fs.Unsigned_8_Array (0 .. 31);
+         Buf  : Schild_Schild_Fs.Unsigned_8_Array (0 .. 511);
          Len  : Unsigned_32;
          Data : constant Schild_Schild_Fs.Unsigned_8_Array (0 .. 511) :=
            (0=>78,1=>101,2=>118,3=>97,4=>79,5=>83,
@@ -68,11 +68,11 @@ package body Schild_Fs_Server with SPARK_Mode => Off is
                   C_Putln (Msg_Write'Address, Msg_Write'Length);
                   F.Curr_Off := 0;
                   Schild_Schild_Fs.Read (F, Buf, Len, Ok);
-                  -- Audit H111: verify the full 16-byte payload (was 2 bytes,
+                  -- Audit H111: verify the full 512-byte sector (was 2 bytes,
                   -- a misleading "VERIFY OK" marker).
-                  if Ok and then Len >= 16 then
+                  if Ok and then Len >= 512 then
                      Self_Test_Ok := True;
-                     for I in 0 .. 15 loop
+                     for I in 0 .. 511 loop
                         if Buf (I) /= Data (I) then
                            Self_Test_Ok := False;
                            exit;

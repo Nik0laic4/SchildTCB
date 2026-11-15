@@ -108,10 +108,6 @@ is
       Daemon.Processes := (others => (PID => 0, Level => Public, Active => False));
    end Initialize;
 
-   --  C-level mapping 0..4 -> security level.
-   Level_Map : constant array (0 .. 4) of Clearance :=
-     (Public, Internal, Confidential, Secret, Top_Secret);
-
    --  C-callable Bell-LaPadula gate: delegates to the verified Can_Read /
    --  Can_Write / Can_IPC functions. Malformed requests are denied.
    function Mls_Authorize_Op
