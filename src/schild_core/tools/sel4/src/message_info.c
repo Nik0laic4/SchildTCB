@@ -21,7 +21,11 @@ unsigned long long schild_get_bootinfo_frame(void) { return (unsigned long long)
  * dereferencing the opaque C pointer.  nbytes is BootInfo'Size/8 passed from Ada. */
 void schild_get_bootinfo_copy(void *dest, unsigned long long nbytes) {
     unsigned char *d = (unsigned char *)dest;
-    const unsigned char *s = (const unsigned char *)rt_bootinfo_vptr;
+    /* ELF-child boot (Phase B): the root task's RDI is unset, so the bootstrap
+     * maps the BootInfo frame at 0x580000; fall back to it when rt_bootinfo_vptr
+     * is 0. Direct boot keeps the RDI-provided vptr. */
+    const unsigned char *s = (const unsigned char *)
+        (rt_bootinfo_vptr ? rt_bootinfo_vptr : 0x580000UL);
     unsigned long long i;
     for (i = 0; i < nbytes; i++) d[i] = s[i];
 }

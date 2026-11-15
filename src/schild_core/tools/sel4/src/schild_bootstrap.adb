@@ -81,6 +81,11 @@ begin
    R := Page_Table_Map (Bootstrap_PT_Lo_Slot, Bootstrap_PML4_Slot, 16#400000#);
    if R /= 0 then return; end if;
 
+   -- Map the BootInfo frame (cap 9) into the root task's VSpace at 0x580000,
+   -- so the root task can read BootInfo even though its RDI is unset (ELF-child).
+   R := Page_Map (9, Bootstrap_PML4_Slot, 16#580000#);
+   if R /= 0 then return; end if;
+
    -- Load the root task ELF into its new VSpace.
    Schild_Elf_Loader.Load_Elf (Root_Task_Elf_Start, Root_Task_Elf_Size,
                                Bootstrap_PML4_Slot, Root_VSpace, UT, CNode_Slot,
