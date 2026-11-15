@@ -56,8 +56,9 @@ tier-A guarantees. It splits into two honest halves:
 
 Everything else is **outside the TCB** and must be isolated (Phase 3): the
 drivers and daemons run in their own **Tier B** protection domains —
-**NetServer** (e1000e + TCP/IP), **FS daemon** (SchildFS + NVMe, since H86),
-**MLS server** and **Config daemon** (own ELF via H87 Load_Elf, since v0.46/v0.50).
+**NetServer** (e1000e + TCP/IP), **FS daemon** (SchildFS + NVMe), **MLS server**
+and **Config daemon** — all four on their own ELF via H87 Load_Elf
+(v0.42/v0.46/v0.50/v0.51).
 The FS daemon is Tier B, **not** part of the Verified TCB: `Schild_Schild_Fs` /
 `Schild_Nvme` bodies are `SPARK_Mode => Off` and *contained* by seL4 (own
 PML4/CSpace, NVMe BAR0 @0x620000), and `Persist_Audit_Log` reaches it over IPC
