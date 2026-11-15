@@ -18,6 +18,7 @@
 | H87 — code isolation (FS) | `Launch_FS_Daemon` + `schild_elf_loader` | run_tests `[FS] daemon: OK`, `[NVFS] VERIFY OK` |
 | H87 — code isolation (MLS) | `Launch_MLS_Server` (v0.46) | run_tests `[S7.7] MLS Server: OK`, `[H88]` |
 | H87 — code isolation (Config) | `Launch_Config_Daemon` (v0.50) | run_tests `[R3] Config validate@Top_Secret/Public`, `[CONTAINMENT] Config Daemon contained` |
+| H87 — code isolation (NetServer) | `Map_NetServer_VSpace` + `Load_Elf` (v0.51) | run_tests `[S8.2] NetServer VSpace: OK`, `[E1000E] Init OK`, `[CONTAINMENT] core alive after fault` |
 | H87 — ELF-парсер | `Schild_Elf_Core` (SPARK On) | host-KAT `elf-kat` PASS + gnatprove |
 | H87 — SchildFS parsing core | `Schild_Fs_Core` (SPARK On) | host-KAT `fs-core-kat` PASS (CRC32 + superblock/dir-entry) + gnatprove |
 | AS6 — syscall seam ABI | `seam_abi_test` (host) | host-KAT `seam-abi` PASS (msgInfo round-trip/clamp/offset) |
@@ -32,7 +33,6 @@
 
 | Требование | Причина |
 |---|---|
-| H87 — code isolation (NetServer) | `netserver.elf` собран, Load_Elf-обвязка pending — слот-проблема (mint-offset) |
 | C1 — ring-3 UART/framebuffer драйвер | premature: bare-metal без ring-3; seL4 UART уже ring-3 |
 
 ## 4. Как заполняется дальше

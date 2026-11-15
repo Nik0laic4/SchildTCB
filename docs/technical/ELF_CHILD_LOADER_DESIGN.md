@@ -122,9 +122,12 @@ x86_64 повторяет этот паттерн, но для **четырёх*
 > (ep/reply), `TCB_Resume(Load_Entry)`. Слоты: `Config_Image_Frame_Base +300` (4396),
 > mint `+364..+372` (4460..4468) — свободное окно 4391..4479 (корневой образ ~167
 > кадров, заканчивается ~4390; `FS_Image_Frame_Base` 4480). run_tests 24/24.
-> **NetServer (pending):** `netserver.elf` ≈ 162 КБ ≈ **40 кадров**, mint `+64`
-> ⇒ ~86 слотов нужно, а после Config свободного окна осталось ~65. Требуется
-> параметризация mint-offset в `Load_Segment` (Tier A) либо расширение окна.
+> **NetServer (v0.51, 2026-11-15 — готово):** `netserver.elf` ≈ 162 КБ (40 стр.)
+> грузится через `Load_Elf` в NetServer VSpace (`Net_Image_Frame_Base +316` = 4412,
+> mint-offset **3200** → 7612..7651, выше MMIO PCI-окна ~4608..7455). Shared frame
+> @0x560000 для ep/reply (`schild_net_shared_write`), `TCB_Resume(Load_Entry)`.
+> run_tests 24/24. **H87 (code isolation) закрыт: 4/4 daemons на своих ELF.**
+> mint-offset параметризован в `Load_Segment` (FS/MLS/Config передают 64).
 
 Каждый daemon-ELF линкуется со своим linker-скриптом `daemon_linker.ld`
 (RX-код, R-rodata, RW-data/bss, entry в `.text` @ 0x400000), затем

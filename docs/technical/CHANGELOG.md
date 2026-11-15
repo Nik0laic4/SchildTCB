@@ -6,6 +6,15 @@
 > *pending* or *target* have not yet been validated. Formal-verification
 > coverage is stated per-module, never as an aggregate percentage.
 
+## v0.51 (2026-11-15) — NetServer daemon → Load_Elf (H87 4/4 — code isolation complete)
+
+**Validated: the NetServer now boots its own `netserver.elf` (own VSpace/CSpace) — H87 code isolation is complete for all four daemons.**
+
+- Parameterize `Load_Elf`/`Load_Segment` mint-offset (was hard-coded `+64`); FS/MLS/Config pass 64, NetServer passes 3200 (mint 7612..7651, above the MMIO PCI window ~4608..7455).
+- `Map_NetServer_VSpace`: replace the shared-image minting loop with `Load_Elf(netserver_blob, Net_PML4, Net_Image_Frame_Base +316, mint 3200)` + shared frame @0x560000 (`schild_net_shared_write`); RAM_UT scan >= 256KB.
+- `netserver.c`: reads ep/reply from shared frame @0x560000 (not `.bss`). Embed `netserver_blob` + accessors.
+- Gates: build 184/0; run_tests 24/24; `[E1000E] Init OK`; NetServer VSpace/containment PASS.
+
 ## v0.50 (2026-11-15) — Config daemon → Load_Elf (H87 3/4) + C1 step 1
 
 **Validated: the Config daemon now boots its own `config_daemon.elf` (own PML4/CSpace), and the ring-0 UART debug path is unified to a single lock-free channel.**
