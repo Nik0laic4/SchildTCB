@@ -18,7 +18,7 @@ Assurance Case (Block 4). Открытые позиции помечены ⏳.
 
 - `run_tests` **24/24** (seL4, QEMU) — загрузка, MLS, NetServer/FS/Config, containment, fault/timeout.
 - host-KAT: `seam-abi` (msgInfo ABI), `elf-kat` (ELF64 parser), `fs-core-kat` (CRC32 + superblock/dir-entry), + существующие (hmac/aes/acpi/ipc/mtf/two_level).
-- ⏳ `gnatcov` (Ada coverage) — **не в toolchain** (в `gnat_native` есть только `gcov`), но **есть в локальном индексе Alire** (community: `gnatcov-21.0.1/21.0.2/22.0.1`); установка `alr install gnatcov` блокируется read-only sandbox (`~/.config/alire`, `~/.local/share/alire`).
+- ⏳ `gnatcov` (Ada coverage) — **установлен 22.0.1** (Alire binary); покрытие **не прогнано**: source-instrumentation (`--dump-channel=base64-stdout` + `--dump-trigger=atexit`) не выдаёт trace, binary-trace требует `-fpreserve-control-flow` (не поддержан GNAT 14.2.1) + `valgrind` (отсутствует). Fallback: «runtime + host-KAT, без gnatcov».
 
 ## 3. Открытые позиции (не блокируют H87, но фиксируются)
 
@@ -26,7 +26,7 @@ Assurance Case (Block 4). Открытые позиции помечены ⏳.
 |---|---|---|
 | C1 ring-3 драйвер | premature: bare-metal без ring-3; seL4 UART уже ring-3 | — |
 | root task как ELF-child | убрать DRHU/load-image/bootinfo-8k патчи (L-работа, Блок 3 L) | Tier A |
-| gnatcov | в локальном индексе Alire (community); установка блокируется read-only sandbox | — |
+| gnatcov | установлен 22.0.1; покрытие блокируется несовместимостью (GNAT 14.2.1 + нет valgrind) | — |
 
 ## 4. Что осталось до v1.0.0
 

@@ -37,8 +37,9 @@ ring 3:  Ada root task (SPARK On где возможно) + 4 daemon ELF (H87, o
 ## 4. Что осталось для финальной версии (Block 4)
 
 - `gnatcov` покрытие (statement/decision) для Ada + `gcov` для C-шимов.
-  `gnatcov` есть в локальном индексе Alire (community, до 22.0.1); установка
-  `alr install gnatcov` блокируется read-only sandbox (`~/.config/alire`,
-  `~/.local/share/alire`) — нужен `danger-full-access` либо fallback «без gnatcov».
+  `gnatcov` 22.0.1 установлен (Alire binary), но покрытие не прогнано:
+  source-instrumentation не выдаёт trace, binary-trace требует
+  `-fpreserve-control-flow` (не в GNAT 14.2.1) + `valgrind` (отсутствует).
+  Fallback: «runtime + host-KAT, без gnatcov».
 - Фиксация **точных версий** инструментов (sha256) в `RELEASE_NOTES` при v1.0.0.
 - Ревью каждого пункта §1 перед включением в Assurance Case.
