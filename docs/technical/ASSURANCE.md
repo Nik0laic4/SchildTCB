@@ -336,6 +336,7 @@ bash scripts/prove_kernel.sh                                # full SPARK sweep �
 - **C8 (boot counter persistence, latent):** NVMe I/O is deferred (no `Read_Block`/`Write_Block` wired — `BOOT_COUNTER_DESIGN` §5), so C8 is not active. When NVMe persistence lands, the boot counter must be read by Tier A directly (option a), not via the Tier B NVMe driver — otherwise the golden rule breaks. Deferred indefinitely until IOMMU or a Tier A-controlled counter store.
 - **C9 (health gate, latent):** `Commit_If_Healthy` is only exercised in self-tests with a hardcoded `Network_Up`; the real health probe is not wired. When wired, the health check must be a Tier A observable (IPC liveness + self-test + boot counter state), not `Network_Up` from the Tier B NetServer.
 - **C4 (syscall seam):** Tier A security properties hold conditional on seam correctness, which is trusted, not proven (1475 lines SPARK_Off + C shims). This is the main residual of the Tier A claims.
+- **H112 (MLS/Config CSpace not isolated):** the MLS and Config daemons run in the root CNode (`CNode_Slot=2`), not their own CSpace (Net/FS have their own). A compromised MLS/Config can `seL4_Signal` any notification in the root CSpace — `IRQ_Ntfn` (fake IRQ), `Timeout_EP` (fake budget overrun), `Root_Fault_EP` (fake domain fault). Fix: give MLS/Config their own CSpace (M-work, after C9).
 
 
 
