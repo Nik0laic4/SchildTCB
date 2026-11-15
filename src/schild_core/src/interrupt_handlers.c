@@ -3,8 +3,11 @@
  * SPDX-License-Identifier: GPL-2.0-only
  */
 
-static void raw_uart_putc(char c){unsigned char s;do{__asm__ volatile("inb %1,%0":"=a"(s):"Nd"(0x3FD));}while(!(s&0x20));__asm__ volatile("outb %0,%1"::"a"(c),"Nd"(0x3F8));}
-static void uart_puts(const char*m){for(int i=0;m[i];i++)raw_uart_putc(m[i]);}
+/* C1: single lock-free UART channel (exported by runtime_stubs.c). The fail-stop
+ * path must stay lock-free, so it shares schild_uart_putc_raw instead of its own
+ * duplicate raw_uart_putc. */
+extern void schild_uart_putc_raw(char c);
+static void uart_puts(const char*m){for(int i=0;m[i];i++)schild_uart_putc_raw(m[i]);}
 static void apic_eoi(void){*(volatile unsigned int*)0xFEE000B0=0;}
 extern void schild_map_mmio_2mb(unsigned long long);
 /* Emergency reboot: pulse the CPU reset line via the i8042 controller

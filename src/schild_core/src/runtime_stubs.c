@@ -15,8 +15,10 @@
  * not port I/O. outb/inb instructions required!
  */
 
-/* Send one byte to COM1 (0x3F8) using port I/O (NOT memory access!) */
-static void uart_putc(char c) {
+/* Send one byte to COM1 (0x3F8) using port I/O (NOT memory access!).
+ * C1: exported (lock-free) so the ring-0 exception handlers can share the single
+ * UART channel without taking a spin lock (the fail-stop path must stay lock-free). */
+void schild_uart_putc_raw(char c) {
     unsigned char scratch;
     /* Wait for THRE (bit 5 of LSR at 0x3FD) */
     do {
@@ -57,7 +59,7 @@ static void uart_spin_unlock(void) {
 /* Output len bytes, no trailing newline (internal — caller must hold lock) */
 static void uart_write_unlocked(const char *msg, int len) {
     for (int i = 0; i < len; i++) {
-        uart_putc(msg[i]);
+        schild_uart_putc_raw(msg[i]);
     }
 }
 
@@ -122,8 +124,8 @@ void schild_uart_puts(const char *msg, int len) {
 void schild_uart_putln(const char *msg, int len) {
     uart_spin_lock();
     uart_write_unlocked(msg, len);
-    uart_putc('\r');
-    uart_putc('\n');
+    schild_uart_putc_raw('\r');
+    schild_uart_putc_raw('\n');
     log_capture(msg, len);
     log_capture("\r\n", 2);
     fb_puts(msg, len);
@@ -137,7 +139,7 @@ void schild_uart_putln(const char *msg, int len) {
 
 /* Helper: NUL-terminated C-string output (for panic messages) */
 static void uart_puts(const char *msg) {
-    for (int i = 0; msg[i]; i++) uart_putc(msg[i]);
+    for (int i = 0; msg[i]; i++) schild_uart_putc_raw(msg[i]);
 }
 
 /* ─── Stage 9: network debug bridge (core stub) ──────────────────────────
