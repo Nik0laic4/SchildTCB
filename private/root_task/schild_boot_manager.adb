@@ -63,7 +63,7 @@ is
 
    function Health_Ok (Status : Health_Status) return Boolean is
    begin
-      return Status.Network_Up and Status.MLS_Valid;
+      return Status.NetServer_Alive and Status.MLS_Alive;
    end Health_Ok;
 
    procedure Failover
