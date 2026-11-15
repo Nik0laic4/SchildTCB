@@ -382,6 +382,152 @@ is
       return 0;
    end Init_Heartbeat;
 
+   -- C9: package-level calibrated cycles/us (fallback 2500 = 2.5 GHz).
+   Cycles_Per_Us_Stored : Word := 2500;
+   function Get_Cycles_Per_Us return Word is (Cycles_Per_Us_Stored);
+
+   -- C9: map the HPET frame (0xFED00000) at 0x07F00000 via the device-untyped
+   -- offset pattern (same as Map_Nvme_Into_FS).
+   function Map_Hpet return Word is
+      BI         : constant BI_Access := Get_BootInfo;
+      Hpet_Phys  : constant Word := 16#FED0_0000#;
+      Hpet_VAddr : constant Word := 16#4C2000#;
+      Dev_UT     : Cap_Ref := 0;
+      Rem_Start  : Word := 0;
+      Off_Frames : Word := 0;
+      Created    : Word := 0;
+      Slot       : Cap_Ref := Hpet_Frame_Slot;
+      R          : Word;
+   begin
+      for I in 1 .. N_UNTYPED loop
+         if BI.all.Untyped_List (I).Size_Bits > 0
+           and then BI.all.Untyped_List (I).Is_Device = 1
+           and then BI.all.Untyped_List (I).Size_Bits < 64
+         then
+            declare
+               P  : constant Word := BI.all.Untyped_List (I).PAddr;
+               NB : constant Word := Word (BI.all.Untyped_List (I).Size_Bits);
+               Sz : constant Word := Shift_Left (Word (1), Natural (NB));
+            begin
+               if P <= Hpet_Phys and then Hpet_Phys < P + Sz then
+                  Dev_UT    := BI.all.Untyped_Start + Word (I - 1);
+                  Rem_Start := P;
+                  exit;
+               end if;
+            end;
+         end if;
+      end loop;
+      if Dev_UT = 0 then
+         Put_String ("[C9] HPET: no device-untyped" & ASCII.CR & ASCII.LF);
+         return 1;
+      end if;
+
+      Off_Frames := (Hpet_Phys - Rem_Start) / 16#1000#;
+      while Created < Off_Frames + 1 loop
+         declare
+            Chunk : constant Word := Word'Min (256, Off_Frames + 1 - Created);
+         begin
+            R := Retype_Object (Dev_UT, Object_Frame, 12, CNode_Slot, 0, Slot, Chunk);
+            if R /= 0 then
+               Put_String ("[C9] HPET retype FAIL "); Put_Hex (R);
+               Put_String (ASCII.CR & ASCII.LF);
+               return 2;
+            end if;
+            Created := Created + Chunk;
+            Slot    := Slot + Chunk;
+         end;
+      end loop;
+
+      R := Page_Map (Hpet_Frame_Slot + Off_Frames, Get_Root_VSpace, Hpet_VAddr);
+      if R /= 0 then
+         Put_String ("[C9] HPET map FAIL "); Put_Hex (R);
+         Put_String (ASCII.CR & ASCII.LF);
+         return 3;
+      end if;
+
+      Put_String ("[C9] HPET mapped @0x"); Put_Hex (Hpet_VAddr);
+      Put_String (ASCII.CR & ASCII.LF);
+      return 0;
+   end Map_Hpet;
+
+   -- C9: measure cycles/us via the HPET main counter (10 ms busy-wait).
+   procedure Calibrate_Cycles_Per_Us (Cpu_Us : out Word) is
+      function MMIO_Read32 (Addr : Word) return Word
+        with Import, Convention => C, External_Name => "schild_mmio_read32",
+             Global => null;
+      procedure MMIO_Write32 (Addr : Word; Val : Word)
+        with Import, Convention => C, External_Name => "schild_mmio_write32",
+             Global => null;
+      function MMIO_Read64 (Addr : Word) return Word
+        with Import, Convention => C, External_Name => "schild_mmio_read64",
+             Global => null;
+      function TSC return Word
+        with Import, Convention => C, External_Name => "schild_rdtsc",
+             Global => null;
+      procedure Pause
+        with Import, Convention => C, External_Name => "schild_pause",
+             Global => null;
+
+      Hpet_VAddr : constant Word := 16#4C2000#;
+      Period_Fs   : Word;
+      Freq_Hz     : Word;
+      Target      : Word;
+      T0_H, T1_H  : Word;
+      T0_T, T1_T  : Word;
+      Delta_H     : Word;
+      Delta_T     : Word;
+      Us_Elapsed  : Word;
+   begin
+      Period_Fs := MMIO_Read32 (Hpet_VAddr + 16#04#);
+      if Period_Fs = 0 or Period_Fs = 16#FFFF_FFFF# then
+         Put_String ("[C9] HPET period invalid -> fallback 2500" & ASCII.CR & ASCII.LF);
+         Cpu_Us := 2500; return;
+      end if;
+      Freq_Hz := 1_000_000_000_000_000 / Period_Fs;
+      Target := Freq_Hz / 100;   -- 10 ms worth of ticks
+      if Target = 0 then
+         Cpu_Us := 2500; return;
+      end if;
+
+      Put_String ("[C9] HPET period_fs="); Put_Dec (Period_Fs);
+      Put_String (" freq_hz="); Put_Dec (Freq_Hz);
+      Put_String (ASCII.CR & ASCII.LF);
+
+      T0_H := MMIO_Read64 (Hpet_VAddr + 16#F0#);
+      T0_T := TSC;
+      MMIO_Write32 (Hpet_VAddr + 16#10#, 1);  -- ENABLE_CNF: start the main counter
+      declare
+         Iter : Natural := 0;
+      begin
+         loop
+            T1_H := MMIO_Read64 (Hpet_VAddr + 16#F0#);
+            exit when T1_H - T0_H >= Target;
+            Pause;
+            Iter := Iter + 1;
+            exit when Iter >= 10_000_000;
+         end loop;
+         if Iter >= 10_000_000 then
+            Put_String ("[C9] HPET wait timeout -> fallback 2500" & ASCII.CR & ASCII.LF);
+            Cpu_Us := 2500; return;
+         end if;
+      end;
+      T1_T := TSC;
+
+      Delta_H := T1_H - T0_H;
+      Delta_T := T1_T - T0_T;
+      Us_Elapsed := Delta_H * 1_000_000 / Freq_Hz;  -- microseconds
+      if Us_Elapsed = 0 then
+         Cpu_Us := 2500; return;
+      end if;
+      Cpu_Us := Delta_T / Us_Elapsed;
+
+      if Cpu_Us < 500 or Cpu_Us > 10_000 then
+         Put_String ("[C9] HPET cycles/us out of range -> fallback 2500" & ASCII.CR & ASCII.LF);
+         Cpu_Us := 2500;
+      end if;
+      Cycles_Per_Us_Stored := Cpu_Us;
+   end Calibrate_Cycles_Per_Us;
+
     -- MLS address helpers (from C)
     function MLS_Entry_Addr return Word
       with Import, Convention => C, External_Name => "schild_mls_entry_addr";

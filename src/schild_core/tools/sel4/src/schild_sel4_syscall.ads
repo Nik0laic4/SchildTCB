@@ -179,6 +179,15 @@ is
    function Init_Heartbeat return Word
      with Global => null;
 
+   -- C9 HPET calibration. Map_Hpet maps the HPET frame at 0x07F00000;
+   -- Calibrate_Cycles_Per_Us measures cycles/us (fallback 2500). The result
+   -- is stored in a package-level variable read by Get_Cycles_Per_Us.
+   function Map_Hpet return Word
+     with Global => null;
+   procedure Calibrate_Cycles_Per_Us (Cpu_Us : out Word);
+   function Get_Cycles_Per_Us return Word
+     with Global => null;
+
    function Retype_Object
      (Untyped_Cap : Cap_Ref;
       Object_Type : Word;
@@ -526,6 +535,9 @@ is
    FS_Ping_Ntfn_Slot          : constant Cap_Ref := Slot_Base + 89;  -- 4185
    MLS_Ping_Ntfn_Badged_Slot   : constant Cap_Ref := Slot_Base + 90;  -- 4186
    Config_Ping_Ntfn_Badged_Slot : constant Cap_Ref := Slot_Base + 91; -- 4187
+
+   -- C9 HPET calibration: one 4K device frame mapped at 0x07F00000.
+   Hpet_Frame_Slot : constant Cap_Ref := Slot_Base + 92;  -- 4188
    --  H87 MLS Stage 1: dedicated shared frame for MLS ep/reply (before Load_Elf).
    MLS_Shared_Frame_Slot : constant Cap_Ref := Slot_Base + 84;  -- 4180
    --  H87s1 fix: minted copy of MLS shared frame (frame cap maps once per cap).

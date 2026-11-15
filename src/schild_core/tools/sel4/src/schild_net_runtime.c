@@ -65,6 +65,10 @@ unsigned long long schild_mmio_read32(unsigned long long addr) {
 void schild_mmio_write32(unsigned long long addr, unsigned long long val) {
     *(volatile unsigned int *)(unsigned long)addr = (unsigned int)val;
 }
+/* C9: 64-bit MMIO read (HPET main counter / general capabilities). */
+unsigned long long schild_mmio_read64(unsigned long long addr) {
+    return (unsigned long long)(*(volatile unsigned long long *)(unsigned long)addr);
+}
 
 /* One-time warning print: surfacing (not masking) a Ring 0-only helper that was
  * incorrectly invoked from Ring 3. */

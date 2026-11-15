@@ -48,30 +48,13 @@ procedure Schild_Root_Task with SPARK_Mode => On is
    Grace_Until : array (1 .. 4) of Word := (others => 0);
    Grace_Ms    : constant array (1 .. 4) of Word := (1000, 1000, 1000, 5000);
    Last_Check  : Word := 0;  -- throttle: last health-check timestamp
-   -- TSC cycles per microsecond. Calibrated via CPUID leaf 0x15 at boot;
-   -- fixed 2500 (~2.5 GHz) fallback if the leaf is unsupported.
-   Cycles_Per_Us : Word := 2500;
    function RDTSC return Word
      with Import, Convention => C, External_Name => "schild_rdtsc",
-          Global => null;
-   function TSC_Hz return Word
-     with Import, Convention => C, External_Name => "schild_tsc_hz",
           Global => null;
 begin
    Get_BootInfo_Copy (BI, Unsigned_64 (BootInfo'Size / System.Storage_Unit));
    Put_Str (ASCII.CR & ASCII.LF);
 
-   -- C9: calibrate the TSC frequency (CPUID leaf 0x15) for the health threshold.
-   declare
-      Hz : Word := TSC_Hz;
-   begin
-      if Hz > 0 then
-         Cycles_Per_Us := Hz / 1_000_000;
-      end if;
-      Put_Str ("[C9] TSC "); Put_Dec (Hz);
-      Put_Str (" Hz -> "); Put_Dec (Cycles_Per_Us);
-      Put_Str (" cycles/us" & ASCII.CR & ASCII.LF);
-   end;
    Put_Str ("==== Schild TCB Root Task (Ada/SPARK 2022) ====" & ASCII.CR & ASCII.LF);
    Put_Str ("==== Stage 7: Config Daemon + A/B Boot Manager ====" & ASCII.CR & ASCII.LF);
    Put_Str ("Node: "); Put_Dec (BI.Node_ID); Put_Str (" / "); Put_Dec (BI.Num_Nodes); Put_Str (ASCII.CR & ASCII.LF);
@@ -356,6 +339,26 @@ begin
       end if;
    end;
 
+   -- C9: calibrate cycles/us (HPET via MMIO; fallback 2500). Runs after Stage 6
+   -- so the IPC buffer (schild_ipc_buf_addr) is set up for the syscalls.
+   declare
+      Hpet_Map_R : Word := Schild_Sel4_Syscall.Map_Hpet;
+      Cpu_Us     : Word := 2500;
+   begin
+      if Hpet_Map_R = 0 then
+         Schild_Sel4_Syscall.Calibrate_Cycles_Per_Us (Cpu_Us);
+      end if;
+      Put_Str ("[C9] cycles_per_us="); Put_Dec (Schild_Sel4_Syscall.Get_Cycles_Per_Us);
+      Put_Str (" (source=");
+      if Hpet_Map_R = 0 then Put_Str ("HPET"); else Put_Str ("fallback"); end if;
+      Put_Str (")" & ASCII.CR & ASCII.LF);
+      if Schild_Sel4_Syscall.Get_Cycles_Per_Us < 2000
+        or else Schild_Sel4_Syscall.Get_Cycles_Per_Us > 3000
+      then
+         Put_Str ("[C9] WARN: cycles/us outside 2000..3000" & ASCII.CR & ASCII.LF);
+      end if;
+   end;
+
    -- C9 heartbeat: retype the ping notification + MLS/Config badged copies.
    Put_Str ("----- C9: Init heartbeat -----" & ASCII.CR & ASCII.LF);
    declare
@@ -378,7 +381,7 @@ begin
       if R = 0 then
          Put_Str ("[S7.7] MLS Server: OK" & ASCII.CR & ASCII.LF);
          Last_Seen (2) := RDTSC;  -- C9 grace period
-         Grace_Until (2) := RDTSC + Grace_Ms (2) * Cycles_Per_Us;
+         Grace_Until (2) := RDTSC + Grace_Ms (2) * Schild_Sel4_Syscall.Get_Cycles_Per_Us;
       else
          Put_Str ("[S7.7] MLS Server: FAILED (code=");
          Put_Dec (R);
@@ -433,7 +436,7 @@ begin
             if LR = 0 then
                Put_Str ("[S8.1D] NetServer: OK" & ASCII.CR & ASCII.LF);
                Last_Seen (1) := RDTSC;  -- C9 grace period
-               Grace_Until (1) := RDTSC + Grace_Ms (1) * Cycles_Per_Us;
+               Grace_Until (1) := RDTSC + Grace_Ms (1) * Schild_Sel4_Syscall.Get_Cycles_Per_Us;
             else
                Put_Str ("[S8.1D] NetServer: FAILED (code=");
                Put_Dec (LR);
@@ -487,7 +490,7 @@ begin
       if CD_R = 0 then
          Put_Str ("[R3] Config Daemon: OK" & ASCII.CR & ASCII.LF);
          Last_Seen (3) := RDTSC;  -- C9 grace period
-         Grace_Until (3) := RDTSC + Grace_Ms (3) * Cycles_Per_Us;
+         Grace_Until (3) := RDTSC + Grace_Ms (3) * Schild_Sel4_Syscall.Get_Cycles_Per_Us;
       else
          Put_Str ("[R3] Config Daemon: FAILED (code=");
          Put_Dec (CD_R);
@@ -502,7 +505,7 @@ begin
       if FS_R = 0 then
          Put_Str ("[FS] daemon: OK" & ASCII.CR & ASCII.LF);
          Last_Seen (4) := RDTSC;  -- C9 grace period
-         Grace_Until (4) := RDTSC + Grace_Ms (4) * Cycles_Per_Us;
+         Grace_Until (4) := RDTSC + Grace_Ms (4) * Schild_Sel4_Syscall.Get_Cycles_Per_Us;
       else
          Put_Str ("[FS] daemon: FAILED (code=");
          Put_Dec (FS_R);
@@ -751,8 +754,8 @@ begin
       -- C9 health check (throttled): a domain stale > 500 ms is unhealthy
       -- (liveness-detect, not recover). Grace period skips the slow init.
       declare
-         Threshold      : constant Word := 500_000 * Cycles_Per_Us;   -- 500 ms
-         Check_Interval : constant Word := 100_000 * Cycles_Per_Us;   -- 100 ms
+         Threshold      : constant Word := 500_000 * Schild_Sel4_Syscall.Get_Cycles_Per_Us;   -- 500 ms
+         Check_Interval : constant Word := 100_000 * Schild_Sel4_Syscall.Get_Cycles_Per_Us;   -- 100 ms
          Now            : Word := RDTSC;
       begin
          if Last_Check = 0 or else Now - Last_Check > Check_Interval then
