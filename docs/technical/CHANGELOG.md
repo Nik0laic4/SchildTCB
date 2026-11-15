@@ -6,6 +6,14 @@
 > *pending* or *target* have not yet been validated. Formal-verification
 > coverage is stated per-module, never as an aggregate percentage.
 
+## v0.50 (2026-11-15) — Config daemon → Load_Elf (H87 3/4) + C1 step 1
+
+**Validated: the Config daemon now boots its own `config_daemon.elf` (own PML4/CSpace), and the ring-0 UART debug path is unified to a single lock-free channel.**
+
+- H87 Config Stage 1–2: `Launch_Config_Daemon` Load_Elf's the Config ELF into a dedicated `Config_PML4` (retype + ASID + page tables), shared frame @0x550000 for ep/reply (`schild_config_shared_write`), `TCB_Resume(Load_Entry)`; `config_daemon.c` reads ep/reply from the shared frame (not `.bss`). Slots: `Config_Image_Frame_Base +300` (4396), mint `+364..+372` (4460..4468) — free window 4391..4479 (root image ends ~4390).
+- C1 step 1: `schild_uart_putc_raw` exported from `runtime_stubs.c` (lock-free); `interrupt_handlers.c` shares it instead of its own duplicate `raw_uart_putc` (fail-stop stays lock-free).
+- Gates: build 184/0; run_tests 24/24; Config `validate@Top_Secret=1` / `validate@Public=0` / containment PASS.
+
 ## v0.49 (2026-11-14) — AS6 step 1: seam-abi host unit (msgInfo ABI fuzzing)
 
 **Validated: the seL4 msgInfo encoding round-trips losslessly and its IPC-buffer windows do not overlap (SYSCALL_SEAM_ABI_SPEC.md §8, C4 fuzzing).**
