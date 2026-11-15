@@ -13,8 +13,10 @@
 _Static_assert(sizeof(void*) == 8, "bootinfo pointer must be 64-bit");
 
 extern unsigned long rt_bootinfo_vptr;
-void *schild_get_bootinfo(void) { return (void*)rt_bootinfo_vptr; }
-unsigned long long schild_get_bootinfo_frame(void) { return (unsigned long long)rt_bootinfo_vptr; }
+void *schild_get_bootinfo(void) { return (void*)(rt_bootinfo_vptr ? rt_bootinfo_vptr : 0x900000UL); }
+unsigned long long schild_get_bootinfo_frame(void) {
+    return rt_bootinfo_vptr ? (unsigned long long)rt_bootinfo_vptr : 0x900000ULL;
+}
 
 /* Value copy of the seL4 BootInfo frame into a caller-provided buffer.
  * Lets the Ada root task read BootInfo as a VALUE (SPARK-provable) instead of
@@ -28,6 +30,11 @@ void schild_get_bootinfo_copy(void *dest, unsigned long long nbytes) {
         (rt_bootinfo_vptr ? rt_bootinfo_vptr : 0x900000UL);
     unsigned long long i;
     for (i = 0; i < nbytes; i++) d[i] = s[i];
+}
+
+/* Raw qword store (Phase B: bootstrap patches the copied BootInfo's ipcBuffer). */
+void schild_set_qword(unsigned long long addr, unsigned long long val) {
+    *(volatile unsigned long long *)addr = val;
 }
 
 /* ─── GNAT runtime check stubs — safe fallback for Ring 3 user space ─── */

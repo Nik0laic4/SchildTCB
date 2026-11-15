@@ -14,6 +14,13 @@ procedure Schild_Bootstrap with SPARK_Mode => Off is
    procedure Get_BootInfo_Copy (BI : out Schild_Sel4_BootInfo.BootInfo; Nbytes : Unsigned_64)
      with Import, Convention => C, External_Name => "schild_get_bootinfo_copy",
           Global => null;
+   -- Raw copy (full BootInfo incl. extra BI) into a caller-provided address.
+   procedure Copy_BootInfo_Raw (Dest : Unsigned_64; Nbytes : Unsigned_64)
+     with Import, Convention => C, External_Name => "schild_get_bootinfo_copy",
+          Global => null;
+   procedure Set_Qword (Addr : Unsigned_64; Val : Unsigned_64)
+     with Import, Convention => C, External_Name => "schild_set_qword",
+          Global => null;
 
    -- Embedded root_task.elf blob (ld -r -b binary) — accessors from bootstrap.c.
    function Root_Task_Elf_Start return Unsigned_64
@@ -90,16 +97,38 @@ begin
    if R /= 0 then return; end if;
    Debug_Put (77);  -- 'M': page tables mapped
 
-   -- Map the BootInfo frame (cap 9) into the root task's VSpace at 0x900000
-   -- (above the ~4.25 MB root-task image), so the root task can read BootInfo
-   -- even though its RDI is unset (ELF-child). The BootInfo frame is already
-   -- mapped in the init VSpace, so mint a copy first.
+   -- Copy the full BootInfo (base 4KB + extra BI ~4KB) into 2 writable frames
+   -- and map them into the root task's VSpace at 0x900000/0x901000 (the root
+   -- task's RDI is unset in the ELF-child boot).
+   R := Retype_Object (UT, Object_Frame, 0, CNode_Slot, 0, Bootstrap_BootInfo_Frame_Slot, 1);
+   if R /= 0 then return; end if;
+   R := Retype_Object (UT, Object_Frame, 0, CNode_Slot, 0, Bootstrap_BootInfo_Frame2_Slot, 1);
+   if R /= 0 then return; end if;
+   Debug_Put (98);  -- 'b': BootInfo frames retyped
+   -- Temporary mapping in the init VSpace for the copy (free 0x5F0000 window,
+   -- above the bootstrap image 0x400000..0x581000, within the init VSpace PT).
+   R := Page_Map (Bootstrap_BootInfo_Frame_Slot, Root_VSpace, 16#5F0000#);
+   if R /= 0 then return; end if;
+   R := Page_Map (Bootstrap_BootInfo_Frame2_Slot, Root_VSpace, 16#5F1000#);
+   if R /= 0 then return; end if;
+   Debug_Put (112);  -- 'p': BootInfo temp-mapped
+   Copy_BootInfo_Raw (16#5F0000#, Unsigned_64 (Schild_Sel4_BootInfo.BootInfo'Size / System.Storage_Unit));
+   -- Patch the copied BootInfo's ipcBuffer field (offset 0x20) with the root
+   -- task's IPC buffer (0x500000), so set_mr/set_ec use the NEW VSpace's buffer.
+   Set_Qword (16#5F0000# + 16#20#, 16#500000#);
+   -- Mint copies (the frames are already mapped in the init VSpace) + map
+   -- the copies into the root task's VSpace.
    R := CNode_Mint (CNode_Slot, Bootstrap_BootInfo_Copy_Slot, 64,
-                    CNode_Slot, 9, 64, 16#F#, 0);
+                    CNode_Slot, Bootstrap_BootInfo_Frame_Slot, 64, 16#F#, 0);
+   if R /= 0 then return; end if;
+   R := CNode_Mint (CNode_Slot, Bootstrap_BootInfo_Copy2_Slot, 64,
+                    CNode_Slot, Bootstrap_BootInfo_Frame2_Slot, 64, 16#F#, 0);
    if R /= 0 then return; end if;
    R := Page_Map (Bootstrap_BootInfo_Copy_Slot, Bootstrap_PML4_Slot, 16#900000#);
    if R /= 0 then return; end if;
-   Debug_Put (66);  -- 'B': BootInfo mapped
+   R := Page_Map (Bootstrap_BootInfo_Copy2_Slot, Bootstrap_PML4_Slot, 16#901000#);
+   if R /= 0 then return; end if;
+   Debug_Put (66);  -- 'B': BootInfo copied + mapped
 
    -- Load the root task ELF into its new VSpace.
    Schild_Elf_Loader.Load_Elf (Root_Task_Elf_Start, Root_Task_Elf_Size,
@@ -121,6 +150,8 @@ begin
    R := Retype_Object (UT, Object_Reply, 0, CNode_Slot, 0, Bootstrap_Reply_Slot, 1);
    if R /= 0 then return; end if;
    R := Retype_Object (UT, Object_Frame, 0, CNode_Slot, 0, Bootstrap_IPC_Frame_Slot, 1);
+   if R /= 0 then return; end if;
+   R := Page_Map (Bootstrap_IPC_Frame_Slot, Bootstrap_PML4_Slot, 16#500000#);
    if R /= 0 then return; end if;
    R := Retype_Object (UT, Object_Endpoint, 0, CNode_Slot, 0, Bootstrap_Fault_EP_Slot, 1);
    if R /= 0 then return; end if;
