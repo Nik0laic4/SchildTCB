@@ -213,12 +213,6 @@ done
     "$OBJ/schild_audit_logger.o" "$OBJ/schild_uart_driver.o" \
     "$OBJ/daemon_stubs.o" 2>&1
 
-# H87-L (Phase A): build the mini-bootstrap ELF (root task as ELF-child stub).
-"$TOOL/ld" -T src/daemon_linker.ld -o "$OBJ/bootstrap.elf" \
-    "$OBJ/bootstrap.o" \
-    "$OBJ/bootstrap_c.o" \
-    "$OBJ/daemon_stubs.o" 2>&1
-
 # H87: embed fs_daemon.elf as a blob (kernel loads it above the kernel region).
 # Embed the ELF FILE (not objcopy -O binary) so the loader can parse its header.
 "$TOOL/ld" -r -b binary "$OBJ/fs_daemon.elf" -o "$OBJ/fs_daemon_blob.o" 2>&1
@@ -276,6 +270,15 @@ done
     "$OBJ/netserver_blob.o" 2>&1
 
 echo "  [RT] root_task.elf: $(wc -c < root_task.elf) bytes"
+
+# H87-L (Phase A): embed root_task.elf as a blob and link the mini-bootstrap
+# (root task as ELF-child stub). The bootstrap will Load_Elf this blob in Phase B.
+"$TOOL/ld" -r -b binary root_task.elf -o "$OBJ/root_task_blob.o" 2>&1
+"$TOOL/ld" -T src/daemon_linker.ld -o "$OBJ/bootstrap.elf" \
+    "$OBJ/bootstrap.o" \
+    "$OBJ/bootstrap_c.o" \
+    "$OBJ/root_task_blob.o" \
+    "$OBJ/daemon_stubs.o" 2>&1
 
 # Post-build path sanitization: strip host-absolute paths from root-task artifacts.
 bash ../../scripts/sanitize_paths.sh || true
