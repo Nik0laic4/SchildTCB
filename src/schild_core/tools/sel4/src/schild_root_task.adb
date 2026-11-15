@@ -41,6 +41,16 @@ procedure Schild_Root_Task with SPARK_Mode => On is
    -- C9 heartbeat: last-seen RDTSC per domain (Net=1, MLS=2, Config=3, FS=4).
    -- Initialized to the boot timestamp at each launch (grace period).
    Last_Seen : array (1 .. 4) of Word := (others => 0);
+   -- C9 health verdict per domain (True = alive within the threshold).
+   Health_Ok : array (1 .. 4) of Boolean := (others => True);
+   -- Grace deadline per domain (skip the health check until the daemon has had
+   -- time to finish its slow init, e.g. FS NVMe mount). FS=5s, others=1s.
+   Grace_Until : array (1 .. 4) of Word := (others => 0);
+   Grace_Ms    : constant array (1 .. 4) of Word := (1000, 1000, 1000, 5000);
+   Last_Check  : Word := 0;  -- throttle: last health-check timestamp
+   -- TSC cycles per microsecond. Fixed estimate for QEMU (~2.5 GHz); TODO:
+   -- calibrate at boot (PIT/HPET busy-wait) for real hardware.
+   Cycles_Per_Us : constant Word := 2500;
    function RDTSC return Word
      with Import, Convention => C, External_Name => "schild_rdtsc",
           Global => null;
@@ -352,6 +362,8 @@ begin
    begin
       if R = 0 then
          Put_Str ("[S7.7] MLS Server: OK" & ASCII.CR & ASCII.LF);
+         Last_Seen (2) := RDTSC;  -- C9 grace period
+         Grace_Until (2) := RDTSC + Grace_Ms (2) * Cycles_Per_Us;
       else
          Put_Str ("[S7.7] MLS Server: FAILED (code=");
          Put_Dec (R);
@@ -405,6 +417,8 @@ begin
          begin
             if LR = 0 then
                Put_Str ("[S8.1D] NetServer: OK" & ASCII.CR & ASCII.LF);
+               Last_Seen (1) := RDTSC;  -- C9 grace period
+               Grace_Until (1) := RDTSC + Grace_Ms (1) * Cycles_Per_Us;
             else
                Put_Str ("[S8.1D] NetServer: FAILED (code=");
                Put_Dec (LR);
@@ -457,6 +471,8 @@ begin
    begin
       if CD_R = 0 then
          Put_Str ("[R3] Config Daemon: OK" & ASCII.CR & ASCII.LF);
+         Last_Seen (3) := RDTSC;  -- C9 grace period
+         Grace_Until (3) := RDTSC + Grace_Ms (3) * Cycles_Per_Us;
       else
          Put_Str ("[R3] Config Daemon: FAILED (code=");
          Put_Dec (CD_R);
@@ -470,6 +486,8 @@ begin
    begin
       if FS_R = 0 then
          Put_Str ("[FS] daemon: OK" & ASCII.CR & ASCII.LF);
+         Last_Seen (4) := RDTSC;  -- C9 grace period
+         Grace_Until (4) := RDTSC + Grace_Ms (4) * Cycles_Per_Us;
       else
          Put_Str ("[FS] daemon: FAILED (code=");
          Put_Dec (FS_R);
@@ -683,12 +701,16 @@ begin
                Put_Str (ASCII.CR & ASCII.LF & "[IRQ] e1000e interrupt (badge=0x");
                Put_Hex (Badge);
                Put_Str (")" & ASCII.CR & ASCII.LF);
-               declare
-                  R : Word := Schild_Sel4_Syscall.Call_IPC (Schild_Sel4_Syscall.Root_Net_EP_Badged_Slot, 1, 0);
-               begin
-                  -- op=1 = poll_rx; reply MR0 = status (1=packet, 0=idle).
-                  null;
-               end;
+               if Health_Ok (1) then
+                  -- C9: gate the blocking poll Call on NetServer alive, else a
+                  -- hung NetServer blocks the root task (and the heartbeat).
+                  declare
+                     R : Word := Schild_Sel4_Syscall.Call_IPC (Schild_Sel4_Syscall.Root_Net_EP_Badged_Slot, 1, 0);
+                  begin
+                     -- op=1 = poll_rx; reply MR0 = status (1=packet, 0=idle).
+                     null;
+                  end;
+               end if;
                declare
                   R : Word := Schild_Sel4_Syscall.IRQ_Handler_Ack (IRQ_Handler_Slot);
                begin
@@ -709,6 +731,26 @@ begin
          if M > 0 then Last_Seen (2) := RDTSC; end if;
          if C > 0 then Last_Seen (3) := RDTSC; end if;
          if F > 0 then Last_Seen (4) := RDTSC; end if;
+      end;
+
+      -- C9 health check (throttled): a domain stale > 500 ms is unhealthy
+      -- (liveness-detect, not recover). Grace period skips the slow init.
+      declare
+         Threshold      : constant Word := 500_000 * Cycles_Per_Us;   -- 500 ms
+         Check_Interval : constant Word := 100_000 * Cycles_Per_Us;   -- 100 ms
+         Now            : Word := RDTSC;
+      begin
+         if Last_Check = 0 or else Now - Last_Check > Check_Interval then
+            Last_Check := Now;
+            for D in 1 .. 4 loop
+               if Now > Grace_Until (D)
+                 and then (Last_Seen (D) = 0
+                           or else Now - Last_Seen (D) > Threshold)
+               then
+                  Health_Ok (D) := False;
+               end if;
+            end loop;
+         end if;
       end;
 
       -- Cooperatively yield the CPU so the other domains (NetServer, MLS

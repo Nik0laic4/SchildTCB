@@ -203,4 +203,16 @@ schild_sel4_send:
     popq    %rbx
     ret
 
+/* Signal — seL4_Signal(ntfn): 0-length message (no payload). RDI = dest. */
+.globl schild_sel4_signal
+schild_sel4_signal:
+    pushq   %rbx
+    movq    %rsp, %rbx
+    xorq    %rsi, %rsi        /* info = 0 (0 MR)                            */
+    movq    $-5, %rdx         /* seL4_SysSend = -5 (MCS)                     */
+    syscall
+    movq    %rbx, %rsp
+    popq    %rbx
+    ret
+
 .section .note.GNU-stack,"",@progbits

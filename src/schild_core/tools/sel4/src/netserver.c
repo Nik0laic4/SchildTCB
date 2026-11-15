@@ -14,7 +14,7 @@ typedef          long long i64;
 extern i64 schild_sel4_recv(u64 src, u64 reply);
 extern i64 schild_sel4_replyrecv(u64 src, u64 info, u64 reply);
 extern i64 schild_sel4_reply_only(u64 reply, u64 info);
-extern i64 schild_sel4_send(u64 dest, u64 info);
+extern i64 schild_sel4_signal(u64 dest);
 extern unsigned int schild_mls_authorize_ipc_levels(unsigned int sender_level, unsigned int receiver_level);
 extern volatile u64 net_reply_cptr;
 extern volatile u64 schild_recv_mr[4];
@@ -44,7 +44,7 @@ void netserver_main(void) {
 
     for (;;) {
         /* C9 heartbeat: signal the ping_ntfn (CPtr 2, domain Net). */
-        schild_sel4_send(2ULL, 0ULL);
+        schild_sel4_signal(2ULL);
         u64 sender_role  = (badge >> 8) & 0xFF;
         u64 sender_level = badge & 0xFF;
         if (badge != 0 && sender_role != 0) {
