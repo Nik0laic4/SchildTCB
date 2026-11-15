@@ -534,6 +534,14 @@ is
    Config_PT_Lo_Slot       : constant Cap_Ref := Slot_Base + 315;  -- 4411
    Config_Image_Frame_Base : constant Cap_Ref := Slot_Base + 300;  -- 4396
 
+   --  H87 NetServer Stage 1/2: image frames + shared frame + mint offset.
+   --  netserver.elf = 40 pages (4412..4451); mint (offset 3200) lands at
+   --  7612..7651 — above the MMIO PCI window (4608..~7455), no collision.
+   Net_Image_Frame_Base      : constant Cap_Ref := Slot_Base + 316;  -- 4412
+   Net_Shared_Frame_Slot     : constant Cap_Ref := Slot_Base + 356;  -- 4452
+   Net_Shared_Frame_Copy_Slot : constant Cap_Ref := Slot_Base + 357; -- 4453
+   Net_Mint_Offset           : constant Cap_Ref := 3200;
+
    function Launch_FS_Daemon return Word
      with Global => null;
 

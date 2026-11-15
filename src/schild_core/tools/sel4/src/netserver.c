@@ -29,8 +29,11 @@ extern unsigned int schild_net_tx_shared(unsigned int len);
 extern unsigned int schild_net_rx_shared(void);
 
 void netserver_main(void) {
-    u64 ep = schild_net_endpoint_cptr;
-    u64 reply = net_reply_cptr;
+    /* H87 Stage 1: ep/reply live in the shared frame @0x560000 (root task
+     * writes them there; .bss globals belong to a different ELF copy). */
+    volatile u64 *sh = (volatile u64 *)0x560000ULL;
+    u64 ep = sh[0];
+    u64 reply = sh[1];
 
     if (ep == 0 || reply == 0) {
         for (;;) __asm__ volatile("pause");

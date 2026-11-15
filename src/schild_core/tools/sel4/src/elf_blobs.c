@@ -36,3 +36,14 @@ u64 schild_config_daemon_elf_size(void) {
     return (u64)(_binary_obj_root_task_config_daemon_elf_end -
                  _binary_obj_root_task_config_daemon_elf_start);
 }
+
+extern unsigned char _binary_obj_root_task_netserver_elf_start[];
+extern unsigned char _binary_obj_root_task_netserver_elf_end[];
+
+u64 schild_netserver_elf_start(void) {
+    return (u64)_binary_obj_root_task_netserver_elf_start;
+}
+u64 schild_netserver_elf_size(void) {
+    return (u64)(_binary_obj_root_task_netserver_elf_end -
+                 _binary_obj_root_task_netserver_elf_start);
+}

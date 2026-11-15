@@ -977,6 +977,11 @@ is
       VAddr        : Word;
       I            : Word := 0;
       R            : Word := 0;
+      Load_Status, Load_Entry : Word := 0;
+      function NetServer_Elf_Start return Word
+        with Import, Convention => C, External_Name => "schild_netserver_elf_start";
+      function NetServer_Elf_Size return Word
+        with Import, Convention => C, External_Name => "schild_netserver_elf_size";
    begin
       -- W2: discover the real NIC (ECAM scan; falls back to QEMU 82540EM).
       declare
@@ -991,9 +996,9 @@ is
       -- W7: discover the NVMe controller (optional; storage disabled if absent).
       R := Init_NetServer_NVMe;
 
-      -- 1. RAM untyped (>= 32 KB: 5 objects + IPC frame).
+      -- 1. RAM untyped (>= 256 KB: VSpace objects + IPC + shared + 40-page image).
       for Idx in 1 .. N_UNTYPED loop
-         if BI.all.Untyped_List (Idx).Size_Bits >= 15
+         if BI.all.Untyped_List (Idx).Size_Bits >= 18
            and then BI.all.Untyped_List (Idx).Is_Device = 0
            and then BI.all.Untyped_List (Idx).PAddr >= 16#800000#
          then
@@ -1036,20 +1041,32 @@ is
       R := Page_Table_Map (PT_Mmio_Slot, PML4_Slot, MMIO_VAddr);
       if R /= 0 then Put_String ("[S8.2] PTMmioMap FAIL"); Put_Hex (R); Put_String (ASCII.CR & ASCII.LF); return 2; end if;
 
-      -- 5. Mint + map the user image frames (shared with the Root Task).
-      Frame := BI.all.User_Image_Frames_Start;
-      VAddr := 16#400000#;
-      I := 0;
-      while Frame < BI.all.User_Image_Frames_End loop
-         R := CNode_Mint (CNode_Slot, Image_Frame_Base + I, 64,
-                          CNode_Slot, Frame, 64, 16#F#, 0);
-         if R /= 0 then Put_String ("[S8.2] ImgMint FAIL"); Put_Hex (R); Put_String (ASCII.CR & ASCII.LF); return 2; end if;
-         R := Page_Map (Image_Frame_Base + I, PML4_Slot, VAddr);
-         if R /= 0 then Put_String ("[S8.2] ImgMap FAIL"); Put_Hex (R); Put_String (ASCII.CR & ASCII.LF); return 2; end if;
-         Frame := Frame + 1;
-         VAddr := VAddr + 16#1000#;
-         I := I + 1;
-      end loop;
+      -- 5. H87: Load_Elf netserver.elf into the NetServer VSpace (replaces the
+      -- shared-image minting) + shared frame @0x560000 for ep/reply.
+      declare
+         Root_VSpace : constant Cap_Ref := 3;
+      begin
+         Load_Elf (NetServer_Elf_Start, NetServer_Elf_Size,
+                   PML4_Slot, Root_VSpace, RAM_UT, CNode_Slot,
+                   Net_Image_Frame_Base, Net_Mint_Offset, Load_Status, Load_Entry);
+         if Load_Status /= 0 then
+            Put_String ("[H87n] Load_Elf FAIL "); Put_Hex (Load_Status); Put_String (ASCII.CR & ASCII.LF);
+            return 2;
+         end if;
+      end;
+      Put_String ("[H87n] Load_Elf OK entry=0x"); Put_Hex (Load_Entry); Put_String (ASCII.CR & ASCII.LF);
+      Net_Entry := Load_Entry;
+      Net_Stack := 16#404018#;
+
+      R := Retype_Object (RAM_UT, Object_Frame, 0, CNode_Slot, 0, Net_Shared_Frame_Slot, 1);
+      if R /= 0 then Put_String ("[H87n] SharedRetype FAIL"); Put_Hex (R); Put_String (ASCII.CR & ASCII.LF); return 2; end if;
+      R := Page_Map (Net_Shared_Frame_Slot, PML4_Slot, 16#560000#);
+      if R /= 0 then Put_String ("[H87n] SharedMap FAIL"); Put_Hex (R); Put_String (ASCII.CR & ASCII.LF); return 2; end if;
+      R := CNode_Mint (CNode_Slot, Net_Shared_Frame_Copy_Slot, 64,
+                       CNode_Slot, Net_Shared_Frame_Slot, 64, 16#F#, 0);
+      if R /= 0 then Put_String ("[H87n] SharedMint FAIL"); Put_Hex (R); Put_String (ASCII.CR & ASCII.LF); return 2; end if;
+      R := Page_Map (Net_Shared_Frame_Copy_Slot, 3, 16#560000#);
+      if R /= 0 then Put_String ("[H87n] SharedMapRoot FAIL"); Put_Hex (R); Put_String (ASCII.CR & ASCII.LF); return 2; end if;
 
       -- 6. Retype + map the NetServer IPC buffer frame (slot Net_IPC_Slot = 4104, vaddr 0x510000).
       R := Retype_Object (RAM_UT, Object_Frame, 0, CNode_Slot, 0, Net_IPC_Slot, 1);
@@ -1278,19 +1295,16 @@ is
 
        -- 7. Write registers (RIP + RSP)
        Put_String ("[S8.1D] WriteRegs... ");
-       R := TCB_Write_Registers (Net_TCB_Slot, NetServer_Entry_Addr, NetServer_Stack_Addr);
+       R := TCB_Write_Registers (Net_TCB_Slot, Net_Entry, Net_Stack);
        Put_Hex (R); Put_String (ASCII.CR & ASCII.LF);
        if R /= 0 then return 2; end if;
 
-       -- 8. Set net endpoint CPtr
+       -- 8. H87 Stage 1: write ep/reply into the NetServer shared frame @0x560000.
        declare
-          procedure Set_Net_EP (EP : Word)
-            with Import, Convention => C, External_Name => "schild_set_net_endpoint";
-          procedure Set_Net_Reply (Rpl : Word)
-            with Import, Convention => C, External_Name => "schild_set_net_reply";
+          procedure C_Net_Shared_Write (EP, Reply : Word)
+            with Import, Convention => C, External_Name => "schild_net_shared_write";
        begin
-          Set_Net_EP (Net_EP_CPtr);
-          Set_Net_Reply (Net_Reply_CPtr);
+          C_Net_Shared_Write (Net_EP_CPtr, Net_Reply_CPtr);
        end;
 
        -- 9. Resume NetServer
@@ -1301,8 +1315,7 @@ is
 
        -- Health Monitoring: remember NetServer TCB/entry/stack for restart.
        Net_TCB_Cap := Net_TCB_Slot;
-       Net_Entry    := NetServer_Entry_Addr;
-       Net_Stack    := NetServer_Stack_Addr;
+       --  Net_Entry/Net_Stack already set by Map_NetServer_VSpace (Load_Entry/0x404018).
 
        -- 10. Yield to let NetServer start its Recv loop
        Yield;

@@ -281,6 +281,14 @@ void schild_config_shared_write(u64 ep, u64 reply) {
     sh[2] = 0;
 }
 
+/* H87 NetServer Stage 1: write ep/reply into the NetServer shared frame at 0x560000. */
+void schild_net_shared_write(u64 ep, u64 reply) {
+    volatile u64 *sh = (volatile u64 *)0x560000ULL;
+    sh[0] = ep;
+    sh[1] = reply;
+    sh[2] = 0;
+}
+
 void schild_set_mls_ipc_buf(u64 addr) { mls_ipc_buf_addr = addr; }
 
 /* Return root task's IPC buffer virtual address (for sharing). */
