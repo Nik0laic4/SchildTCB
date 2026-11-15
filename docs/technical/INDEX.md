@@ -21,6 +21,8 @@
 ## H87 (code isolation) и драйверы
 
 - `ELF_CHILD_LOADER_DESIGN.md` — ELF loader, слот-раскладка, mint-offset.
+- `SLOT_MAP.md` — единая таблица CSpace-слотов (image/mint/shared/PML4 + системные окна).
+- `ROOT_TASK_ELF_CHILD_DESIGN.md` — L-работа: root task как ELF-child (снятие 3 патчей).
 - `RING3_NETWORK_MIGRATION.md` — миграция сети в Ring 3.
 - `ARM64_VIRTIO_NET.md`, `GENET_DRIVER_DESIGN.md`, `VIRTIO_NET_L4RE_COMPARISON.md` — ARM64/virtio.
 
