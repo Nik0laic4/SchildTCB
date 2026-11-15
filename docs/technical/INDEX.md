@@ -33,6 +33,8 @@
 - `FINAL_AUDIT.md` — сводка assurance-доказательств.
 - `RING0_C_AUDIT.md` — аудит ring-0 C (C1).
 - `SEL4_PATCHES_ANALYSIS.md` — анализ 7 патчей seL4.
+- `HEALTH_CHECK_DESIGN.md` — C9 heartbeat (liveness) дизайн.
+- `C4_FUZZING_PLAN.md` — C4 seam fuzzing план (LLM harness, ASan/UBSan).
 
 ## Roadmap и история
 
