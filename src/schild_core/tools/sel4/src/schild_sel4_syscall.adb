@@ -577,15 +577,13 @@ is
        Put_Hex (Read_IPC_MR0); Put_String (ASCII.CR & ASCII.LF);
 
        --  H88: unit-test Authorize_IPC_Levels (gate logic, no IPC).
-       --  Expected: root=1, eq=1, up=0, dn=0.
+       --  Expected: eq=1, up=0, dn=0 (root bypass is caller-side, sender_role=0).
        Put_String ("[H88] Authorize_IPC_Levels: ");
-       R := Word (Schild_MLS_Policy.Authorize_IPC_Levels (4, 4, True));
-       Put_String ("root=4/4="); Put_Hex (R);
-       R := Word (Schild_MLS_Policy.Authorize_IPC_Levels (4, 4, False));
-       Put_String (" eq=4/4="); Put_Hex (R);
-       R := Word (Schild_MLS_Policy.Authorize_IPC_Levels (1, 4, False));
+       R := Word (Schild_MLS_Policy.Authorize_IPC_Levels (4, 4));
+       Put_String ("eq=4/4="); Put_Hex (R);
+       R := Word (Schild_MLS_Policy.Authorize_IPC_Levels (1, 4));
        Put_String (" up=1/4="); Put_Hex (R);
-       R := Word (Schild_MLS_Policy.Authorize_IPC_Levels (4, 1, False));
+       R := Word (Schild_MLS_Policy.Authorize_IPC_Levels (4, 1));
        Put_String (" dn=4/1="); Put_Hex (R);
        Put_String (ASCII.CR & ASCII.LF);
 

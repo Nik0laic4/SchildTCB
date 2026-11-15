@@ -17,7 +17,7 @@ typedef unsigned int       u32;
 extern i64 schild_sel4_recv(u64 src, u64 reply);
 extern i64 schild_sel4_replyrecv(u64 src, u64 info, u64 reply);
 extern i64 schild_sel4_reply_only(u64 reply, u64 info);
-extern unsigned int schild_mls_authorize_ipc_levels(unsigned int sender_level, unsigned int receiver_level, int sender_is_root);
+extern unsigned int schild_mls_authorize_ipc_levels(unsigned int sender_level, unsigned int receiver_level);
 extern volatile u64 fs_reply_cptr;
 extern volatile u64 fs_endpoint_cptr;
 extern volatile u64 schild_recv_mr[4];
@@ -61,8 +61,8 @@ void fs_daemon_main(void) {
     for (;;) {
         u64 sender_role  = (badge >> 8) & 0xFF;
         u64 sender_level = badge & 0xFF;
-        if (badge != 0) {
-            if (!schild_mls_authorize_ipc_levels((unsigned int)sender_level, 4, (sender_role == 0))) {
+        if (badge != 0 && sender_role != 0) {
+            if (!schild_mls_authorize_ipc_levels((unsigned int)sender_level, 4)) {
                 schild_reply_mr[0] = SCHILD_EMLSDENIED;
                 schild_reply_mr[1] = 0; schild_reply_mr[2] = 0; schild_reply_mr[3] = 0;
                 badge = schild_sel4_replyrecv(ep, 2ULL, reply);

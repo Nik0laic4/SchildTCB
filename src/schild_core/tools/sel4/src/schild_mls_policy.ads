@@ -141,17 +141,12 @@ is
    --  Returns 1 = allowed, 0 = denied.
    function Authorize_IPC_Levels
      (Sender_Level   : Unsigned_32;
-      Receiver_Level : Unsigned_32;
-      Sender_Is_Root : Boolean) return Unsigned_32
+      Receiver_Level : Unsigned_32) return Unsigned_32
    with Export, Convention => C,
         External_Name => "schild_mls_authorize_ipc_levels",
+        Pre => Sender_Level in 0 .. 4 and Receiver_Level in 0 .. 4,
         Post =>
-          (if Sender_Level > 4 or Receiver_Level > 4 then
-              Authorize_IPC_Levels'Result = 0
-           elsif Sender_Is_Root then
-              Authorize_IPC_Levels'Result = 1
-           else
-              Authorize_IPC_Levels'Result =
-                (if Can_IPC (Level_Map (Integer (Sender_Level)),
-                             Level_Map (Integer (Receiver_Level))) then 1 else 0));
+          Authorize_IPC_Levels'Result =
+            (if Can_IPC (Level_Map (Integer (Sender_Level)),
+                         Level_Map (Integer (Receiver_Level))) then 1 else 0);
 end Schild_MLS_Policy;

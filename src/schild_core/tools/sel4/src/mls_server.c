@@ -14,7 +14,7 @@ typedef          long long i64;
 extern i64 schild_sel4_recv(u64 src, u64 reply);
 extern i64 schild_sel4_replyrecv(u64 src, u64 info, u64 reply);
 extern i64 schild_sel4_reply_only(u64 reply, u64 info);
-extern unsigned int schild_mls_authorize_ipc_levels(unsigned int sender_level, unsigned int receiver_level, int sender_is_root);
+extern unsigned int schild_mls_authorize_ipc_levels(unsigned int sender_level, unsigned int receiver_level);
 
 /* IPC buffer address — set by Root Task via schild_set_mls_ipc_buf.
  * NOTE: on x86_64 seL4, MR[0..3] are delivered in hardware registers
@@ -55,8 +55,8 @@ void mls_server_main(void) {
         /* H88: MLS IPC gate. badge=0 -> legacy path (self-tests, policy-only).
          * badge!=0 && sender_role=0 -> root task (R2 bypass). Otherwise strict
          * BL via Authorize_IPC_Levels; deny on mismatch. */
-        if (badge != 0) {
-            if (!schild_mls_authorize_ipc_levels((unsigned int)sender_level, 4, (sender_role == 0))) {
+        if (badge != 0 && sender_role != 0) {
+            if (!schild_mls_authorize_ipc_levels((unsigned int)sender_level, 4)) {
                 schild_reply_mr[0] = SCHILD_EMLSDENIED;
                 schild_reply_mr[1] = 0; schild_reply_mr[2] = 0; schild_reply_mr[3] = 0;
                 badge = schild_sel4_replyrecv(endpoint, 1ULL, reply);
