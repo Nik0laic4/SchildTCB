@@ -602,6 +602,11 @@ is
        Reply_Slot  : constant Cap_Ref := Config_Reply_Slot;
        IPC_Buf_VAddr  : constant Word := 16#52B000#;
        R : Word;
+       Load_Status, Load_Entry : Word := 0;
+       function Config_Daemon_Elf_Start return Word
+         with Import, Convention => C, External_Name => "schild_config_daemon_elf_start";
+       function Config_Daemon_Elf_Size return Word
+         with Import, Convention => C, External_Name => "schild_config_daemon_elf_size";
     begin
        for I in 1 .. N_UNTYPED loop
           exit when Found >= 6;
@@ -648,34 +653,73 @@ is
        if R /= 0 then return 5; end if;
        R := Page_Map (IPC_Frame_Slot, VSpace_Slot, IPC_Buf_VAddr);
        if R /= 0 then return 6; end if;
+
+       --  H87 Stage 2: Config_PML4 + page tables + Load_Elf (from UT4, like MLS).
+       R := Retype_Object (UT4, Object_PML4, 0, CNode_Slot, 0, Config_PML4_Slot, 1);
+       if R /= 0 then return 2; end if;
+       R := Retype_Object (UT4, Object_PDPT, 0, CNode_Slot, 0, Config_PDPT_Slot, 1);
+       if R /= 0 then return 2; end if;
+       R := Retype_Object (UT4, Object_PageDirectory, 0, CNode_Slot, 0, Config_PD_Slot, 1);
+       if R /= 0 then return 2; end if;
+       R := Retype_Object (UT4, Object_PageTable, 0, CNode_Slot, 0, Config_PT_Lo_Slot, 1);
+       if R /= 0 then return 2; end if;
+       R := ASID_Pool_Assign (6, Config_PML4_Slot);
+       if R /= 0 then return 2; end if;
+       R := PDPT_Map (Config_PDPT_Slot, Config_PML4_Slot, 0);
+       if R /= 0 then return 2; end if;
+       R := Page_Directory_Map (Config_PD_Slot, Config_PML4_Slot, 0);
+       if R /= 0 then return 2; end if;
+       R := Page_Table_Map (Config_PT_Lo_Slot, Config_PML4_Slot, 16#400000#);
+       if R /= 0 then return 2; end if;
+       declare
+          Root_VSpace : constant Cap_Ref := 3;
+       begin
+          Load_Elf (Config_Daemon_Elf_Start, Config_Daemon_Elf_Size,
+                    Config_PML4_Slot, Root_VSpace, UT4, CNode_Slot,
+                    Config_Image_Frame_Base, Load_Status, Load_Entry);
+          if Load_Status /= 0 then
+             Put_String ("[H87c] Load_Elf FAIL" & ASCII.CR & ASCII.LF);
+             return 2;
+          end if;
+       end;
+       Put_String ("[H87c] Load_Elf OK entry=0x"); Put_Hex (Load_Entry); Put_String (ASCII.CR & ASCII.LF);
+
+       --  H87 Stage 1: Config shared frame @0x550000 (retype from UT4 + mint copy).
+       R := Retype_Object (UT4, Object_Frame, 0, CNode_Slot, 0, Config_Shared_Frame_Slot, 1);
+       if R /= 0 then return 2; end if;
+       R := Page_Map (Config_Shared_Frame_Slot, Config_PML4_Slot, 16#550000#);
+       if R /= 0 then return 2; end if;
+       R := CNode_Mint (CNode_Slot, Config_Shared_Frame_Copy_Slot, 64,
+                        CNode_Slot, Config_Shared_Frame_Slot, 64, 16#F#, 0);
+       if R /= 0 then return 2; end if;
+       R := Page_Map (Config_Shared_Frame_Copy_Slot, VSpace_Slot, 16#550000#);
+       if R /= 0 then return 2; end if;
+
        -- MCS: scheduling context + reply object, configure + bind.
        R := Setup_MCS_Thread (BI.all.SchedControl_Start, UT5, UT6,
                               SC_Slot, Reply_Slot, TCB_Slot,
                               Config_Budget_Us, Config_Period_Us, Config_SC_Badge);
        if R /= 0 then return 11; end if;
        R := TCB_Set_Fault_Handler (TCB_Slot, Fault_Slot,
-                                   CNode_Slot, 0, VSpace_Slot, 0);
+                                   CNode_Slot, 0, Config_PML4_Slot, 0);
        if R /= 0 then return 7; end if;
        R := TCB_Set_IPC_Buffer (TCB_Slot, IPC_Frame_Slot, IPC_Buf_VAddr);
        if R /= 0 then return 8; end if;
-       R := TCB_Write_Registers (TCB_Slot, Config_Entry_Addr, Config_Stack_Addr);
+       R := TCB_Write_Registers (TCB_Slot, Load_Entry, 16#404018#);
        if R /= 0 then return 9; end if;
        declare
-          procedure Set_Config_EP (EP : Word)
-            with Import, Convention => C, External_Name => "schild_set_config_endpoint";
-          procedure Set_Config_Reply (Rpl : Word)
-            with Import, Convention => C, External_Name => "schild_set_config_reply";
+          procedure C_Config_Shared_Write (EP, Reply : Word)
+            with Import, Convention => C, External_Name => "schild_config_shared_write";
        begin
-          Set_Config_EP (EP_Slot);
-          Set_Config_Reply (Reply_Slot);
+          C_Config_Shared_Write (EP_Slot, Reply_Slot);
        end;
        R := TCB_Resume (TCB_Slot);
        if R /= 0 then return 10; end if;
 
        -- Health Monitoring: remember Config Daemon TCB/entry/stack for restart.
        Cfg_TCB_Cap := TCB_Slot;
-       Cfg_Entry    := Config_Entry_Addr;
-       Cfg_Stack    := Config_Stack_Addr;
+       Cfg_Entry    := Load_Entry;
+       Cfg_Stack    := 16#404018#;
 
        Yield;
        -- IPC test: validate at Top_Secret (level=4) -> expect reply 1.

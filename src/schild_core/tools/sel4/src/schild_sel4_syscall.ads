@@ -521,6 +521,19 @@ is
    --  leaves 9 slots of headroom before FS_EP (+64).
    MLS_Image_Frame_Base : constant Cap_Ref := Slot_Base + 55;  -- 4151
 
+   --  H87 Config Stage 1/2: separate shared frame + PML4 + image frames.
+   --  Root image (NetServer minting) spans 4224..~4390 (167 frames, root_task.elf
+   --  ~680KB incl. config blob). Free window ~4391..4479 (before FS_Image_Frame_Base
+   --  4480). Image frames +300..+308 (4396..4404); Load_Segment mint (+64) lands at
+   --  +364..+372 (4460..4468) — both inside the free window, no collision.
+   Config_Shared_Frame_Slot      : constant Cap_Ref := Slot_Base + 310;  -- 4406
+   Config_Shared_Frame_Copy_Slot : constant Cap_Ref := Slot_Base + 311;  -- 4407
+   Config_PML4_Slot        : constant Cap_Ref := Slot_Base + 312;  -- 4408
+   Config_PDPT_Slot        : constant Cap_Ref := Slot_Base + 313;  -- 4409
+   Config_PD_Slot          : constant Cap_Ref := Slot_Base + 314;  -- 4410
+   Config_PT_Lo_Slot       : constant Cap_Ref := Slot_Base + 315;  -- 4411
+   Config_Image_Frame_Base : constant Cap_Ref := Slot_Base + 300;  -- 4396
+
    function Launch_FS_Daemon return Word
      with Global => null;
 

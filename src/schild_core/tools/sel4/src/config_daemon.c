@@ -29,9 +29,11 @@ _Static_assert(sizeof(schild_recv_mr) == SCHILD_IPC_MR_BYTES,  "recv MR window m
 _Static_assert(sizeof(schild_reply_mr) == SCHILD_IPC_MR_BYTES, "reply MR window must be 32 bytes");
 
 void config_daemon_main(void) {
-    extern volatile u64 config_endpoint_cptr;
-    u64 endpoint = config_endpoint_cptr;
-    u64 reply = config_reply_cptr;
+    /* H87 Stage 1: ep/reply live in the shared frame @0x550000 (root task
+     * writes them there; .bss globals belong to a different ELF copy). */
+    volatile u64 *sh = (volatile u64 *)0x550000ULL;
+    u64 endpoint = sh[0];
+    u64 reply    = sh[1];
 
     if (endpoint == 0 || reply == 0) {
         extern char config_alive_flag;
