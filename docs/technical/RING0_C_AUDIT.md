@@ -1,61 +1,56 @@
 # Schild TCB — Ring-0 C Audit (C1)
 
-**Version:** v0.1 (draft) | **Date:** 2026-11-08
-**Статус:** Блок 3, третий пункт (после H87-дизайна и AS6-спеки). Аудит, не рефакторинг.
+**Version:** v0.1 (draft) | **Date:** 2026-11-15
+**Scope:** классификация ring-0 trusted C (bare-metal профиль) — что можно вынести
+в Ring 3, что остаётся AS8-trusted. Консолидирует `THREAT_MODEL.md` R9/T8b/C-§.
 
----
+## 1. Что входит в ring-0 C (bare-metal)
 
-## 1. Назначение
+| Файл | Строк | Роль |
+|---|---|---|
+| `boot.S` | 601 | Multiboot2 → x86_64 Long Mode → Ada kernel (bootstrap) |
+| `interrupt_handlers.c` | 323 | IDT exception handlers + APIC EOI/init + system reset + raw UART (debug) |
+| `runtime_stubs.c` | 521 | UART/framebuffer/debug-render + GNAT Rcheck (panic→reset) + MMIO map + phys write |
+| `hw_io.c` | 43 | `outb`/`inb` (port I/O) |
 
-C1 (THREAT_MODEL T8b/R9): ring-0 C — **не содержит** containment (это Ring 3
-механизм). Баг в ring-0 C = паника ядра или произвольное исполнение в Ring 0.
-Задача — (а) зафиксировать, что именно в ring-0 C, (б) что можно вынести в
-Ring 3 (после H87 ELF loader), (в) остальное пометить как **trusted (AS8)**.
+Все четыре — ring-0, memory-unsafe (C), runtime-tested only (`THREAT_MODEL` R9).
 
-## 2. Инвентарь
+## 2. Классификация
 
-| Файл | Строк | Роль | Привилегия |
-|---|---|---|---|
-| `boot.S` | 601 | 32-bit entry, identity paging, long-mode handoff, SSE/FPU enable | **обязательно ring-0** (до ядра) |
-| `src/hw_io.c` | 43 | `outb`/`inb` (порт I/O x86_64) | **ring-0** (порт I/O; Ring 3 требует IO-bitmap) |
-| `src/interrupt_handlers.c` | 323 | IDT init, APIC/LAPIC/IOAPIC, PIT, PIC remap, `sti/hlt/cli`, i8042 reset | **ring-0** (IDT/APIC привилегированы) |
-| `src/runtime_stubs.c` | 521 | C-runtime заглушки (`malloc/free`=no-op, panic, secondary stack), UART, framebuffer, `memcmp`, trampoline, `wbinvd/clflush` | смешанно (см. §3) |
+### 2.1 Остаётся ring-0 (AS8 trusted) — не выносится
 
-## 3. Классификация
+- **`boot.S`** — bootstrap: GDT/IDT/paging/Long-Mode до появления Ring 3. Переносу не подлежит.
+- **`interrupt_handlers.c` → IDT/APIC** — `__attribute__((interrupt))` exception handlers
+  (`eDE..eDF`, PF, GP, …) + `apic_eoi`/`apic_init`. Работают на interrupt-стеке, привилегированы.
+- **`runtime_stubs.c` → GNAT Rcheck** (`__gnat_rcheck_*`, `__gnat_last_chance_handler`,
+  `__gnat_raise_exception`) — panic → `system_reset()`. Это контракт «fail-stop», не выносится.
+- **`runtime_stubs.c` → `schild_map_mmio_2mb` / `schild_phys_write64`** — манипуляция page-table
+  и физические записи (MMIO). Ring-0 по определению.
 
-### 3.1 Trusted, остаётся в ring-0 (AS8)
+### 2.2 Выносится в Ring 3 (уменьшает ring-0 поверхность)
 
-- **`boot.S`** — доверенный стартовый путь (Multiboot2 → long mode). Не выносим.
-- **`interrupt_handlers.c`** — IDT/APIC/IOAPIC/PIT/PIC: это прерывания и таймеры,
-  структурно ring-0. Доступ через MMIO (0xFEE00000) привилегирован.
-- **`hw_io.c`** — `inb`/`outb`: порт I/O. В Ring 3 доступен только через
-  IO-bitmap TSS (seL4 не экспонирует порт-I/O даемонам; MSI/MMIO — вместо портов).
-- **`runtime_stubs.c` panic/reset** — `__gnat_last_chance_handler`, i8042 reset:
-  последняя линия защиты от wedge, должна быть ring-0.
+- **UART** — `schild_uart_puts`/`schild_uart_putln` (`runtime_stubs.c`) и raw-UART в
+  `interrupt_handlers.c`. Комментарий: raw-UART в interrupt-handlers — дублирующий debug-путь,
+  можно удалить после перевода на единственный UART-канал.
+- **Framebuffer** — `schild_fb_init`/`putpixel`/`scroll` (`runtime_stubs.c`), MMIO-доступ.
+- **Debug render** — `schild_debug_render` (`runtime_stubs.c`), буфер-в/буфер-из.
+- **Port I/O** — `outb`/`inb` (`hw_io.c`, 43 строки): в Ring 3 возможен через TSS I/O bitmap
+  (разрешить только порты UART 0x3F8/0x3FD, 0x64) либо оставить AS8-trusted (43 строки,
+  без арифметики указателей — низкий риск).
 
-### 3.2 Кандидаты на вынос в Ring 3 (после H87)
+## 3. Целевая архитектура (после C1)
 
-- **UART helper** (`schild_uart_puts/putln`) — если UART отдать даемону-драйверу.
-- **Framebuffer** (`schild_fb_*`) — если FB отдать даемону-драйверу.
-- **`memcmp`/`memset`-подобные** — чистые функции, уже в Ring 3 как часть runtime.
-- **Runtime-заглушки** (`malloc/free`=no-op, `abort`, secondary stack) — при
-  появлении полноценного Ring 3 runtime (H87) заменяются на реальные.
+```
+ring 0:  boot.S + IDT/APIC + Rcheck(fail-stop) + mmio-map/phys-write   [AS8 trusted, ~миним.]
+ring 3:  UART driver + framebuffer driver + debug render               [isolated, memory-safe Ada]
+```
 
-**Вывод:** выносимое — это **утилиты и runtime-клей**, не привилегированный
-механизм. Привилегированный слой (boot/IDT/APIC/port-I/O) остаётся ring-0
-и помечается **trusted (AS8)**. Полный «0 строк ring-0 C» — не цель и не
-достижим без переписывания boot/IDT на Ada/SPARK (отдельная задача).
+## 4. Оценка влияния и порядок
 
-## 4. Что даёт вынос (после H87)
+1. **Сначала** — перевести raw-UART debug на единый канал (удалить дубль из
+   `interrupt_handlers.c`), не меняя ring-0 семантики.
+2. **Затем** — ring-3 UART/framebuffer драйвер (Ada, MMIO через существующий
+   `schild_map_mmio_2mb`, право map через корневой CSpace), ring-0 оставляет только fail-stop.
+3. **Port I/O** — либо TSS I/O bitmap, либо оставить AS8 (43 строки).
 
-- Уменьшает TCB: меньше доверенных строк в Ring 0.
-- Даже до выноса — документация (этот файл) делает trust-границу явной:
-  в THREAT_MODEL §9 уже перечислен ring-0 C; здесь — построчный инвентарь.
-
-## 5. Residuals
-
-- Ring-0 C остаётся **trusted, не proved** (AS8) до переписывания (если будет).
-- `schild_sel4_loader.c` / `schild_sel4_boot.c` (seL4 root-task build) — отдельный
-  слой, описан в H87/AS6, не в этом аудите.
-- IO-bitmap TSS для порт-I/O даемонам — out of scope (seL4 x86_64 MCS не даёт
-  готового пути; драйверы используют MMIO/MSI).
+Каждый шаг — отдельный коммит с gates (build + run_tests + host-KAT).
