@@ -162,13 +162,15 @@
 
 ### 5.1. Root task как ELF-child
 
-Ключевая архитектурная стратегия. Сейчас root task — GRUB-module, и это порождает `max-num-drhu`, `load-image`, `bootinfo-8k`. Если root task загружается как ELF-child (по образцу FS/MLS daemon), GRUB грузит только kernel, а userspace-загрузчик (`Load_Elf`) размещает root task в своём VSpace. Тогда:
+**Выполнено (v0.53, run_tests 24/24):** root task теперь грузится как ELF-child —
+`mini-bootstrap` (сам GRUB-module, ~1.6 MB с blob root task) ретайпит PML4 + page
+tables, копирует BootInfo, `Load_Elf(root_task.elf)` и `TCB_Resume`'ит root task
+(`ROOT_TASK_ELF_CHILD_DESIGN.md`). Но **три патча НЕ ушли**: bootstrap сам является
+GRUB-модулем, поэтому `max-num-drhu`/`load-image` всё ещё нужны для его загрузки, а
+`bootinfo-8k` — под 500 untyped caps. Чтобы снять патчи, bootstrap надо встроить в
+kernel (не модуль) и/или сократить `MaxNumBootinfoUntypedCaps` — отдельная работа.
 
-- `max-num-drhu` не нужен: `.boot.bss` может быть любого размера, GRUB не грузит модуль в зону memzero.
-- `load-image` не нужен: kernel не копирует модуль из `mods_end_paddr`.
-- `bootinfo-8k` может остаться только для untyped caps, но не для module placement.
-
-Это L-работа (Блок 3), но она убирает три патча архитектурно, а не патчем.
+Это L-работа (Блок 3); основная часть (ELF-child boot) выполнена, снятие патчей переосмыслено.
 
 ### 5.2. Собственный UART-драйвер вместо `DebugPutChar`
 
