@@ -461,7 +461,7 @@ is
        begin
           Load_Elf (Mls_Daemon_Elf_Start, Mls_Daemon_Elf_Size,
                     MLS_PML4_Slot, Root_VSpace, UT4, CNode_Slot,
-                    MLS_Image_Frame_Base, Load_Status, Load_Entry);
+                    MLS_Image_Frame_Base, 64, Load_Status, Load_Entry);
           if Load_Status /= 0 then
              Put_String ("[H87s2] Load_Elf FAIL" & ASCII.CR & ASCII.LF);
              return 2;
@@ -676,7 +676,7 @@ is
        begin
           Load_Elf (Config_Daemon_Elf_Start, Config_Daemon_Elf_Size,
                     Config_PML4_Slot, Root_VSpace, UT4, CNode_Slot,
-                    Config_Image_Frame_Base, Load_Status, Load_Entry);
+                    Config_Image_Frame_Base, 64, Load_Status, Load_Entry);
           if Load_Status /= 0 then
              Put_String ("[H87c] Load_Elf FAIL" & ASCII.CR & ASCII.LF);
              return 2;
@@ -1806,7 +1806,7 @@ is
       begin
          Load_Elf (Fs_Daemon_Elf_Start, Fs_Daemon_Elf_Size,
                    FS_PML4_Slot, Root_VSpace, UT_ELF, CNode_Slot,
-                   FS_Image_Frame_Base, Load_Status, Load_Entry);
+                   FS_Image_Frame_Base, 64, Load_Status, Load_Entry);
          if Load_Status /= 0 then
             Put_String ("[FS] Load_Elf FAIL" & ASCII.CR & ASCII.LF);
             return 2;

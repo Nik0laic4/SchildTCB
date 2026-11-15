@@ -43,7 +43,8 @@ package body Schild_Elf_Loader with SPARK_Mode => Off is
       Root_VSpace : Cap_Ref;
       RAM_UT     : Cap_Ref;
       CNode      : Cap_Ref;
-      Frame_Slot : in out Cap_Ref)
+      Frame_Slot : in out Cap_Ref;
+      Mint_Offset : Cap_Ref)
      return Word
    is
       VStart : constant Word := Ph.P_Vaddr and (not 16#FFF#);
@@ -60,7 +61,7 @@ package body Schild_Elf_Loader with SPARK_Mode => Off is
          end if;
 
          --  Mint an unmapped copy for the root-scratch mapping.
-         R := CNode_Mint (CNode, Frame_Slot + 64, 64, CNode, Frame_Slot, 64, 16#F#, 0);
+         R := CNode_Mint (CNode, Frame_Slot + Mint_Offset, 64, CNode, Frame_Slot, 64, 16#F#, 0);
          if R /= 0 then
             Put_String ("[ELF] Mint FAIL "); Schild_Sel4_BootInfo.Put_Hex (R);
             Put_String (ASCII.CR & ASCII.LF);
@@ -80,7 +81,7 @@ package body Schild_Elf_Loader with SPARK_Mode => Off is
          end if;
 
          --  Map the copy into the root VSpace at the scratch VA so the copy can write it.
-         R := Page_Map (Frame_Slot + 64, Root_VSpace, Scratch_VA);
+         R := Page_Map (Frame_Slot + Mint_Offset, Root_VSpace, Scratch_VA);
          if R /= 0 then
             Put_String ("[ELF] MapScratch FAIL "); Schild_Sel4_BootInfo.Put_Hex (R);
             Put_String (ASCII.CR & ASCII.LF);
@@ -116,6 +117,7 @@ package body Schild_Elf_Loader with SPARK_Mode => Off is
       RAM_UT      : Cap_Ref;
       CNode       : Cap_Ref;
       Slot_Base   : Cap_Ref;
+      Mint_Offset : Cap_Ref;
       Status      : out Word;
       Entry_Point : out Word)
    is
@@ -148,7 +150,7 @@ package body Schild_Elf_Loader with SPARK_Mode => Off is
          Schild_Elf_Core.Parse_Phdr (Ph_Buf, Ph);
          if Schild_Elf_Core.Is_Load (Ph) then
             R := Load_Segment (Ph, Image_Base, VSpace, Root_VSpace,
-                               RAM_UT, CNode, Frame_Slot);
+                               RAM_UT, CNode, Frame_Slot, Mint_Offset);
             if R /= 0 then
                Status := R;
                return;

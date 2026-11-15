@@ -18,6 +18,8 @@ package Schild_Elf_Loader with SPARK_Mode => On is
    --   RAM_UT      : untyped cap for retyping frames.
    --   CNode       : root CNode for the retype destination.
    --   Slot_Base   : first CSpace slot for the retyped frames (consumed 1/page).
+   --   Mint_Offset : CSpace offset from Slot_Base for the per-page mint copy
+   --                 (kept clear of the next frames + the daemon's own slots).
    --   Status      : 0 on success, nonzero on the first failing syscall.
    --   Entry_Point : the ELF entry point (e_entry).
    procedure Load_Elf
@@ -28,6 +30,7 @@ package Schild_Elf_Loader with SPARK_Mode => On is
       RAM_UT      : Cap_Ref;
       CNode       : Cap_Ref;
       Slot_Base   : Cap_Ref;
+      Mint_Offset : Cap_Ref;
       Status      : out Word;
       Entry_Point : out Word)
    with Pre => Image_Base /= 0 and Image_Size > 0 and VSpace > 0
