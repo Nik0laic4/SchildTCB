@@ -31,9 +31,10 @@ procedure Schild_Bootstrap with SPARK_Mode => Off is
 begin
    Get_BootInfo_Copy (BI, Unsigned_64 (Schild_Sel4_BootInfo.BootInfo'Size / System.Storage_Unit));
 
-   -- Find a RAM untyped for the root task's VSpace objects + image frames.
+   -- Find a large RAM untyped for the root task's VSpace objects + image
+   -- frames (~1087 pages, MemSiz ~4.25 MB) — needs Size_Bits >= 23 (8 MB).
    for I in BI.Untyped_List'Range loop
-      if BI.Untyped_List (I).Size_Bits >= 18
+      if BI.Untyped_List (I).Size_Bits >= 23
         and then BI.Untyped_List (I).Is_Device = 0
       then
          UT := BI.Untyped_Start + Word (I - 1);
@@ -73,7 +74,31 @@ begin
       return;
    end if;
 
-   -- Phase B next: retype TCB + SC + Reply, TCB_Set_Space + Write_Registers +
-   -- TCB_Resume (entry = Load_Entry). Skeleton for now.
-   null;
+   -- Phase B part 2: retype TCB + SchedContext + Reply + IPC frame, MCS
+   -- configure + bind, fault handler + IPC buffer, write registers + resume.
+   R := Retype_Object (UT, Object_TCB, 0, CNode_Slot, 0, Bootstrap_TCB_Slot, 1);
+   if R /= 0 then return; end if;
+   R := Retype_Object (UT, Object_SchedContext, 7, CNode_Slot, 0, Bootstrap_SC_Slot, 1);
+   if R /= 0 then return; end if;
+   R := Retype_Object (UT, Object_Reply, 0, CNode_Slot, 0, Bootstrap_Reply_Slot, 1);
+   if R /= 0 then return; end if;
+   R := Retype_Object (UT, Object_Frame, 0, CNode_Slot, 0, Bootstrap_IPC_Frame_Slot, 1);
+   if R /= 0 then return; end if;
+
+   R := SchedControl_ConfigureFlags (BI.SchedControl_Start, Bootstrap_SC_Slot,
+                                     50_000, 50_000, 0, 0, 0);
+   if R /= 0 then return; end if;
+   R := SchedContext_Bind (Bootstrap_SC_Slot, Bootstrap_TCB_Slot);
+   if R /= 0 then return; end if;
+   R := TCB_Set_Timeout_Endpoint (Bootstrap_TCB_Slot, Timeout_EP_Slot);
+   if R /= 0 then return; end if;
+   R := TCB_Set_Fault_Handler (Bootstrap_TCB_Slot, Root_Fault_EP_Slot,
+                               CNode_Slot, 0, Bootstrap_PML4_Slot, 0);
+   if R /= 0 then return; end if;
+   R := TCB_Set_IPC_Buffer (Bootstrap_TCB_Slot, Bootstrap_IPC_Frame_Slot, 16#500000#);
+   if R /= 0 then return; end if;
+   R := TCB_Write_Registers (Bootstrap_TCB_Slot, Load_Entry, 16#404018#);
+   if R /= 0 then return; end if;
+   R := TCB_Resume (Bootstrap_TCB_Slot);
+   if R /= 0 then return; end if;
 end Schild_Bootstrap;
