@@ -13,9 +13,9 @@
 _Static_assert(sizeof(void*) == 8, "bootinfo pointer must be 64-bit");
 
 extern unsigned long rt_bootinfo_vptr;
-void *schild_get_bootinfo(void) { return (void*)(rt_bootinfo_vptr ? rt_bootinfo_vptr : 0x900000UL); }
+void *schild_get_bootinfo(void) { return (void*)(rt_bootinfo_vptr ? rt_bootinfo_vptr : 0x4C0000UL); }
 unsigned long long schild_get_bootinfo_frame(void) {
-    return rt_bootinfo_vptr ? (unsigned long long)rt_bootinfo_vptr : 0x900000ULL;
+    return rt_bootinfo_vptr ? (unsigned long long)rt_bootinfo_vptr : 0x4C0000ULL;
 }
 
 /* Value copy of the seL4 BootInfo frame into a caller-provided buffer.
@@ -27,7 +27,7 @@ void schild_get_bootinfo_copy(void *dest, unsigned long long nbytes) {
      * maps the BootInfo frame at 0x580000; fall back to it when rt_bootinfo_vptr
      * is 0. Direct boot keeps the RDI-provided vptr. */
     const unsigned char *s = (const unsigned char *)
-        (rt_bootinfo_vptr ? rt_bootinfo_vptr : 0x900000UL);
+        (rt_bootinfo_vptr ? rt_bootinfo_vptr : 0x4C0000UL);
     unsigned long long i;
     for (i = 0; i < nbytes; i++) d[i] = s[i];
 }

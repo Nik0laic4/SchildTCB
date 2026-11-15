@@ -93,8 +93,8 @@ begin
    if R /= 0 then return; end if;
    R := Page_Table_Map (Bootstrap_PT_Hi_Slot, Bootstrap_PML4_Slot, 16#600000#);
    if R /= 0 then return; end if;
-   R := Page_Table_Map (Bootstrap_PT_Hi2_Slot, Bootstrap_PML4_Slot, 16#800000#);
-   if R /= 0 then return; end if;
+   -- NOTE: do NOT map PT_Hi2 at 0x800000 — the root task maps the ECAM 2MB
+   -- large page there (Ecam_VAddr), which needs the PD large-page entry, not a PT.
    Debug_Put (77);  -- 'M': page tables mapped
 
    -- Copy the full BootInfo (base 4KB + extra BI ~4KB) into 2 writable frames
@@ -124,9 +124,9 @@ begin
    R := CNode_Mint (CNode_Slot, Bootstrap_BootInfo_Copy2_Slot, 64,
                     CNode_Slot, Bootstrap_BootInfo_Frame2_Slot, 64, 16#F#, 0);
    if R /= 0 then return; end if;
-   R := Page_Map (Bootstrap_BootInfo_Copy_Slot, Bootstrap_PML4_Slot, 16#900000#);
+   R := Page_Map (Bootstrap_BootInfo_Copy_Slot, Bootstrap_PML4_Slot, 16#4C0000#);
    if R /= 0 then return; end if;
-   R := Page_Map (Bootstrap_BootInfo_Copy2_Slot, Bootstrap_PML4_Slot, 16#901000#);
+   R := Page_Map (Bootstrap_BootInfo_Copy2_Slot, Bootstrap_PML4_Slot, 16#4C1000#);
    if R /= 0 then return; end if;
    Debug_Put (66);  -- 'B': BootInfo copied + mapped
 

@@ -177,7 +177,7 @@ if [ "${SEL4_PRIMARY:-0}" = "1" ]; then
    rm -rf build/sel4_iso/boot/grub
    mkdir -p build/sel4_iso/boot/grub
    cp "$SEL4_KERNEL" build/sel4_iso/boot/sel4_kernel.elf
-   cp "$RT_ELF" build/sel4_iso/boot/root_task.elf
+   cp "$BOOT_ELF" build/sel4_iso/boot/bootstrap.elf
    FS_ELF="tools/sel4/obj/root_task/fs_daemon.elf"
    if [ -f "$FS_ELF" ]; then
       cp "$FS_ELF" build/sel4_iso/boot/fs_daemon.elf
@@ -188,7 +188,7 @@ set gfxmode=auto
 set timeout=0
 menuentry "seL4 + Ada Root Task" {
     multiboot2 /boot/sel4_kernel.elf
-    module2 /boot/root_task.elf
+    module2 /boot/bootstrap.elf
     module2 /boot/fs_daemon.elf
     boot;
 }

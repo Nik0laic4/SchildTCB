@@ -311,7 +311,7 @@ is
                               & ASCII.CR & ASCII.LF);
                   declare
                      TCB_Slot     : constant Cap_Ref := 1;   -- seL4_CapInitThreadTCB
-                     VSpace_Slot  : constant Cap_Ref := 3;   -- seL4_CapInitThreadVSpace
+                     VSpace_Slot  : constant Cap_Ref := Get_Root_VSpace;   -- seL4_CapInitThreadVSpace
                      Bind_Result  : Word;
                   begin
                      Bind_Result := TCB_Set_Fault_Handler
@@ -1078,7 +1078,7 @@ is
       R := CNode_Mint (CNode_Slot, Net_Shared_Frame_Copy_Slot, 64,
                        CNode_Slot, Net_Shared_Frame_Slot, 64, 16#F#, 0);
       if R /= 0 then Put_String ("[H87n] SharedMint FAIL"); Put_Hex (R); Put_String (ASCII.CR & ASCII.LF); return 2; end if;
-      R := Page_Map (Net_Shared_Frame_Copy_Slot, 3, 16#560000#);
+      R := Page_Map (Net_Shared_Frame_Copy_Slot, Get_Root_VSpace, 16#560000#);
       if R /= 0 then Put_String ("[H87n] SharedMapRoot FAIL"); Put_Hex (R); Put_String (ASCII.CR & ASCII.LF); return 2; end if;
 
       -- 6. Retype + map the NetServer IPC buffer frame (slot Net_IPC_Slot = 4104, vaddr 0x510000).
@@ -1456,7 +1456,7 @@ is
        Shared_Slot  : constant Cap_Ref := Shared_Frame_Slot;
        Shared_Copy  : constant Cap_Ref := Shared_Frame_Copy_Slot;
        Shared_VAddr : constant Word := 16#52A000#;
-       Root_VSpace  : constant Cap_Ref := 3;    -- seL4_CapInitThreadVSpace
+       Root_VSpace  : constant Cap_Ref := Get_Root_VSpace;    -- seL4_CapInitThreadVSpace
        Net_VSpace   : constant Cap_Ref := Net_PML4_Slot;  -- NetServer PML4
        Root_Depth   : constant Word := 64;
        UT : Cap_Ref := 0;
