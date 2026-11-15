@@ -136,7 +136,7 @@
 
 **`smap` — upstream не развязал PRINTING и SMAP.** В `CHANGES.md` 16.0.0/17.0.0 нет коммитов, меняющих условие `!PRINTING && !DANGEROUS`. Патч остаётся, либо нужен собственный UART-драйвер в root task.
 
-**`load-image` и `max-num-drhu` — архитектурная альтернатива.** Оба патча из-за GRUB-module. Если root task станет ELF-child (по образцу FS/MLS daemon), оба уходят архитектурно. Это уже зафиксировано в `HANDOFF.md` как Блок 3 (L).
+**`load-image` и `max-num-drhu` — архитектурная альтернатива.** Оба патча из-за GRUB-module. Root task **уже** стал ELF-child (v0.53, §5.1), но bootstrap сам — GRUB-module, поэтому оба патча остаются (загрузка bootstrap). Чтобы снять, bootstrap надо встроить в kernel.
 
 ### 4.3. Полезные `Kconfig`-опции (docs.sel4.systems/projects/sel4/configurations.html)
 
