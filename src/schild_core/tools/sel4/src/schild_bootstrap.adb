@@ -110,6 +110,7 @@ begin
       return;
    end if;
    Debug_Put (76);  -- 'L': Load_Elf OK
+   Debug_Put (Shift_Right (Load_Entry, 16) and 16#FF#);  -- entry byte 2 (0x40='@' for 0x400000)
 
    -- Phase B part 2: retype TCB + SchedContext + Reply + IPC frame, MCS
    -- configure + bind, fault handler + IPC buffer, write registers + resume.
