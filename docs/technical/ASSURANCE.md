@@ -1,6 +1,6 @@
 # Schild TCB — Assurance Case & Hardening Roadmap
 
-**Version:** v0.5  |  **Date:** 2026-11-01  |  **Status:** assurance-кейс и TCB заморожены (Tier A/B/C); «что дальше» вынесено в `ROADMAP.md`. §5 (фазы) и §7 (лог) — исторические.
+**Version:** v0.6  |  **Date:** 2026-11-15  |  **Status:** assurance-кейс и TCB заморожены (Tier A/B/C); «что дальше» вынесено в `ROADMAP.md`. §5 (фазы) и §7 (лог) — исторические.
 **Owner:** Ирганов А.Н.
 
 ---
@@ -11,6 +11,8 @@ This document is the **general plan** (генплан) for turning Schild TCB fr
 research prototype into a system whose security claims are **precise,
 per-component, and mechanically checked** — instead of a broad "high-assurance"
 label that is wider than the verified reality.
+
+**Scope note.** This is a research prototype, not a product, not a Linux replacement, and not a certified system. It is an open reference architecture and methodology for building trusted computing bases on seL4. The value is in the approach, the assurance case, and the documented engineering decisions.
 
 It defines:
 
@@ -53,6 +55,7 @@ tier-A guarantees. It splits into two honest halves:
 **Unverified TCB — ring 0, runtime-tested only:**
 - `boot.S` — 32-bit entry, identity paging, long-mode hand-off
 - `runtime_stubs.c`, `interrupt_handlers.c`, `hw_io.c` — C runtime, IDT, MMIO
+- **Local seL4 patches** (SMAP, object-zeroing, framebuffer, bootinfo-8k, max-num-drhu, load-image) — modify the formally verified kernel; reviewed but not re-proven. See [`SEL4_PATCHES_ANALYSIS.md`](SEL4_PATCHES_ANALYSIS.md) for the full analysis, risk classification, and minimization strategy. This is a real, acknowledged weakening of the upstream verification guarantee (AS8).
 
 Everything else is **outside the TCB** and must be isolated (Phase 3): the
 drivers and daemons run in their own **Tier B** protection domains —
@@ -66,9 +69,9 @@ PML4/CSpace, NVMe BAR0 @0x620000), and `Persist_Audit_Log` reaches it over IPC
 
 ### 2.2 Verified claims (frozen)
 
-| Claim | Mechanical check | Result (2026-08-16) |
+| Claim | Mechanical check | Result (2026-11-15) |
 |-------|------------------|---------------------|
-| Tier-A modules have no unproved VCs | `bash scripts/prove_kernel.sh` | `not-proved: 0` (132 proved / 48 skipped, 180 total — 2026-11-09; 8 scaffold excluded, see H99) |
+| Tier-A modules have no unproved VCs | `bash scripts/prove_kernel.sh` | `not-proved: 0` (188 modules swept; 180 in proof set: 132 proved / 48 skipped; 8 scaffold excluded, see H99) |
 | Level-4 root-task proof units prove (8: 1 daemon + 7 libraries/models) | `bash scripts/verify.sh` | "all verification conditions proved" (`not-proved: 0`) |
 | Kernel builds clean | `SCHILD_PROFILE=public ./build.sh` | 184 objects, 0 errors |
 | Boot chain works | `SKIP_BUILD=1 SEL4_PRIMARY=0 bash scripts/run_tests.sh` | PASS (Long Mode → e1000e → SMP → MLS → :80) |
@@ -336,6 +339,7 @@ bash scripts/prove_kernel.sh                                # full SPARK sweep �
 - **C8 (boot counter persistence, latent):** NVMe I/O is deferred (no `Read_Block`/`Write_Block` wired — `BOOT_COUNTER_DESIGN` §5), so C8 is not active. When NVMe persistence lands, the boot counter must be read by Tier A directly (option a), not via the Tier B NVMe driver — otherwise the golden rule breaks. Deferred indefinitely until IOMMU or a Tier A-controlled counter store.
 - **C9 heartbeat (partial, liveness-detect only):** the root task polls 4 per-domain ping notifications (badge-OR-safe — one object per domain, demux by slot) and updates `Last_Seen[D]` via RDTSC (HPET-calibrated `cycles/us`). Detects a hang (`Health_Ok[D]=False` for the boot-manager failover) but does **not** recover — recovery needs Health_Monitor on heartbeat timeout, which requires H90 (timeout on Call). RDTSC threshold assumes single-core / TSC-synchronized; on SMP with unsynchronized TSC, false positives are possible (current target is 1 core). Boot-manager `Health_Status` is renamed `NetServer_Alive`/`MLS_Alive`: "alive" = heartbeat liveness, **not** functional; the MLS functional probe (`Call_IPC(MLS_EP, op=2, target=4) → 1`) is gated on the heartbeat + throttled 5 s, but it is blocking — full mitigation needs H90. Network functional probe (NIC link/RX/TX) remains pending H90.
 - **C4 (syscall seam):** Tier A security properties hold conditional on seam correctness, which is trusted, not proven (1475 lines SPARK_Off + C shims). This is the main residual of the Tier A claims.
+- **AS8 (local seL4 patches):** 7 patches modify the formally verified kernel (SMAP, object-zeroing, framebuffer ×3, bootinfo-8k, max-num-drhu, load-image). Each is reviewed but not re-proven; the upstream verification guarantee transfers only partially. The full analysis, risk classification, and the architectural path to a clean upstream kernel are in [`SEL4_PATCHES_ANALYSIS.md`](SEL4_PATCHES_ANALYSIS.md). Accepted as a documented residual; minimization is tracked in `ROADMAP.md`.
 - **H112 (MLS/Config CSpace not isolated):** the MLS and Config daemons run in the root CNode (`CNode_Slot=2`), not their own CSpace (Net/FS have their own). A compromised MLS/Config can `seL4_Signal` any notification in the root CSpace — `IRQ_Ntfn` (fake IRQ), `Timeout_EP` (fake budget overrun), `Root_Fault_EP` (fake domain fault). Fix: give MLS/Config their own CSpace (M-work, after C9).
 
 

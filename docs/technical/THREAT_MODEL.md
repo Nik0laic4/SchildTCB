@@ -205,9 +205,13 @@ The following are **trusted, not re-proven**, and must be listed explicitly:
   x86_64 MCS is weaker — upstream). We accept this as the root of trust.
 - **Local patches.** `patches/` contains kernel modifications (`seL4-smap.patch`,
   `seL4-object-zeroing.patch`, `seL4-framebuffer*.patch` (×3),
-  `seL4-max-num-drhu.patch`, `seL4-bootinfo-8k-untyped.patch`).
+  `seL4-max-num-drhu.patch`, `seL4-bootinfo-8k-untyped.patch`, and
+  `seL4-load-image-above-kernel.patch`).
   These alter the verified kernel; they are **reviewed but not re-proven**, so
   the transferred guarantee is partial. This is a real, acknowledged weakening.
+  The full analysis, risk classification, and minimization strategy (root task
+  as ELF-child, own UART driver, Kconfig migration, upstream updates) are in
+  [`SEL4_PATCHES_ANALYSIS.md`](SEL4_PATCHES_ANALYSIS.md).
 - **The syscall seam.** `Schild_Sel4_Syscall` (spec `On`, body `Off`) and the C
   shims encode the seL4 ABI (syscall numbers, message-info layout, MR/cap
   slots). The mapping from Ada contracts to the actual ABI is trusted and

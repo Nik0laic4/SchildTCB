@@ -30,3 +30,5 @@ Open an issue describing the problem, the expected behavior, and (if possible) s
 ## License
 
 By contributing, you agree that your contributions are licensed under GPL-2.0-only.
+
+The project may offer a separate commercial license for use in closed-source products (dual licensing). By contributing, you agree that your contributions may be distributed under both the GPL-2.0-only and such a commercial license.

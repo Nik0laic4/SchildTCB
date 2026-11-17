@@ -14,11 +14,13 @@ A **Trusted Computing Base (TCB)** research prototype: a formally verified core 
 Schild TCB is a research prototype of a microkernel-based trusted computing base. It is two artifacts, not one:
 
 1. **A bare-metal OS** written from scratch in Ada — bootloader, NVMe driver, e1000e NIC driver, TCP/IP stack, HTTP server. Runs on a ThinkPad T580 and in QEMU. Answers *"does it work"*.
-2. **An seL4-based artifact** — the microkernel is upstream (unmodified, formally verified), and the contribution is an Ada/SPARK **root task** plus several daemons. Network and storage run **isolated in Ring 3** processes, communicating over IPC. Answers *"is it proven"*.
+2. **An seL4-based artifact** — the microkernel is upstream seL4 (formally verified; locally patched for x86_64 MCS and hardware support, see [`SEL4_PATCHES_ANALYSIS.md`](docs/technical/SEL4_PATCHES_ANALYSIS.md)), and the contribution is an Ada/SPARK **root task** plus several daemons. Network and storage run **isolated in Ring 3** processes, communicating over IPC. Answers *"is it proven"*.
+
+**This is not a product, not a Linux replacement, and not a certified system.** It is an open reference architecture and methodology for building trusted computing bases on seL4. The value is in the approach, the assurance case, and the documented engineering decisions, not in shipping a ready-to-use OS.
 
 ## Highlights
 
-- **Formal verification** — 186 kernel modules swept at **SPARK Level 4** (`gnatprove --level=4 --mode=all`) with **0 unproved VCs**; ~130 of 188 are proved, the remaining ~56 are outside proof scope (`SPARK_Mode => Off` drivers/platform code, or no analyzable body). 8 root-task daemons (MLS policy, config daemon, audit logger, A/B boot manager, HM model, launch model, watchdog, root task) are also proved. *(A few modules — `schild_firewall`, `schild_signals`, `schild_frame_allocator`, `schild_server_security_policy` — are provable at Level 4 in a focused run but may be classified `SKIPPED` by the canonical `-j8` batch; the stable gate is `not-proved: 0`. See [`SPARK_PROOF_TECHNIQUES.md`](docs/technical/SPARK_PROOF_TECHNIQUES.md).)*
+- **Formal verification** — 188 kernel modules swept at **SPARK Level 4** (`gnatprove --level=4 --mode=all`) with **0 unproved VCs**: 132 proved, 48 outside proof scope (`SPARK_Mode => Off` drivers/platform code), 8 scaffold modules explicitly excluded (see [`ASSURANCE.md`](docs/technical/ASSURANCE.md) §2.2). 8 root-task daemons (MLS policy, config daemon, audit logger, A/B boot manager, HM model, launch model, watchdog, root task) are also proved. *(A few modules — `schild_firewall`, `schild_signals`, `schild_frame_allocator`, `schild_server_security_policy` — are provable at Level 4 in a focused run but may be classified `SKIPPED` by the canonical `-j8` batch; the stable gate is `not-proved: 0`. See [`SPARK_PROOF_TECHNIQUES.md`](docs/technical/SPARK_PROOF_TECHNIQUES.md).)*
 - **Isolated periphery** — network (e1000e → I219-V) and storage (NVMe + SchildFS) run in the isolated Ring-3 **NetServer**; a fault there cannot reach the proven core.
 - **MLS Bell-LaPadula** — 5 security levels in the seL4 layer (Public..Top_Secret), 4 in the bare-metal kernel.
 - **Crash containment** — faulting a driver is caught and contained without rebooting the platform.
@@ -109,11 +111,13 @@ The project's own code is licensed under **GPL-2.0-only** (see [`LICENSE`](LICEN
 - seL4 microkernel — GPL-2.0-only (Data61/CSIRO)
 - GNAT Runtime Library — GMGPL (GPL + runtime exception)
 
+GPL-2.0-only is a deliberate choice: it ensures that derivative works remain open. For commercial use in closed-source products, a separate licensing agreement is possible — contact the author.
+
 ## Author
 
 Alexander Irganov.
 
-- Habr (RU): [«Микроядро seL4, Ada/SPARK и 185 модулей: разбор проекта»](https://habr.com/ru/articles/1095314/)
+- Habr (RU): [Microkernel seL4, Ada/SPARK and formal verification](https://habr.com/ru/articles/1095314/)
 - vc.ru (RU): [«Зачем сварщику микроядро?»](https://vc.ru/id79615/3203908-zachem-svarshchiku-mikroyadro-sel4-i-proyekt-schild-tcb-na-ada-spark)
 - Reddit (r/ada): [«I'm a 38-year-old welder…»](https://www.reddit.com/r/ada/s/XSFhtr1EzA)
 
