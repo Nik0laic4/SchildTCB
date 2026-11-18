@@ -2,6 +2,7 @@
 
 A **Trusted Computing Base (TCB)** research prototype: a formally verified core (**seL4** microkernel + **Ada/SPARK 2022**) with an isolated-peripheral environment.
 
+[![OpenSSF Best Practices](https://www.bestpractices.dev/projects/16898/badge)](https://www.bestpractices.dev/projects/16898)
 [![CI](https://github.com/Nik0laic4/SchildTCB/actions/workflows/ci.yml/badge.svg)](https://github.com/Nik0laic4/SchildTCB/actions/workflows/ci.yml)
 [![ARM64 virtio-net](https://github.com/Nik0laic4/SchildTCB/actions/workflows/arm64-net.yml/badge.svg)](https://github.com/Nik0laic4/SchildTCB/actions/workflows/arm64-net.yml)
 [![SPARK Level 4](https://img.shields.io/badge/SPARK_Level_4-0_unproved_VCs-green)](docs/technical/ASSURANCE.md)
