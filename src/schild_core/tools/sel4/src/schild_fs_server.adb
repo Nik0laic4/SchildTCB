@@ -151,10 +151,10 @@ package body Schild_Fs_Server with SPARK_Mode => Off is
       Actual : out Unsigned_32) return Unsigned_32
    is
       F     : Schild_Schild_Fs.File_Info;
-      Buf   : Schild_Schild_Fs.Unsigned_8_Array (0 .. 2047);
+      Buf   : Schild_Schild_Fs.Unsigned_8_Array (0 .. Fs_Buffer_Size - 1);
       Got   : Unsigned_32;
       Ok    : Boolean;
-      L     : constant Unsigned_32 := (if Len > 2048 then 2048 else Len);
+      L     : constant Unsigned_32 := (if Len > Fs_Buffer_Size then Fs_Buffer_Size else Len);
    begin
       Actual := 0;
       if not Initialized then return St_Not_Mounted; end if;
@@ -174,9 +174,9 @@ package body Schild_Fs_Server with SPARK_Mode => Off is
       New_Off : out Unsigned_32) return Unsigned_32
    is
       F     : Schild_Schild_Fs.File_Info;
-      Buf   : Schild_Schild_Fs.Unsigned_8_Array (0 .. 2047);
+      Buf   : Schild_Schild_Fs.Unsigned_8_Array (0 .. Fs_Buffer_Size - 1);
       Ok    : Boolean;
-      L     : constant Unsigned_32 := (if Len > 2048 then 2048 else Len);
+      L     : constant Unsigned_32 := (if Len > Fs_Buffer_Size then Fs_Buffer_Size else Len);
    begin
       New_Off := Offset;
       if not Initialized then return St_Not_Mounted; end if;
@@ -220,10 +220,10 @@ package body Schild_Fs_Server with SPARK_Mode => Off is
       New_Size : out Unsigned_32) return Unsigned_32
    is
       pragma Unreferenced (Name_Len);
-      Buf : Schild_Schild_Fs.Unsigned_8_Array (0 .. 4095) := (others => 0);
+      Buf : Schild_Schild_Fs.Unsigned_8_Array (0 .. Fs_Append_Buffer_Size - 1) := (others => 0);
       F   : Schild_Schild_Fs.File_Info;
       Ok  : Boolean;
-      L   : constant Unsigned_32 := (if Len > 4096 then 4096 else Len);
+      L   : constant Unsigned_32 := (if Len > Fs_Append_Buffer_Size then Fs_Append_Buffer_Size else Len);
    begin
       New_Size := 0;
       if not Initialized then return St_Not_Mounted; end if;

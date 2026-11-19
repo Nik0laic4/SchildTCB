@@ -13,6 +13,8 @@
 with Interfaces;
 with Schild_Schild_Fs;
 
+use type Interfaces.Unsigned_32;
+
 package Schild_Fs_Server with SPARK_Mode => Off is
 
    -- Op codes (MR[0]) — синхронизировано с fs_daemon.c
@@ -27,6 +29,12 @@ package Schild_Fs_Server with SPARK_Mode => Off is
    Op_Is_Read_Only: constant := 8;
    Op_Delete      : constant := 9;
    Op_Fault_Test  : constant := 99;
+
+   -- M19: single source of truth for the per-op byte-buffer size (the shared
+   -- DMA frame chunk copied per Read/Write/Append). The body clamps Len to it.
+   Fs_Buffer_Size : constant := 2048;
+   -- Fs_Append uses the full 4 KiB shared frame (4096), not the 2048 chunk.
+   Fs_Append_Buffer_Size : constant := 4096;
 
    -- Status codes (Reply MR[0])
    St_Ok          : constant := 0;
@@ -51,21 +59,27 @@ package Schild_Fs_Server with SPARK_Mode => Off is
    pragma Export (C, Fs_Open, "schild_fs_open");
 
    -- Read up to Len bytes at Offset, copy into shared frame.
+   -- M19: Len is bounded by the shared-frame size (2048); the body clamps as
+   -- the runtime guard for the C caller (this package is Off, so the Pre is
+   -- documentation, not a proved contract).
    -- Reply: actual_len (0 = EOF).
    function Fs_Read
      (Handle    : Interfaces.Unsigned_32;
       Offset    : Interfaces.Unsigned_32;
       Len       : Interfaces.Unsigned_32;
-      Actual    : out Interfaces.Unsigned_32) return Interfaces.Unsigned_32;
+      Actual    : out Interfaces.Unsigned_32) return Interfaces.Unsigned_32
+   with Pre => Len <= Fs_Buffer_Size;
    pragma Export (C, Fs_Read, "schild_fs_read");
 
    -- Write Len bytes from shared frame at Offset.
+   -- M19: Len bounded by the shared-frame size (2048); body clamps (see Fs_Read).
    -- Reply: new_offset (Offset + Len on success).
    function Fs_Write
      (Handle    : Interfaces.Unsigned_32;
       Offset    : Interfaces.Unsigned_32;
       Len       : Interfaces.Unsigned_32;
-      New_Off   : out Interfaces.Unsigned_32) return Interfaces.Unsigned_32;
+      New_Off   : out Interfaces.Unsigned_32) return Interfaces.Unsigned_32
+   with Pre => Len <= Fs_Buffer_Size;
    pragma Export (C, Fs_Write, "schild_fs_write");
 
    -- Create a file (name in shared frame, name_len). Size pre-allocates.
@@ -76,11 +90,13 @@ package Schild_Fs_Server with SPARK_Mode => Off is
    pragma Export (C, Fs_Create, "schild_fs_create");
 
    -- Append Len bytes from shared frame at end of file (H72=Б).
+   -- M19: Len bounded by the full shared-frame size (4096); body clamps.
    -- Reply: new_size.
    function Fs_Append
      (Name_Len  : Interfaces.Unsigned_32;
       Len       : Interfaces.Unsigned_32;
-      New_Size  : out Interfaces.Unsigned_32) return Interfaces.Unsigned_32;
+      New_Size  : out Interfaces.Unsigned_32) return Interfaces.Unsigned_32
+   with Pre => Len <= Fs_Append_Buffer_Size;
    pragma Export (C, Fs_Append, "schild_fs_append");
 
    -- Delete a file by name (name in shared frame, name_len). Frees its data
