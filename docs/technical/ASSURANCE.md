@@ -333,6 +333,19 @@ bash scripts/prove_kernel.sh                                # full SPARK sweep �
 
 ## 9. Accepted residuals (2026-11-15)
 
+| Risk | Attack scenario | Mitigation (today) | Blocking dependency |
+|---|---|---|---|
+| **C4** syscall seam (1475 lines SPARK_Off + C shims) | bug in the seam breaks Tier-A isolation (the trust root) | code review; seam is the trust root of every Tier-A claim | **C4 fuzzing** (planned, `C4_FUZZING_PLAN.md`) |
+| **AS8** 7 local seL4 patches | patch regresses a proven kernel property | per-patch review; full analysis in `SEL4_PATCHES_ANALYSIS.md` | **upstream attempt** (framebuffer/bootinfo) |
+| **C9** heartbeat detect-not-recover | daemon hangs are detected but not auto-recovered | `Health_Ok[D]=False` → boot-manager failover | **H90** (timeout on Call) for recovery |
+| **H112** MLS/Config in root CNode | compromised MLS/Config signals `IRQ_Ntfn`/`Timeout_EP`/`Root_Fault_EP` (fake-fault) | MLS/Config run as root-level daemons; no per-op isolation | own CSpace for MLS/Config (M-work) |
+| **C8** boot counter not persistent | boot counter not yet read/written (NVMe deferred) | deferred (not active) | NVMe persistence + Tier-A counter store |
+| **M20** `op=99` fault-injection compiled unconditionally | attacker reaches the test-only fault path | self-test only (not reachable from peers) | compile out for production |
+| **R23** MLS gate is communication-level only | non-root Top_Secret peer can `Fs_Delete("audit.log")` | only root holds the FS-EP cap (single-level) | per-file levels + operation-aware gate (multi-level) |
+| **R24** root bypass at the caller | MLS enforcement is meaningless under root compromise | accepted — root is in the TCB | — (by design) |
+
+### Residuals in detail
+
 - **H107 / H88 policy (R23):** the MLS gate (`Authorize_IPC_Levels`) is communication-level (strict equal-clearance), not per-file and not per-operation. A non-root Top_Secret peer (e.g. `Audit_Logger`) could `Fs_Delete("audit.log")`; a lower-clearance domain cannot even `Fs_Is_Mounted`. Safe for the single-level prototype (only root holds the FS-EP cap); multi-level requires per-file levels + an operation-aware gate.
 - **R2 root bypass (R24):** root bypass is implemented at the caller side (`sender_role = 0` → the daemons skip the gate); `Authorize_IPC_Levels` is a pure equal-clearance predicate with no bypass branch. MLS enforcement is meaningless under root compromise — accepted (root is in the TCB).
 - **M20 (test-only fault injection):** `op=99` is compiled unconditionally; must be compiled out for production.
