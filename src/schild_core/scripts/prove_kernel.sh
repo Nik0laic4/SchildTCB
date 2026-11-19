@@ -43,6 +43,7 @@ mkdir -p obj/proof
 # build artifact compiled only in the public profile, not a proof source, and it
 # is not listed in the proof project's Source_Dirs (gnatprove would fail on it).
 mapfile -t MODS < <(find src -name '*.adb' -not -path '*/null/*' -exec basename {} .adb \; | sort)
+SWEPT=${#MODS[@]}   # modules swept before scaffold exclusion (canonical metric)
 
 # H99: exclude scaffold modules from proof (On spec + Off stub, not in TCB, not linked).
 # These modules are dead code in the repo; proving their Off stubs creates a
@@ -92,8 +93,23 @@ echo "proved     : $(grep -c '^PROVED' "$OUT" || true)" >> "$OUT"
 echo "not-proved : $(grep -c '^NOT-PROVED' "$OUT" || true)" >> "$OUT"
 echo "skipped    : $(grep -c '^SKIPPED' "$OUT" || true)" >> "$OUT"
 
-# Gate: fail hard if any module is NOT-PROVED (Level-4 claim is "not-proved: 0").
+# Canonical metrics JSON (machine-generated; README/CI consume this, not hand numbers).
+PROVED=$(grep -c '^PROVED' "$OUT" || true)
 NOTPROVED=$(grep -c '^NOT-PROVED' "$OUT" || true)
+SKIPPED=$(grep -c '^SKIPPED' "$OUT" || true)
+SCAFFOLD=${#SCAFFOLD_MODULES[@]}
+cat > obj/proof/metrics.json <<JSON
+{
+  "swept": $SWEPT,
+  "in_proof": $TOTAL,
+  "proved": $PROVED,
+  "skipped": $SKIPPED,
+  "not_proved": $NOTPROVED,
+  "scaffold_excluded": $SCAFFOLD
+}
+JSON
+
+# Gate: fail hard if any module is NOT-PROVED (Level-4 claim is "not-proved: 0").
 if [ "$NOTPROVED" -ne 0 ]; then
   echo "ERROR: $NOTPROVED module(s) NOT-PROVED (see $OUT)." >&2
   grep '^NOT-PROVED' "$OUT" >&2 || true
@@ -101,3 +117,4 @@ if [ "$NOTPROVED" -ne 0 ]; then
 fi
 
 echo "Report: $OUT"
+echo "Metrics: obj/proof/metrics.json"

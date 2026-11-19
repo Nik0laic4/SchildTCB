@@ -75,7 +75,14 @@ See [`src/schild_core/arm64/README.md`](src/schild_core/arm64/README.md).
 
 ## Build (x86_64)
 
-Requirements: GNAT (Ada/SPARK 2022) + gprbuild (Alire `gnat_native` 14.2.1 recommended), grub-mkrescue, QEMU.
+**Quick start (Docker, no toolchain install):**
+
+```bash
+docker build -t schild-tcb .
+docker run --rm -v "$PWD":/repo schild-tcb    # build + SPARK verify (green = "proof passed")
+```
+
+Requirements (native): GNAT (Ada/SPARK 2022) + gprbuild (Alire `gnat_native` 14.2.1 recommended), grub-mkrescue, QEMU.
 
 ```bash
 cd src/schild_core

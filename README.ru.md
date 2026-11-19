@@ -74,7 +74,14 @@ Schild TCB — исследовательский прототип довере�
 
 ## Сборка (x86_64)
 
-Требования: GNAT (Ada/SPARK 2022) + gprbuild (рекомендуется Alire `gnat_native` 14.2.1), grub-mkrescue, QEMU.
+**Быстрый старт (Docker, без установки тулчейна):**
+
+```bash
+docker build -t schild-tcb .
+docker run --rm -v "$PWD":/repo schild-tcb    # сборка + SPARK-проверка (зелёный = "proof passed")
+```
+
+Требования (нативно): GNAT (Ada/SPARK 2022) + gprbuild (рекомендуется Alire `gnat_native` 14.2.1), grub-mkrescue, QEMU.
 
 ```bash
 cd src/schild_core
