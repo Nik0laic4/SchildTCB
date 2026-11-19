@@ -9,7 +9,9 @@ is
    is
    begin
       --  Admit the request only if it fits within the remaining quota.
-      if Passport.Current_Usage + Request <= Passport.Max_Limit then
+      --  H100: compare against the remaining budget (no addition), so a huge
+      --  Request cannot wrap Unsigned_64 and bypass the quota.
+      if Request <= Passport.Max_Limit - Passport.Current_Usage then
          Passport.Current_Usage := Passport.Current_Usage + Request;
          Allowed := True;
       else

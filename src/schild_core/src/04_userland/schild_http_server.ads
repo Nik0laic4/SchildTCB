@@ -12,6 +12,9 @@ package Schild_Http_Server with SPARK_Mode => Off is
    -- requests answer 503 instead of reading an unmapped BAR0 and faulting.
    -- Local_FS is a compile-time constant False in the NetServer.
 
+   -- H101: this body is SPARK_Mode => Off, so the Pre below is NOT an enforced
+   -- contract — the runtime guard (in the body, "Audit C23") is the actual
+   -- backstop for the undersized Reply_Buf path. Kept as documentation only.
    procedure Handle_Request (Request : in Byte_Array;
      Reply_Buf : out Byte_Array; Reply_Len : out Unsigned_16; Success : out Boolean)
      with Pre => Reply_Buf'Length >= 4096;
