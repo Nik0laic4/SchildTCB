@@ -126,7 +126,8 @@ GPL-2.0-only — осознанный выбор: она гарантирует,
 
 Александр Ирганов (Alexander Irganov).
 
-- Хабр: [Microkernel seL4, Ada/SPARK and formal verification](https://habr.com/ru/articles/1095314/)
+- Хабр: [Microkernel seL4, Ada/SPARK and formal verification](https://habr.com/ru/articles/1095314/) (16 октября 2026)
+- Хабр: [Доказано ≠ безопасно: как каскады ИИ-агентов заставили меня усилить модель угроз](https://habr.com/ru/articles/1102822/) (3 ноября 2026)
 - vc.ru: [«Зачем сварщику микроядро?»](https://vc.ru/id79615/3203908-zachem-svarshchiku-mikroyadro-sel4-i-proyekt-schild-tcb-na-ada-spark)
 - Reddit (r/ada): [«I'm a 38-year-old welder…»](https://www.reddit.com/r/ada/s/XSFhtr1EzA)
 
