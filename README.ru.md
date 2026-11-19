@@ -94,7 +94,7 @@ SEL4_PRIMARY=1 ./build.sh
 
 # Формальная верификация
 bash scripts/verify.sh          # демоны root-задачи, SPARK Level 4
-bash scripts/prove_kernel.sh    # полный прогон ядра (186 модулей)
+bash scripts/prove_kernel.sh    # полный прогон ядра (180 модулей)
 
 # Прогон в QEMU
 SKIP_BUILD=1 SEL4_PRIMARY=0 bash scripts/run_tests.sh
@@ -103,7 +103,7 @@ SKIP_BUILD=1 SEL4_PRIMARY=0 bash scripts/run_tests.sh
 ## CI (GitHub Actions)
 
 - **Push / PR в `master`** → автоматически выполняются `build` (bare-metal ядро + ISO) и `verify` (8 демонов root-задачи, SPARK Level 4).
-- **Вручную** (`Actions` → `CI` → *Run workflow*) → задача `prove-full` выполняет полное доказательство 186 модулей на SPARK Level 4 (`scripts/prove_kernel.sh`) и загружает `obj/proof/report.txt` как артефакт.
+- **Вручную** (`Actions` → `CI` → *Run workflow*) → задача `prove-full` выполняет полное доказательство 180 модулей на SPARK Level 4 (`scripts/prove_kernel.sh`) и загружает `obj/proof/report.txt` как артефакт.
 
 ## Участие
 
@@ -112,6 +112,8 @@ SKIP_BUILD=1 SEL4_PRIMARY=0 bash scripts/run_tests.sh
 ## Документация
 
 - [`docs/README.md`](docs/README.md) — указатель документации и единый источник истины.
+- [`docs/GLOSSARY.md`](docs/GLOSSARY.md) — глоссарий (VC, Pre/Post, Tier A/B/C, Capability).
+- [`docs/methodology/`](docs/methodology/) — «конституция ИИ-агента» и разборы кейсов.
 - [`PROJECT_PASSPORT.md`](PROJECT_PASSPORT.md) — обзор проекта.
 - [`docs/technical/ASSURANCE.md`](docs/technical/ASSURANCE.md) — assurance-кейс и план укрепления.
 - [`docs/technical/THREAT_MODEL.md`](docs/technical/THREAT_MODEL.md) — модель угроз и модель нарушителя.
