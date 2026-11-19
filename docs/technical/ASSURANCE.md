@@ -1,13 +1,15 @@
 # Schild TCB — Assurance Case & Hardening Roadmap
 
-**Version:** v0.6  |  **Date:** 2026-11-15  |  **Status:** assurance-кейс и TCB заморожены (Tier A/B/C); «что дальше» вынесено в `ROADMAP.md`. §5 (фазы) и §7 (лог) — исторические.
+> Language: English (this file) | [Русский](./ASSURANCE.ru.md)
+
+**Version:** v0.6  |  **Date:** 2026-11-15  |  **Status:** the assurance case and TCB are frozen (Tier A/B/C); "what's next" is in `ROADMAP.md`. §5 (phases) and §7 (log) are historical.
 **Owner:** Ирганов А.Н.
 
 ---
 
 ## 1. Purpose
 
-This document is the **general plan** (генплан) for turning Schild TCB from a
+This document is the **general plan** (master plan) for turning Schild TCB from a
 research prototype into a system whose security claims are **precise,
 per-component, and mechanically checked** — instead of a broad "high-assurance"
 label that is wider than the verified reality.
@@ -144,9 +146,9 @@ and forwards to the platform UART driver.
 
 ## 5. Phase plan
 
-> **Историческая секция.** План фаз 1–4 выполнен (см. §7). Дальнейшая работа
-> канонично ведётся в [`ROADMAP.md`](ROADMAP.md) (W1–W10); эта секция оставлена
-> как запись исходного плана.
+> **Historical section.** The Phase 1–4 plan has been executed (see §7). Further
+> work is canonically tracked in [`ROADMAP.md`](ROADMAP.md) (W1–W10); this section
+> is kept as a record of the original plan.
 
 ### Phase 1 — Close the proof seams (target: `not-proved: 0` in tier A)
 
@@ -233,8 +235,8 @@ assurance argument until the x86_64 MCS proof catches up (see
 
 ## 7. Progress log
 
-> **Исторический лог (заморожен на 2026-10-04).** Более поздние проверенные
-> результаты — в [`CHANGELOG.md`](CHANGELOG.md) и [`ROADMAP.md`](ROADMAP.md).
+> **Historical log (frozen at 2026-10-04).** Later verified results are in
+> [`CHANGELOG.md`](CHANGELOG.md) and [`ROADMAP.md`](ROADMAP.md).
 
 - 2026-08-16 — Document adopted. Phase 1 in progress: `Schild_Log` abstraction
   introduced; precise gnatprove diagnosis of the 5 not-proved modules launched.
