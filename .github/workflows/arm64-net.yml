@@ -93,8 +93,23 @@ jobs:
           git config --global user.email "ci@schildtcb.invalid"
           git config --global user.name "SchildTCB CI"
           mkdir sel4proj && cd sel4proj
-          repo init -u https://github.com/seL4/sel4test-manifest.git --depth=1
-          repo sync -j8
+          # seL4's manifest fetches many projects in parallel; a transient
+          # network/fetch failure used to fail the whole e2e job. Retry.
+          SYNCED=0
+          for attempt in 1 2 3 4; do
+            repo init -u https://github.com/seL4/sel4test-manifest.git --depth=1 >/dev/null 2>&1 || true
+            if repo sync -j8 --retry-fetches=3; then
+              SYNCED=1
+              echo "seL4 checkout OK (attempt $attempt)"
+              break
+            fi
+            echo "seL4 checkout failed (attempt $attempt), retrying in 10s ..."
+            sleep 10
+          done
+          if [ "$SYNCED" -ne 1 ]; then
+            echo "ERROR: seL4 checkout failed after 4 attempts" >&2
+            exit 1
+          fi
 
       - name: Build seL4 (qemu-arm-virt, aarch64, non-MCS)
         run: |
