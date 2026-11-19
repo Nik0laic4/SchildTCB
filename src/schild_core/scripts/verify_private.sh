@@ -83,7 +83,7 @@ echo "Proving private daemon bodies (level=4, mode=all) ..."
 LOG="$ROOT_DIR/obj/verify_private/obj/gnatprove.stdout"
 gnatprove -P /tmp/verify_private.gpr --level=4 --mode=all 2>&1 | tee "$LOG"
 # Gate on the stdout ("medium:"/"high:" = unproved VCs), not the old "not proved".
-if grep -qE '^[[:space:]]*(medium|high):' "$LOG"; then
+if grep -qE ' (medium|high):' "$LOG"; then
   echo "ERROR: private daemons have unproved verification conditions." >&2
   grep -nE '^[[:space:]]*(medium|high):' "$LOG" >&2 || true
   exit 1
