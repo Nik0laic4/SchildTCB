@@ -18,6 +18,8 @@ with System;
 package Schild_Sel4_Syscall
   with SPARK_Mode => On
 is
+   pragma Elaborate_Body;  -- body (Cycles_Per_Us_Stored) initializes before the main
+
    -- seL4 word types (64-bit on x86_64)
    subtype Word is Unsigned_64;
    subtype Cap_Ref is Word;
@@ -184,9 +186,11 @@ is
    -- is stored in a package-level variable read by Get_Cycles_Per_Us.
    function Map_Hpet return Word
      with Global => null;
-   procedure Calibrate_Cycles_Per_Us (Cpu_Us : out Word);
+   Cycles_Per_Us_Stored : Word := 2500;  -- calibrated cycles/us (spec-visible)
+   procedure Calibrate_Cycles_Per_Us (Cpu_Us : out Word)
+     with Global => (In_Out => Cycles_Per_Us_Stored);
    function Get_Cycles_Per_Us return Word
-     with Global => null;
+     with Global => (Input => Cycles_Per_Us_Stored);
 
    function Retype_Object
      (Untyped_Cap : Cap_Ref;

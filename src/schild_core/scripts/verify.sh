@@ -52,15 +52,14 @@ export PATH="$(dirname "$GNATPROVE_BIN"):$GNAT_BIN:$PATH"
 echo "GNATprove: $GNATPROVE_BIN"
 echo "GNAT:      $GNAT_BIN/gcc"
 echo "Proving verify.gpr (mode=all, level=4) ..."
-gnatprove -P verify.gpr --mode=all --level=4
-REPORT="obj/verify/gnatprove/gnatprove.out"
-# Gate on the machine-readable report: a clean Level-4 run has no
-# "not proved" entries.  (gnatprove exits 0 even when VCs are unproved —
-# they are reported as "high" messages — so the report is the source of
-# truth, not the exit code.)
-if grep -q "not proved" "$REPORT"; then
-  echo "ERROR: SPARK verification conditions remain UNPROVED (not-proved > 0)." >&2
-  grep -n "not proved" "$REPORT" >&2 || true
+# Gate on the stdout: unproved VCs are reported as "medium:"/"high:" messages
+# (gnatprove exits 0 even when VCs are unproved), so the stdout is the source
+# of truth, not the exit code.  (The old "not proved" grep never matched.)
+LOG="obj/verify/gnatprove/gnatprove.stdout"
+gnatprove -P verify.gpr --mode=all --level=4 2>&1 | tee "$LOG"
+if grep -qE '^[[:space:]]*(medium|high):' "$LOG"; then
+  echo "ERROR: SPARK verification conditions remain UNPROVED." >&2
+  grep -nE '^[[:space:]]*(medium|high):' "$LOG" >&2 || true
   exit 1
 fi
 echo "SPARK proof passed: all verification conditions proved."

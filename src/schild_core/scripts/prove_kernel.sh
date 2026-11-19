@@ -14,11 +14,16 @@ set -u
 ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT_DIR"
 
-GP="$(ls -1d "$HOME"/.local/share/alire/releases/gnatprove_*/bin/gnatprove 2>/dev/null | head -1)"
+# gnatprove discovery: PATH first (fresh 'alr install' -> ~/.alire/bin), then the
+# legacy Alire release path (prove_kernel.sh used to hardcode only the latter).
+GP="$(command -v gnatprove 2>/dev/null)"
+if [ -z "$GP" ]; then
+  GP="$(ls -1d "$HOME"/.local/share/alire/releases/gnatprove_*/bin/gnatprove 2>/dev/null | head -1)"
+fi
 GNAT="$(ls -1d "$HOME"/.local/share/alire/toolchains/gnat_native_*/bin 2>/dev/null | head -1)"
 
 if [ -z "$GP" ] || [ ! -x "$GP" ]; then
-  echo "ERROR: gnatprove not found (~/.local/share/alire/releases/gnatprove_*/bin)." >&2
+  echo "ERROR: gnatprove not found (PATH or ~/.local/share/alire/releases/gnatprove_*/bin)." >&2
   echo "Install it with 'alr install gnatprove' and retry." >&2
   exit 2
 fi

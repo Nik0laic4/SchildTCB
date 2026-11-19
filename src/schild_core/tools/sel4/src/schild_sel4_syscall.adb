@@ -382,8 +382,8 @@ is
       return 0;
    end Init_Heartbeat;
 
-   -- C9: package-level calibrated cycles/us (fallback 2500 = 2.5 GHz).
-   Cycles_Per_Us_Stored : Word := 2500;
+   -- C9: Cycles_Per_Us_Stored lives in the spec (spec-visible + initialized);
+   -- Get_Cycles_Per_Us is an expression function over it.
    function Get_Cycles_Per_Us return Word is (Cycles_Per_Us_Stored);
 
    -- C9: map the HPET frame (0xFED00000) at 0x07F00000 via the device-untyped

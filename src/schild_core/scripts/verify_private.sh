@@ -80,12 +80,12 @@ GPR
 
 echo "GNATprove: $GNATPROVE_BIN"
 echo "Proving private daemon bodies (level=4, mode=all) ..."
-gnatprove -P /tmp/verify_private.gpr --level=4 --mode=all
-
-REPORT="$ROOT_DIR/obj/verify_private/obj/gnatprove/gnatprove.out"
-if grep -q "not proved" "$REPORT"; then
+LOG="$ROOT_DIR/obj/verify_private/obj/gnatprove.stdout"
+gnatprove -P /tmp/verify_private.gpr --level=4 --mode=all 2>&1 | tee "$LOG"
+# Gate on the stdout ("medium:"/"high:" = unproved VCs), not the old "not proved".
+if grep -qE '^[[:space:]]*(medium|high):' "$LOG"; then
   echo "ERROR: private daemons have unproved verification conditions." >&2
-  grep -n "not proved" "$REPORT" >&2 || true
+  grep -nE '^[[:space:]]*(medium|high):' "$LOG" >&2 || true
   exit 1
 fi
 echo "Private profile proof passed: all verification conditions proved."
