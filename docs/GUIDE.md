@@ -19,9 +19,11 @@ Schild TCB — **два артефакта**, их важно не путать:
 ## 1. Предварительные требования
 
 - Linux x86_64; Alire `alr` 2.1.1; `gnat_native` 14.2.1; `gprbuild` 22.0.1;
-  `gnatprove` 14.1.1.
+  `gnatprove` (CI/Dockerfile ставят latest — сегодня 16.1.0; пруф воспроизводится
+  и на пинованном 14.1.1, см. `TOOL_QUALIFICATION.md`).
 - Системные пакеты: `grub-pc-bin grub-common xorriso mtools qemu-system-x86
-  python3 make binutils gcc`.
+  python3 make binutils gcc` (+ для сборки seL4-ядра: `cmake ninja-build
+  libxml2-utils`).
 - Быстрый старт без ручной установки — `Dockerfile` (см. §9).
 
 Точные версии и детерминизм — `docs/technical/TOOL_QUALIFICATION.md`.

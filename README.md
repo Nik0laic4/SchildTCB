@@ -78,7 +78,7 @@ SEL4_PRIMARY=1 ./build.sh
 
 # Formal verification
 bash scripts/verify.sh          # root-task daemons, SPARK Level 4
-bash scripts/prove_kernel.sh    # full kernel run (186 modules)
+bash scripts/prove_kernel.sh    # full kernel run (180 modules)
 
 # Run in QEMU
 SKIP_BUILD=1 SEL4_PRIMARY=0 bash scripts/run_tests.sh
@@ -87,7 +87,7 @@ SKIP_BUILD=1 SEL4_PRIMARY=0 bash scripts/run_tests.sh
 ## CI (GitHub Actions)
 
 - **Push / PR to `master`** → `build` (bare-metal kernel + ISO) and `verify` (8 root-task daemons, SPARK Level 4) run automatically.
-- **Manual** (`Actions` → `CI` → *Run workflow*) → the `prove-full` job runs the complete 186-module SPARK Level-4 proof (`scripts/prove_kernel.sh`) and uploads `obj/proof/report.txt` as an artifact.
+- **Manual** (`Actions` → `CI` → *Run workflow*) → the `prove-full` job runs the complete 180-module SPARK Level-4 proof (`scripts/prove_kernel.sh`) and uploads `obj/proof/report.txt` as an artifact.
 
 ## Contributing
 

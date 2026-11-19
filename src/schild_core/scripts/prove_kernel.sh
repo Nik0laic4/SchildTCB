@@ -80,7 +80,7 @@ project Proof_Batch is
 end Proof_Batch;
 EOF
   rm -rf obj/proof/gnatprove
-  gnatprove -P /tmp/proof_batch.gpr --level=4 --mode=all -j8 > /tmp/proof_batch.log 2>&1
+  gnatprove -P /tmp/proof_batch.gpr --level=4 --mode=all -j$(nproc) > /tmp/proof_batch.log 2>&1
   outfile=obj/proof/gnatprove/gnatprove.out
   python3 "$ROOT_DIR/scripts/classify_gnatprove.py" "$outfile" "${chunk[@]}" >> "$OUT"
   echo "chunk $((i/BATCH+1))/$(( (TOTAL+BATCH-1)/BATCH )) done" >&2
