@@ -131,6 +131,11 @@ jobs:
           cd src/schild_core
           bash scripts/prove_kernel.sh
 
+      - name: Metrics consistency (README vs metrics.json)
+        run: |
+          cd src/schild_core
+          bash scripts/check_metrics_consistency.sh
+
       - name: Upload proof report
         if: always()
         uses: actions/upload-artifact@v7
