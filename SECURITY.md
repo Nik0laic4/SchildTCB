@@ -7,8 +7,8 @@
 | `master` (x86_64) | ✅ |
 | `arm64` (Raspberry Pi 4B) | ✅ (pre-release) |
 
-> `master` и `arm64` в данный момент синхронизированы (один и тот же commit);
-> дерево содержит оба таргета — x86_64 и ARM64.
+> `master` and `arm64` are currently synchronized (the same commit);
+> the tree carries both targets — x86_64 and ARM64.
 
 ## Reporting a vulnerability
 
