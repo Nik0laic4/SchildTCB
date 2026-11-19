@@ -19,6 +19,16 @@ Schild TCB is a research prototype of a microkernel-based trusted computing base
 
 **This is not a product, not a Linux replacement, and not a certified system.** It is an open reference architecture and methodology for building trusted computing bases on seL4. The value is in the approach, the assurance case, and the documented engineering decisions, not in shipping a ready-to-use OS.
 
+## Method & Roles
+
+This repository is produced by a documented **human–machine pipeline**, not a lone developer:
+
+- **Author (human)** — architecture, requirements, audit registry, and control; holds the Tier-A boundary and every assurance claim.
+- **AI agent** — generates code, edits contracts, hunts for defects; nothing ships past the gates and the human review.
+- **SPARK/gnatprove** — the impartial oracle; `not-proved: 0` is a machine-checked fact, not an assertion.
+
+The pipeline rules ("AI-agent constitution"), the escalation model, and the worked case studies (e.g. the H61 misaligned-stack bug the prover could not catch) live in [`docs/methodology/`](docs/methodology/).
+
 ## Highlights
 
 - **Formal verification** — 188 kernel modules swept at **SPARK Level 4** (`gnatprove --level=4 --mode=all`) with **0 unproved VCs**: 132 proved, 48 outside proof scope (`SPARK_Mode => Off` drivers/platform code), 8 scaffold modules explicitly excluded (see [`ASSURANCE.md`](docs/technical/ASSURANCE.md) §2.2). 8 root-task daemons (MLS policy, config daemon, audit logger, A/B boot manager, HM model, launch model, watchdog, root task) are also proved. *(A few modules — `schild_firewall`, `schild_signals`, `schild_frame_allocator`, `schild_server_security_policy` — are provable at Level 4 in a focused run but may be classified `SKIPPED` by the canonical `-j8` batch; the stable gate is `not-proved: 0`. See [`SPARK_PROOF_TECHNIQUES.md`](docs/technical/SPARK_PROOF_TECHNIQUES.md).)*
