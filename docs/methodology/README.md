@@ -85,7 +85,11 @@ MLS policy, FS server). Любая правка файла из allowlist — **
 тайминги, железо) он не видит. Поэтому конвейеру нужны оба — доказательство
 (внутри модели) и маркеры/тесты (вне модели).
 
-## 7. Другие кейсы (см. CHANGELOG + AUDIT_REGISTRY)
+## 7. Другие кейсы (см. [`cases.md`](cases.md) + CHANGELOG + AUDIT_REGISTRY)
+
+Полный каталог «ошибок ИИ» — в [`cases.md`](cases.md) (H61 misaligned стек, W11.1
+вакуумный Post, C23 Pre у Off-caller, M1 PID reuse, H82 silent fail, H67 два
+списка). Кратко:
 
 - **H82 (Persist silent fail):** `not-proved: 0` не значит «работает» — код
   проходил пруф, но NVMe `Is_Ready=False` и Init выходил молча.
