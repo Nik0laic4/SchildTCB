@@ -1,2 +1,3 @@
 seam_fuzz
+fs_dispatch_fuzz
 *.o
