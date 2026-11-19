@@ -1,5 +1,7 @@
 # Schild TCB — Threat Model
 
+> Language: English (this file) | [Русский](./THREAT_MODEL.ru.md)
+
 **Version:** v1.1.0-audit (§12 supersedes conflicts in §3-§11 until inline merge)
 **Date:** 2026-11-03
 **Owner:** Ирганов А.Н.
