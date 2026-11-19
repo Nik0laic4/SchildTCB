@@ -30,7 +30,7 @@ Schild TCB — исследовательский прототип довере�
 
 ## Ключевые характеристики
 
-- **Формальная верификация** — 188 модулей ядра прогнаны на **4-м уровне строгости SPARK** (`gnatprove --level=4 --mode=all`), **0 непроверенных VC**: 132 доказаны, 48 вне proof-скоупа (`SPARK_Mode => Off` для драйверов/платформы), 8 scaffold-модулей явно исключены (см. [`ASSURANCE.md`](docs/technical/ASSURANCE.md) §2.2). Ещё 8 демонов root-задачи (политика MLS, конфигурационный демон, журнал аудита, A/B-загрузчик, HM-модель, launch-модель, watchdog, root-задача) доказаны.
+- **Формальная верификация** — 188 модулей ядра прогнаны на **4-м уровне строгости SPARK** (`gnatprove --level=4 --mode=all`), **0 непроверенных VC**: 132 доказаны, 48 вне proof-скоупа (`SPARK_Mode => Off` для драйверов/платформы), 8 scaffold-модулей явно исключены (см. [`ASSURANCE.md`](docs/technical/ASSURANCE.md) §2.2). Ещё 8 proof-юнитов root-задачи (root-задача + 7 библиотек/моделей — политика MLS, модели capability/процессов/firewall, загрузчик, HM/launch-модели, watchdog) доказаны.
 - **Изолированная периферия** — сеть (e1000e → I219-V) и хранилище (NVMe + SchildFS) работают в изолированном Ring-3 **NetServer**; сбой там не достигает доказанного ядра.
 - **MLS Bell-LaPadula** — 5 уровней в слое seL4 (Public..Top_Secret), 4 в bare-metal ядре.
 - **Сдерживание сбоев** — сбой драйвера перехватывается и изолируется без перезагрузки платформы.
@@ -102,7 +102,7 @@ SKIP_BUILD=1 SEL4_PRIMARY=0 bash scripts/run_tests.sh
 
 ## CI (GitHub Actions)
 
-- **Push / PR в `master`** → автоматически выполняются `build` (bare-metal ядро + ISO) и `verify` (8 демонов root-задачи, SPARK Level 4).
+- **Push / PR в `master`** → автоматически выполняются `build` (bare-metal ядро + ISO) и `verify` (8 proof-юнитов root-задачи, SPARK Level 4).
 - **Вручную** (`Actions` → `CI` → *Run workflow*) → задача `prove-full` выполняет полное доказательство 180 модулей на SPARK Level 4 (`scripts/prove_kernel.sh`) и загружает `obj/proof/report.txt` как артефакт.
 
 ## Участие
