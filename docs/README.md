@@ -91,7 +91,7 @@
 
 | Профиль | Что компилируется | Что **формально доказано** |
 |---|---|---|
-| `public` (stub) | заглушки в `tools/sel4/src/` | ✅ `verify.sh` (8 демонов) + `src/03_crypto` |
+| `public` (stub) | заглушки в `tools/sel4/src/` | ✅ `verify.sh` (8 proof-юнитов) + `src/03_crypto` |
 | `private` (полный) | оверлей `private/root_task/{audit_logger,config_daemon,boot_manager}.adb` + `schild_net_runtime.c` | ✅ `verify_private.sh` доказывает 3 Ada-тела (`not-proved: 0`); `schild_net_runtime.c` — C (runtime-tested, как остальные C-шимсы) |
 
 Закрыто (2026-11-01): полные (private) тела демонов доказаны на SPARK Level 4
