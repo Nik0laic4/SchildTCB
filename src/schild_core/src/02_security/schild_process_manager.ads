@@ -130,8 +130,9 @@ is
    procedure Deliver_Pending_Signals
      (Table : in out Process_Table);
 
-   --  Reap exited (Zombie) processes.
-   procedure Reap_Zombies
+   --  H97: log exited (Zombie) processes without reclaiming them. The name
+   --  "Reap" was misleading — reaping is the parent's Wait, not this scan.
+   procedure Log_Zombies
      (Table : in out Process_Table)
    with
      Post => Table = Table'Old;  -- no-op by design: reaping is the parent's Wait

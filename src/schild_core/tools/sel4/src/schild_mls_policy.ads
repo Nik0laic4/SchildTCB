@@ -111,12 +111,21 @@ is
    -- up nor IPC above the Public compartment.
    function Lookup_Clearance
      (Daemon : MLS_Daemon;
-      PID    : Process_ID) return Clearance;
+      PID    : Process_ID) return Clearance
+   with
+     Post =>
+       (if (for all I in 1 .. Daemon.Num_Processes =>
+              Daemon.Processes (I).PID /= PID)
+        then Lookup_Clearance'Result = Public);
 
    -- Authorize IPC between two processes
    function Authorize_IPC
      (Daemon : MLS_Daemon;
-      Msg    : IPC_Message) return Access_Result;
+      Msg    : IPC_Message) return Access_Result
+   with
+     Post => Authorize_IPC'Result =
+               Check_Send (Lookup_Clearance (Daemon, Msg.Sender),
+                           Lookup_Clearance (Daemon, Msg.Receiver));
 
    -- Initialize daemon with empty process table
    procedure Initialize

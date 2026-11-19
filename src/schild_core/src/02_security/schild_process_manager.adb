@@ -313,9 +313,9 @@ is
    end Deliver_Pending_Signals;
 
    -----------------
-   -- Reap_Zombies --
+   -- Log_Zombies --
    -----------------
-   procedure Reap_Zombies
+   procedure Log_Zombies
      (Table : in out Process_Table)
    is
    begin
@@ -326,6 +326,6 @@ is
             Schild_Log.Put_Line ("Proc: zombie process found, awaiting parent Wait");
          end if;
       end loop;
-   end Reap_Zombies;
+   end Log_Zombies;
 
 end Schild_Process_Manager;

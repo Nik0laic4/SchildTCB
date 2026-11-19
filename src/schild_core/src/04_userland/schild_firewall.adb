@@ -77,9 +77,10 @@ is
       Success :    out Boolean)
    is
    begin
-      --  Scaffold: report success without transforming the packet.
+      --  Scaffold: no encryption. Success reports the stub ran, not that the
+      --  packet was transformed (H94 — honest no-op).
       Success := True;
-      Schild_Log.Put_Line ("[FW] Packet encrypted (stub)");
+      Schild_Log.Put_Line ("[FW] Packet NOT encrypted (scaffold)");
    end Encrypt_Outgoing_Packet;
 
    -----------------

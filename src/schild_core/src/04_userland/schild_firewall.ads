@@ -67,10 +67,12 @@ is
              and Context.Num_Blocked = Context.Num_Blocked'Old;
 
    --  Encrypt an outgoing packet (scaffold).
+   --  H94: the scaffold performs NO encryption, so no security guarantee is
+   --  claimed here (Tier C, out of the proof set). The former `Post => Success`
+   --  falsely asserted the packet was encrypted; it is removed.
    procedure Encrypt_Outgoing_Packet
      (Context : in out Firewall_Context;
-      Success :    out Boolean) with
-     Post => Success;
+      Success :    out Boolean);
 
    --  Block a given port (adds it to the blocklist; no-op if full or present).
    procedure Block_Port

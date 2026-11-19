@@ -26,8 +26,11 @@ is
       Has_Handler     : Boolean := False;
    end record;
 
-   --  Outcome of a signal-send operation.
-   type Signal_Status is (Delivered, Pending, Blocked, Rejected);
+   --  Outcome of a signal-send policy check.
+   --  H95: the model enforces the MLS rule, it does not deliver. "Permitted"
+   --  means the policy allows the send; the actual delivery is the seL4 Signal
+   --  (out of this model). The former Delivered/Pending/Blocked were dead.
+   type Signal_Status is (Permitted, Rejected);
 
    ------------------------------------------------------------
    --  Signal operations.
@@ -43,7 +46,7 @@ is
    with
      Pre  => Target_Cap /= Null_Cap,
      Post => (if Sender_Level < Target_Level then Status = Rejected
-              else Status = Delivered);
+              else Status = Permitted);
      --  No write down: a lower-level sender may not signal a higher target.
 
    --  Add a signal to the blocked set.

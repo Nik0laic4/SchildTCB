@@ -21,8 +21,8 @@ is
          Status := Rejected;
          Schild_Uart_Driver.Put_Line ("Signal: REJECTED (No Write Down)");
       else
-         Status := Delivered;
-         Schild_Uart_Driver.Put_Line ("Signal: delivered to process");
+         Status := Permitted;
+         Schild_Uart_Driver.Put_Line ("Signal: permitted by policy (not delivered here)");
       end if;
    end Send_Signal;
 

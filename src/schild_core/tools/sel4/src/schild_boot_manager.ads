@@ -230,9 +230,26 @@ is
        (if Health_Ok (Status) then
            Manager.Boot_Count = Manager.Boot_Count'Old + 1
            and Manager.Verified
+           and (if Manager.Active_Slot'Old = Slot_A then
+                   Manager.Slot_A_Attempts = Max_Boot_Attempts
+                   and not Manager.Slot_A_Locked
+                else
+                   Manager.Slot_B_Attempts = Max_Boot_Attempts
+                   and not Manager.Slot_B_Locked)
         else
            Manager.Failed_Boot_Count = Manager.Failed_Boot_Count'Old + 1
-           and not Manager.Verified);
+           and not Manager.Verified
+           and Manager.Both_Locked = (Manager.Slot_A_Locked and Manager.Slot_B_Locked)
+           and (if Manager.Active_Slot'Old = Slot_A then
+                   Manager.Slot_A_Attempts = Manager.Slot_A_Attempts'Old - 1
+                   and Manager.Slot_A_Locked = (Manager.Slot_A_Attempts = 0)
+                   and (if not Manager.Slot_B_Locked'Old then Manager.Active_Slot = Slot_B
+                        else Manager.Active_Slot = Slot_A)
+                else
+                   Manager.Slot_B_Attempts = Manager.Slot_B_Attempts'Old - 1
+                   and Manager.Slot_B_Locked = (Manager.Slot_B_Attempts = 0)
+                   and (if not Manager.Slot_A_Locked'Old then Manager.Active_Slot = Slot_A
+                        else Manager.Active_Slot = Slot_B)));
 
    -- Initialize boot manager with default (safe) state: slot A active, full
    -- attempt budget on both slots, nothing locked.
