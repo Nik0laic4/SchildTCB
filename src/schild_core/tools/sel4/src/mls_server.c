@@ -51,8 +51,8 @@ void mls_server_main(void) {
     u64 badge = schild_sel4_recv(endpoint, reply);
 
     for (;;) {
-        /* C9 heartbeat: signal the ping_ntfn (badged slot 4186, domain MLS). */
-        schild_sel4_signal(4186ULL);
+        /* C9 heartbeat: signal the ping_ntfn (own-CSpace CPtr 2, H112). */
+        schild_sel4_signal(2ULL);
         u64 sender_level = badge & 0xFF;
         u64 sender_role  = (badge >> 8) & 0xFF;
         /* H88: MLS IPC gate. badge=0 -> legacy path (self-tests, policy-only).

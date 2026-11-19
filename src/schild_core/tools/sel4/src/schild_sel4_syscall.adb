@@ -553,6 +553,14 @@ is
        SC_Slot     : constant Cap_Ref := MLS_SC_Slot;   -- MCS scheduling context
        Reply_Slot  : constant Cap_Ref := MLS_Reply_Slot;   -- MCS reply object
        IPC_Buf_VAddr  : constant Word := 16#500000#;
+       -- H112: own CSpace (CNode) + minted-cap CPtrs (encoded: index << 60).
+       MLS_CSpace_Bits  : constant Word := 4;    -- 16 slots
+       Root_CNode_Depth : constant Word := 64;
+       MLS_EP_Cn        : constant Word := 1;
+       MLS_Ping_Ntfn_Cn : constant Word := 2;
+       MLS_Reply_Cn     : constant Word := 3;
+       MLS_EP_CPtr      : constant Word := 16#1000_0000_0000_0000#;  -- 1 << 60
+       MLS_Reply_CPtr   : constant Word := 16#3000_0000_0000_0000#;  -- 3 << 60
        R : Word;
        Load_Status, Load_Entry : Word := 0;
        function Mls_Daemon_Elf_Start return Word
@@ -708,9 +716,26 @@ is
        Put_Hex (R); Put_String (ASCII.CR & ASCII.LF);
 
        -- 6. SetSpace (fault handler + cspace/vspace)
+       -- H112: own CSpace (CNode) + minimal minted caps, so a compromised
+       -- MLS daemon cannot Signal the root's IRQ_Ntfn/Timeout_EP/Root_Fault_EP.
+       Put_String ("[H112] MLS CNode@4128... ");
+       R := Retype_Object (UT4, Object_CNode, MLS_CSpace_Bits, CNode_Slot, 0, MLS_CSpace_Slot, 1);
+       Put_Hex (R); Put_String (ASCII.CR & ASCII.LF);
+       if R /= 0 then return 2; end if;
+       R := CNode_Mint (MLS_CSpace_Slot, MLS_EP_Cn, MLS_CSpace_Bits,
+                        CNode_Slot, EP_Slot, Root_CNode_Depth, 16#F#, 0);
+       if R /= 0 then Put_String ("[H112] mint ep FAIL" & ASCII.CR & ASCII.LF); return 2; end if;
+       R := CNode_Mint (MLS_CSpace_Slot, MLS_Reply_Cn, MLS_CSpace_Bits,
+                        CNode_Slot, Reply_Slot, Root_CNode_Depth, 16#F#, 0);
+       if R /= 0 then Put_String ("[H112] mint reply FAIL" & ASCII.CR & ASCII.LF); return 2; end if;
+       R := CNode_Mint (MLS_CSpace_Slot, MLS_Ping_Ntfn_Cn, MLS_CSpace_Bits,
+                        CNode_Slot, MLS_Ping_Ntfn_Slot, Root_CNode_Depth, 16#F#, 1);
+       if R /= 0 then Put_String ("[H112] mint ping FAIL" & ASCII.CR & ASCII.LF); return 2; end if;
        Put_String ("[S7.7] SetSpace... ");
+       -- H112: own CSpace (the fault EP stays the plain root CPtr 4097 — a
+       -- dedicated fault endpoint needs no badge, unlike NetServer's shared one).
        R := TCB_Set_Fault_Handler (TCB_Slot, Fault_Slot,
-                                    CNode_Slot, 0, MLS_PML4_Slot, 0);
+                                    MLS_CSpace_Slot, 0, MLS_PML4_Slot, 0);
        Put_Hex (R); Put_String (ASCII.CR & ASCII.LF);
 
        -- 7. SetIPCBuffer: dedicate the 4K frame at 0x500000 to the MLS TCB
@@ -731,7 +756,8 @@ is
             with Import, Convention => C, External_Name => "schild_mls_shared_write";
        begin
           Set_MLS_IPC (IPC_Buf_VAddr);
-          C_MLS_Shared_Write (EP_Slot, Reply_Slot);
+          -- H112: the daemon uses its own-CSpace CPtrs (encoded: 1<<60, 3<<60).
+          C_MLS_Shared_Write (MLS_EP_CPtr, MLS_Reply_CPtr);
        end;
 
        -- 10. Resume MLS thread
@@ -802,6 +828,14 @@ is
        SC_Slot     : constant Cap_Ref := Config_SC_Slot;
        Reply_Slot  : constant Cap_Ref := Config_Reply_Slot;
        IPC_Buf_VAddr  : constant Word := 16#52B000#;
+       -- H112: own CSpace (CNode) + minted-cap CPtrs (encoded: index << 60).
+       Config_CSpace_Bits  : constant Word := 4;
+       Root_CNode_Depth : constant Word := 64;
+       Config_EP_Cn        : constant Word := 1;
+       Config_Ping_Ntfn_Cn : constant Word := 2;
+       Config_Reply_Cn     : constant Word := 3;
+       Config_EP_CPtr      : constant Word := 16#1000_0000_0000_0000#;  -- 1 << 60
+       Config_Reply_CPtr   : constant Word := 16#3000_0000_0000_0000#;  -- 3 << 60
        R : Word;
        Load_Status, Load_Entry : Word := 0;
        function Config_Daemon_Elf_Start return Word
@@ -901,8 +935,22 @@ is
                               SC_Slot, Reply_Slot, TCB_Slot,
                               Config_Budget_Us, Config_Period_Us, Config_SC_Badge);
        if R /= 0 then return 11; end if;
+       -- H112: own CSpace (CNode) + minimal minted caps for the Config daemon.
+       Put_String ("[H112] Config CNode@4129... ");
+       R := Retype_Object (UT4, Object_CNode, Config_CSpace_Bits, CNode_Slot, 0, Config_CSpace_Slot, 1);
+       Put_Hex (R); Put_String (ASCII.CR & ASCII.LF);
+       if R /= 0 then return 2; end if;
+       R := CNode_Mint (Config_CSpace_Slot, Config_EP_Cn, Config_CSpace_Bits,
+                        CNode_Slot, EP_Slot, Root_CNode_Depth, 16#F#, 0);
+       if R /= 0 then Put_String ("[H112] mint config ep FAIL" & ASCII.CR & ASCII.LF); return 2; end if;
+       R := CNode_Mint (Config_CSpace_Slot, Config_Reply_Cn, Config_CSpace_Bits,
+                        CNode_Slot, Reply_Slot, Root_CNode_Depth, 16#F#, 0);
+       if R /= 0 then Put_String ("[H112] mint config reply FAIL" & ASCII.CR & ASCII.LF); return 2; end if;
+       R := CNode_Mint (Config_CSpace_Slot, Config_Ping_Ntfn_Cn, Config_CSpace_Bits,
+                        CNode_Slot, Config_Ping_Ntfn_Slot, Root_CNode_Depth, 16#F#, 1);
+       if R /= 0 then Put_String ("[H112] mint config ping FAIL" & ASCII.CR & ASCII.LF); return 2; end if;
        R := TCB_Set_Fault_Handler (TCB_Slot, Fault_Slot,
-                                   CNode_Slot, 0, Config_PML4_Slot, 0);
+                                   Config_CSpace_Slot, 0, Config_PML4_Slot, 0);
        if R /= 0 then return 7; end if;
        R := TCB_Set_IPC_Buffer (TCB_Slot, IPC_Frame_Slot, IPC_Buf_VAddr);
        if R /= 0 then return 8; end if;
@@ -912,7 +960,8 @@ is
           procedure C_Config_Shared_Write (EP, Reply : Word)
             with Import, Convention => C, External_Name => "schild_config_shared_write";
        begin
-          C_Config_Shared_Write (EP_Slot, Reply_Slot);
+          -- H112: the daemon uses its own-CSpace CPtrs (encoded: 1<<60, 3<<60).
+          C_Config_Shared_Write (Config_EP_CPtr, Config_Reply_CPtr);
        end;
        R := TCB_Resume (TCB_Slot);
        if R /= 0 then return 10; end if;

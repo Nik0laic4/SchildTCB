@@ -75,6 +75,12 @@ is
    Config_SC_Slot      : constant Cap_Ref := Slot_Base + 27;  -- 4123
    Config_Reply_Slot   : constant Cap_Ref := Slot_Base + 28;  -- 4124
 
+   -- H112: own CSpace for MLS/Config (was root CNode=2). A compromised
+   -- MLS/Config could Signal IRQ_Ntfn/Timeout_EP/Root_Fault_EP in the root
+   -- CSpace; the own CNode holds only the minimal caps.
+   MLS_CSpace_Slot     : constant Cap_Ref := Slot_Base + 32;  -- 4128
+   Config_CSpace_Slot  : constant Cap_Ref := Slot_Base + 33;  -- 4129
+
    -- Shared DMA frame (Stage 8.4)
    Shared_Frame_Slot      : constant Cap_Ref := Slot_Base + 29; -- 4125
    Shared_Frame_Copy_Slot : constant Cap_Ref := Slot_Base + 30; -- 4126
