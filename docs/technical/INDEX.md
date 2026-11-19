@@ -2,7 +2,25 @@
 
 **Навигация по технической документации.** Держите актуальным при добавлении новых документов.
 
-## Ядро и архитектура
+## Порядок чтения (для нового инженера)
+
+Читайте по главам — от «зачем» к «как доказано»:
+
+| # | Глава | Документы |
+|---|---|---|
+| 00 | **Зачем** (мотивация) | `../README.md`, `USE_CASE.md`, `../PROJECT_PASSPORT.md` |
+| 01 | **Архитектура** (Tier A/B/C) | `ARCHITECTURE.md`, `HARDWARE.md` |
+| 02 | **Модель угроз** | `THREAT_MODEL.md` |
+| 03 | **Сборка / QEMU** | `BUILD.md`, `../GUIDE.md`, Dockerfile (`docker run`) |
+| 04 | **Доказательство** | `SPARK_PROOF_TECHNIQUES.md`, `TOOL_QUALIFICATION.md` |
+| 05 | **Философия контрактов** | `../methodology/README.md`, `ASSURANCE.md` §3 (root-cause) |
+| 06 | **Разборы демонов** | `ELF_CHILD_LOADER_DESIGN.md`, `ROOT_TASK_ELF_CHILD_DESIGN.md`, `RING3_NETWORK_MIGRATION.md` |
+| 07 | **Assurance case** | `ASSURANCE.md`, `TRACEABILITY.md`, `FINAL_AUDIT.md`, `RING0_C_AUDIT.md`, `SEL4_PATCHES_ANALYSIS.md` |
+| 08 | **Residuals (принятые риски)** | `ASSURANCE.md` §9, `HEALTH_CHECK_DESIGN.md` (C9), `C4_FUZZING_PLAN.md` (C4) |
+
+## Полный указатель (по темам)
+
+### Ядро и архитектура
 
 - `ARCHITECTURE.md` — общая архитектура, Tier A/B/C, границы TCB.
 - `HARDWARE.md` — целевое железо (ThinkPad T580 и др.).
@@ -10,7 +28,7 @@
 - `SEL4_INTEGRATION.md` — интеграция с seL4.
 - `MCS_MIGRATION.md` — MCS-планировщик, бюджеты.
 
-## Безопасность и доказательство
+### Безопасность и доказательство
 
 - `THREAT_MODEL.md` — модель угроз (T*/AS*/R*/C-§).
 - `ASSURANCE.md` — assurance-аргументы, verified TCB.
@@ -18,7 +36,7 @@
 - `SPARK_PROOF_TECHNIQUES.md` — техники SPARK-доказательства.
 - `SYSCALL_SEAM_ABI_SPEC.md` — ABI syscall-seam (AS6) + план фаззинга.
 
-## H87 (code isolation) и драйверы
+### H87 (code isolation) и драйверы
 
 - `ELF_CHILD_LOADER_DESIGN.md` — ELF loader, слот-раскладка, mint-offset.
 - `SLOT_MAP.md` — единая таблица CSpace-слотов (image/mint/shared/PML4 + системные окна).
@@ -26,7 +44,7 @@
 - `RING3_NETWORK_MIGRATION.md` — миграция сети в Ring 3.
 - `ARM64_VIRTIO_NET.md`, `GENET_DRIVER_DESIGN.md`, `VIRTIO_NET_L4RE_COMPARISON.md` — ARM64/virtio.
 
-## Assurance Case (Блок 4)
+### Assurance Case (Блок 4)
 
 - `TRACEABILITY.md` — матрица требование→код→тест.
 - `TOOL_QUALIFICATION.md` — квалификация инструментов.
@@ -36,14 +54,14 @@
 - `HEALTH_CHECK_DESIGN.md` — C9 heartbeat (liveness) дизайн.
 - `C4_FUZZING_PLAN.md` — C4 seam fuzzing план (LLM harness, ASan/UBSan).
 
-## Roadmap и история
+### Roadmap и история
 
 - `ROADMAP.md` — дорожная карта (Блоки 2→3→4).
-- `CHANGELOG.md` — история версий (v0.x → v0.51).
+- `CHANGELOG.md` — история версий (v0.x → v0.54).
 - `DEVELOPMENT_VECTORS.md` — векторы разработки.
 - `RELEASE_NOTES_*.md` — релизные заметки.
 
-## Прочее
+### Прочее
 
 - `BOOT_COUNTER_DESIGN.md` — boot-counter (A/B-слоты).
 - `USE_CASE.md` — сценарий использования.
@@ -51,6 +69,8 @@
 
 ---
 
+**Глоссарий:** [`../GLOSSARY.md`](../GLOSSARY.md) — VC, Pre/Post, Tier, Capability.
+**Методология:** [`../methodology/README.md`](../methodology/README.md) — «конституция ИИ-агента», кейсы.
 **Локальный handoff-каталог** `START/` (gitignored): `HANDOFF.md` (где мы),
 `AGENT_RULES.md` (правила агента), `AUDIT_REGISTRY.md`, `AUDITOR_REVIEW.md` (внешний аудит),
 планы даемонов (`FS_DAEMON_PLAN.md`, `H87_MLS_DAEMON_DESIGN.md`, `H88_MLS_IPC_DESIGN.md`,
