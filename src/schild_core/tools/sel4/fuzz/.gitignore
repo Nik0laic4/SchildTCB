@@ -1,4 +1,5 @@
 seam_fuzz
 fs_dispatch_fuzz
 mls_dispatch_fuzz
+shared_frame_fuzz
 *.o
