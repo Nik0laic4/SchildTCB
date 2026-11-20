@@ -637,12 +637,11 @@ read-back проверен.
 явный `exit when Idx > 13` (Dir_Table 0..13), так что поиск handle не может
 выбежать за таблицу каталога.
 
-**M20 (тестовая fault injection).** `op=99` (fault injection crash-containment)
-компилируется безусловно в каждом демоне и досягаем любым вызывающим с cap
-этого endpoint (сейчас только root). Для продакшена нужно вырезать
-(`#ifdef SCHILD_TEST_FAULT` / debug build) или гейтить выделенным test-badge.
-Записан как test-only путь; поверхность DoS низкая, потому что только root
-держит cap.
+**M20 (тестовая fault injection) — митигировано (2026-11-20).** `op=98`/`op=99`
+fault injection (crash-containment + timeout) вынесено за `#ifdef SCHILD_SELFTEST`
+(default off; `SCHILD_SELFTEST=1` только для QEMU-самотестов). Ada-драйвер
+инжекции гейтится `schild_selftest_enabled()` (в `elf_blobs.c`). Production-сборка
+грузится до `Root Task ready` без достижимого fault-пути.
 
 **H107 / H88 уточнение политики (residual R23).** MLS-гейт
 (`Authorize_IPC_Levels`) — проверка *коммуникационного уровня* (`Can_IPC`,

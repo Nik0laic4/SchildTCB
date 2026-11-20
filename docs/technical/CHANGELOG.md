@@ -6,6 +6,14 @@
 > *pending* or *target* have not yet been validated. Formal-verification
 > coverage is stated per-module, never as an aggregate percentage.
 
+## v0.56 (2026-11-20) — M20 fault-injection out of production + C9 overlay fix
+
+**Validated: `op=98`/`op=99` fault-injection compiled out of production behind `SCHILD_SELFTEST`, plus a C9 private-overlay link fix — `run_tests 24/24`, `verify.sh` 106 checks (no delta), `verify_private.sh` 0, production boot OK.**
+
+- **M20:** C daemons (mls/config/netserver/fs) wrap `op=98`/`op=99` dispatch AND fault-write/spin blocks in `#ifdef SCHILD_SELFTEST` (preprocessor removes them in production; objdump confirms `0xDEADBEEF`/`0xFFFFF000` gone). The Ada fault-injection driver is gated by `schild_selftest_enabled()` (in `elf_blobs.c`, root_task-only). `build.sh`/`build_rt.sh` default `SCHILD_SELFTEST=0` (production); `run_tests.sh`/CI set `=1`.
+- **fix(c9):** private `schild_net_runtime.c` overlay was missing `schild_mmio_read64` (C9 calibration) → private profile link failed; mirrored the public helper.
+- **gates:** build 0, run_tests 24/24, verify.sh 0 (106 checks), verify_private.sh 0.
+
 ## v0.55 (2026-11-20) — H112 CSpace isolation + H90 timeout-on-Call + C4 fuzz
 
 **Validated: MLS/Config own-CSpace isolation (H112), MCS timeout-fault recovery (H90 variant A), C4 daemon-dispatch fuzz, and a CPtr-encoding bugfix in the heartbeat signal — `run_tests 24/24`, `verify.sh` 0, `verify_private.sh` 0.**
