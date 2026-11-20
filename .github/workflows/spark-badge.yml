@@ -51,12 +51,21 @@ jobs:
           echo "not_proved=$NP"
           echo "not_proved=$NP" >> "$GITHUB_OUTPUT"
 
+      - name: Determine badge color
+        id: color
+        run: |
+          if [ "${{ steps.proof.outputs.not_proved }}" = "0" ]; then
+            echo "color=green" >> "$GITHUB_OUTPUT"
+          else
+            echo "color=red" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Update SPARK badge
-        uses: schneegans/dynamic-badges-action@v1
+        uses: schneegans/dynamic-badges-action@v1.9.0
         with:
           auth: ${{ secrets.GIST_SECRET }}
           gistID: ${{ secrets.GIST_ID }}
           filename: spark-badge.json
           label: SPARK Level 4
           message: "${{ steps.proof.outputs.not_proved }} unproved VCs"
-          color: ${{ steps.proof.outputs.not_proved == '0' && 'green' || 'red' }}
+          color: ${{ steps.color.outputs.color }}
