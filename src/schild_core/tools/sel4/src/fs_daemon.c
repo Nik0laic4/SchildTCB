@@ -128,7 +128,7 @@ void fs_daemon_main(void) {
 
     for (;;) {
         /* C9 heartbeat: signal the ping_ntfn (I'm alive + free to dispatch). */
-        schild_sel4_signal(2ULL);
+        schild_sel4_signal((2ULL << 60));  /* own-CSpace CPtr = index<<60 (slot 2 = ping ntfn) */
         u64 sender_role  = (badge >> 8) & 0xFF;
         u64 sender_level = badge & 0xFF;
         if (badge != 0 && sender_role != 0) {

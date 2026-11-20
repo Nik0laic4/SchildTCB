@@ -52,7 +52,7 @@ void mls_server_main(void) {
 
     for (;;) {
         /* C9 heartbeat: signal the ping_ntfn (own-CSpace CPtr 2, H112). */
-        schild_sel4_signal(2ULL);
+        schild_sel4_signal((2ULL << 60));  /* own-CSpace CPtr = index<<60 (slot 2 = ping ntfn) */
         u64 sender_level = badge & 0xFF;
         u64 sender_role  = (badge >> 8) & 0xFF;
         /* H88: MLS IPC gate. badge=0 -> legacy path (self-tests, policy-only).
