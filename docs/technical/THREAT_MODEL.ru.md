@@ -530,10 +530,7 @@ root-задачей (один Call за раз); сегодня конкурен
 NVMe; статический HTTP-путь теперь возвращает `503` (`Set_Local_FS(False)`)
 вместо page-fault. Раздача статических файлов через `fs_ep` — follow-up (H91 (a)).
 
-**C-§7 MCS-бюджет (H90).** FS-демон работает round-robin 5000/5000. Sporadic
-(budget < period) **вешает NVMe-mount** (busy-wait polling прерывается mid-DMA;
-`Call(init)` не возвращается). Митигация отложена: timeout на Persist Call
-(Stage 3+).
+**C-§7 MCS-бюджет (H90) — митигировано (H90-A, 2026-11-20).** FS-демон init-mount'ится round-robin 5000/5000 (busy-wait `Read_Block` этого требует — sporadic прерывает poll DMA-completion mid-flight), затем переключается на sporadic 5000/100000 для runtime. Зависший runtime busy-wait перерасходует бюджет и поднимает `seL4_Fault_Timeout`; root поллит общий `Timeout_EP` (MR[0] = SC-badge) и перезапускает FS-демона (`Health_Monitor`).
 
 ### 12.12 Гипервизорный вектор — дополнения модели угроз (2026-11-07, планово)
 

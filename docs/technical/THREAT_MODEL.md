@@ -461,7 +461,7 @@ with status "documented in TM §12" until either (a) code mitigates or
 
 **C-§7 HTTP→FS regression (H91).** After H86 the NetServer VSpace no longer maps NVMe; the HTTP static path now returns `503` (`Set_Local_FS(False)`) instead of page-faulting. Serving static files via `fs_ep` is a follow-up (H91 (a)).
 
-**C-§7 MCS budget (H90).** The FS daemon runs round-robin 5000/5000. Sporadic (budget < period) **hangs the NVMe mount** (busy-wait polling is preempted mid-DMA; `Call(init)` never returns). Mitigation deferred: timeout on the Persist Call (Stage 3+).
+**C-§7 MCS budget (H90) — mitigated (H90-A, 2026-11-20).** The FS daemon init-mounts round-robin 5000/5000 (the busy-wait `Read_Block` needs it — sporadic preempts the DMA-completion poll mid-flight), then switches to sporadic 5000/100000 for runtime. A hung runtime busy-wait overruns its budget and raises `seL4_Fault_Timeout`; the root polls the shared `Timeout_EP` (MR[0] = SC badge) and restarts the FS daemon (`Health_Monitor`).
 
 ### 12.12 Hypervisor vector — threat model additions (2026-11-07, planned)
 
