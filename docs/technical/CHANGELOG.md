@@ -6,6 +6,17 @@
 > *pending* or *target* have not yet been validated. Formal-verification
 > coverage is stated per-module, never as an aggregate percentage.
 
+## v0.55 (2026-11-20) — H112 CSpace isolation + H90 timeout-on-Call + C4 fuzz
+
+**Validated: MLS/Config own-CSpace isolation (H112), MCS timeout-fault recovery (H90 variant A), C4 daemon-dispatch fuzz, and a CPtr-encoding bugfix in the heartbeat signal — `run_tests 24/24`, `verify.sh` 0, `verify_private.sh` 0.**
+
+- **H112 (MLS/Config own CSpace):** MLS and Config daemons got their own 4-radix CNode (4128/4129) with only ep/reply/ping minted; `TCB_Set_Fault_Handler` uses the own CSpace. The fake-fault vector (`Signal IRQ_Ntfn`/`Timeout_EP`/`Root_Fault_EP`) is closed. ASSURANCE §9 residual → mitigated.
+- **CPtr-encoding bugfix:** the heartbeat ping used raw `signal(2)`, which `resolveAddressBits` decodes as slot 0 (offset = `capptr >> (wordBits - radix)`) — a null cap (`seL4: Attempted to invoke a null cap #2`) on every heartbeat. Fixed to `signal(2ULL << 60)` across all four daemons (matches the ep/reply `1<<60`/`3<<60`).
+- **H90 (timeout-on-Call, variant A):** `seL4_Call` has no timeout (SC donation, "server could never reply"); the native mechanism is `seL4_Fault_Timeout`. FS switches to a sporadic SC (5000/100000) after init-mount, and the root task polls the shared `Timeout_EP` in its main loop, marking the domain unhealthy + `Health_Monitor` on a timeout (liveness-recover).
+- **C4 fuzz:** `fs_daemon.c` dispatch extracted into `fs_dispatch()`; the host harness `#include`s the real dispatch (no drift) — 2M iterations, 0 ASan/UBSan violations.
+- **CI/docs:** SPARK badge is now a dynamic gist badge (`spark-badge.yml`, `schneegans/dynamic-badges-action@v1.9.0`); README 188/180 inline comment; CI badge renamed `CI (build+verify)`; GLOSSARY/methodology links; `schild_firewall` tier footnote.
+- **gates:** build 0, run_tests 24/24, verify.sh 0, verify_private.sh 0.
+
 ## v0.54 (2026-11-15) — C9 heartbeat (liveness) + FS/MLS audit closure
 
 **Validated: FS/MLS audit closure (H107/H109/H110/H111/M20/H112 + `Sender_Is_Root` removal) and the C9 heartbeat health probe (detect, not recover) — `run_tests 24/24`, `verify.sh` 0 errors.**
