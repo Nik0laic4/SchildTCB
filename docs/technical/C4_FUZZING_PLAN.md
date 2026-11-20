@@ -15,11 +15,10 @@ C4 (syscall seam) — главный residual Tier A: 1475 строк SPARK_Off 
   случайные входы, xorshift64 PRNG.
 - Прогон: `gcc -fsanitize=address,undefined` → **10 000 000 итераций, 0 нарушений**
   (ASan/UBSan).
-- `tools/sel4/fuzz/fs_dispatch_fuzz.c` — host-харнес диспатча `fs_daemon.c`
-  (op-switch + `u32`-касты аргументов + reply-MR записи) со стабами seL4/Ada,
-  2 000 000 итераций, 0 нарушений (ASan/UBSan). *Drift-оговорка:* это копия
-  switch; следующий шаг — вынести реальный диспатч в общую функцию и
-  `#include` её харнесом.
+- `tools/sel4/fuzz/fs_dispatch_fuzz.c` — host-харнес диспатча `fs_daemon.c`:
+  **drift устранён** — `fs_daemon.c` вынес op-switch в `fs_dispatch()`, и харнес
+  теперь `#include` реального `../src/fs_daemon.c` (seL4/Ada застаблены),
+  фаззит `op`/`mr[0..3]` напрямую. 2 000 000 итераций, 0 нарушений (ASan/UBSan).
 
 ## Что НЕ покрывает текущий харнес
 
