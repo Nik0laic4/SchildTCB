@@ -47,3 +47,16 @@ u64 schild_netserver_elf_size(void) {
     return (u64)(_binary_obj_root_task_netserver_elf_end -
                  _binary_obj_root_task_netserver_elf_start);
 }
+
+/* M20: build-time self-test switch for the Ada root task. Returns 1 only when
+ * SCHILD_SELFTEST is defined (the QEMU containment/timeout self-tests); a
+ * production build returns 0 and the root task skips the fault-injection
+ * driver entirely.  Lives here (not in schild_sel4_ipc.c) so the daemon ELFs,
+ * which also link schild_sel4_ipc.o, keep their layout unchanged. */
+u64 schild_selftest_enabled(void) {
+#ifdef SCHILD_SELFTEST
+    return 1;
+#else
+    return 0;
+#endif
+}

@@ -162,7 +162,7 @@ if [ "${SEL4_PRIMARY:-0}" = "1" ]; then
 
    # Build Ada root task from source (user-space at 0x400000)
    echo "  Building Root Task..."
-   TOOL="$TOOL" SCHILD_IOMMU="${KERNEL_IOMMU:-0}" bash tools/sel4/build_rt.sh 2>&1 | grep -v 'warning:' | tail -2
+   TOOL="$TOOL" SCHILD_IOMMU="${KERNEL_IOMMU:-0}" SCHILD_SELFTEST="${SCHILD_SELFTEST:-0}" bash tools/sel4/build_rt.sh 2>&1 | grep -v 'warning:' | tail -2
    RT_ELF="tools/sel4/root_task.elf"
    BOOT_ELF="tools/sel4/obj/root_task/bootstrap.elf"
    if [ ! -f "$RT_ELF" ]; then

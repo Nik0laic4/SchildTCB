@@ -74,13 +74,16 @@ void mls_server_main(void) {
 
         u64 result;
         int fault_after_reply = 0;
+#ifdef SCHILD_SELFTEST
         if (op == 99) {
             /* Crash-containment test: reply first, then fault on unmapped
              * 0xFFFFF000 so seL4 delivers a #PF to the MLS fault endpoint
              * (slot 199). */
             result = 0;
             fault_after_reply = 1;
-        } else if (op > 2) {
+        } else
+#endif
+        if (op > 2) {
             /* Unknown MLS operation — reject before any level comparison. */
             result = SCHILD_EBADMSG;
         } else if (target_level > 4) {
@@ -100,12 +103,14 @@ void mls_server_main(void) {
         schild_reply_mr[2] = 0;
         schild_reply_mr[3] = 0;
 
+#ifdef SCHILD_SELFTEST
         if (fault_after_reply) {
             schild_sel4_reply_only(reply, 1ULL);
             *(volatile unsigned long long *)0x00000000FFFFF000ULL =
                 0xDEADBEEFDEADBEEFULL;
             /* unreachable */
         }
+#endif
 
         badge = schild_sel4_replyrecv(endpoint, 1ULL, reply);  /* reply + recv */
     }

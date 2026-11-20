@@ -52,6 +52,9 @@ procedure Schild_Root_Task with SPARK_Mode => On is
    function RDTSC return Word
      with Import, Convention => C, External_Name => "schild_rdtsc",
           Global => null;
+   function Schild_Selftest_Enabled return Word
+     with Import, Convention => C, External_Name => "schild_selftest_enabled",
+          Global => null;
 begin
    Get_BootInfo_Copy (BI, Unsigned_64 (BootInfo'Size / System.Storage_Unit));
    Put_Str (ASCII.CR & ASCII.LF);
@@ -590,6 +593,9 @@ begin
    -- the Call returns we BLOCK on a Recv of the fault endpoint, letting the
    -- NetServer fault; seL4 delivers the fault to the fault endpoint (badge
    -- 0xE2), the Recv returns it, and the core stays alive — containment.
+   -- M20: the containment/timeout self-tests below are guarded by the
+   -- build-time switch (schild_selftest_enabled) and skipped in production.
+   if Schild_Selftest_Enabled /= 0 then
    if Fault_Slot > 0 then
       Put_Str ("[CONTAINMENT] injecting fault into NetServer (op=99)..." & ASCII.CR & ASCII.LF);
       declare
@@ -701,6 +707,7 @@ begin
       Put_Dec (SC_Badge);
       Put_Str (" — temporal isolation enforced" & ASCII.CR & ASCII.LF);
    end;
+   end if;
 
    Put_Str ("==== Root Task ready ====" & ASCII.CR & ASCII.LF);
 

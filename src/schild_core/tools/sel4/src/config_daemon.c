@@ -63,6 +63,7 @@ void config_daemon_main(void) {
         u64 result;
         int fault_after_reply = 0;
         int spin_after_reply = 0;
+#ifdef SCHILD_SELFTEST
         if (op == 99) {
             /* Crash-containment test: reply first, then fault on unmapped
              * 0xFFFFF000 so seL4 delivers a #PF to the Config fault endpoint
@@ -75,7 +76,9 @@ void config_daemon_main(void) {
              * to the shared timeout endpoint (slot 215). */
             result = 0;
             spin_after_reply = 1;
-        } else if (op > 2) {
+        } else
+#endif
+        if (op > 2) {
             result = SCHILD_EBADMSG;   /* unknown config operation */
         } else if (level > 4) {
             result = SCHILD_EBADMSG;   /* level outside 0..4 */
@@ -92,6 +95,7 @@ void config_daemon_main(void) {
         schild_reply_mr[2] = 0;
         schild_reply_mr[3] = 0;
 
+#ifdef SCHILD_SELFTEST
         if (fault_after_reply) {
             schild_sel4_reply_only(reply, 1ULL);
             *(volatile unsigned long long *)0x00000000FFFFF000ULL =
@@ -103,6 +107,7 @@ void config_daemon_main(void) {
             schild_sel4_reply_only(reply, 1ULL);
             for (;;) { }   /* exhaust the sporadic budget -> timeout fault */
         }
+#endif
 
         badge = schild_sel4_replyrecv(endpoint, 1ULL, reply);  /* reply + next recv */
     }

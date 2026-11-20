@@ -199,7 +199,7 @@ jobs:
       - name: Build seL4 primary image (kernel + Ada root task)
         run: |
           cd src/schild_core
-          SEL4_PRIMARY=1 ./build.sh
+          SCHILD_SELFTEST=1 SEL4_PRIMARY=1 ./build.sh
 
       - name: Run QEMU smoke tests (seL4 primary)
         env:

@@ -85,19 +85,23 @@ void netserver_main(void) {
             /* bench noop: reply immediately (no NIC access) — IPC latency
              * probe for the seL4 Fastpath benchmark. */
             result = 0;
-        } else if (op == 99) {
+        }
+#ifdef SCHILD_SELFTEST
+        else if (op == 99) {
             /* Crash-containment test: reply first (so the root task's
              * Call_IPC returns), THEN fault on unmapped 0xFFFFF000. seL4
              * delivers the #PF to the NetServer's fault endpoint. */
             result = 0;
             fault_after_reply = 1;
         }
+#endif
 
         schild_reply_mr[0] = result;
         schild_reply_mr[1] = result2;
         schild_reply_mr[2] = 0;
         schild_reply_mr[3] = 0;
 
+#ifdef SCHILD_SELFTEST
         if (fault_after_reply) {
             /* Reply first (so the root task's Call returns), then fault on an
              * unmapped page.  seL4 delivers the #PF to the NetServer's fault
@@ -107,6 +111,7 @@ void netserver_main(void) {
                 0xDEADBEEFDEADBEEFULL;
             /* unreachable */
         }
+#endif
 
         badge = schild_sel4_replyrecv(ep, 2ULL, reply);  /* 2 MRs; reply + next recv */
     }

@@ -94,11 +94,13 @@ static void fs_dispatch(u64 op, u64 a, u64 b, u64 c,
     case 9:  /* Delete: name_len (name in shared) -> status */
         result = (u64) schild_fs_delete((u32)a);
         break;
+#ifdef SCHILD_SELFTEST
     case 99: /* Crash-containment test: reply first, then fault on unmapped
               * 0xFFFFF000 so seL4 delivers a #PF to the FS fault endpoint. */
         result = 0;
         fault_after_reply = 1;
         break;
+#endif
     default:
         result = SCHILD_EBADMSG;
         break;
@@ -157,12 +159,14 @@ void fs_daemon_main(void) {
         schild_reply_mr[2] = result2;
         schild_reply_mr[3] = result3;
 
+#ifdef SCHILD_SELFTEST
         if (fault_after_reply) {
             schild_sel4_reply_only(reply, 2ULL);
             *(volatile unsigned long long *)0x00000000FFFFF000ULL =
                 0xDEADBEEFDEADBEEFULL;
             /* unreachable */
         }
+#endif
 
         badge = schild_sel4_replyrecv(ep, 2ULL, reply);
     }

@@ -12,6 +12,7 @@
 # Env:
 #   SEL4_PRIMARY   1 = seL4 + Ada Root Task (default), 0 = standalone Ring 0 kernel
 #   SCHILD_PROFILE public|private (default public)
+#   SCHILD_SELFTEST 1 = compile in op=98/op=99 fault-injection self-tests (default 1)
 #   TOOL           GNAT toolchain bin dir (default alire native 14.2.1)
 #   QEMU_TIMEOUT   boot timeout in seconds (default 30)
 set -euo pipefail
@@ -21,6 +22,7 @@ cd "$ROOT_DIR"
 
 SEL4_PRIMARY="${SEL4_PRIMARY:-1}"
 SCHILD_PROFILE="${SCHILD_PROFILE:-public}"
+SCHILD_SELFTEST="${SCHILD_SELFTEST:-1}"
 TOOL="${TOOL:-$HOME/.local/share/alire/toolchains/gnat_native_14.2.1_06bb3def/bin}"
 QEMU_TIMEOUT="${QEMU_TIMEOUT:-60}"
 
@@ -48,7 +50,7 @@ else
 fi
 
 if [ "${SKIP_BUILD:-0}" != "1" ]; then
-  TOOL="$TOOL" SCHILD_PROFILE="$SCHILD_PROFILE" SEL4_PRIMARY="$SEL4_PRIMARY" ./build.sh
+  TOOL="$TOOL" SCHILD_PROFILE="$SCHILD_PROFILE" SEL4_PRIMARY="$SEL4_PRIMARY" SCHILD_SELFTEST="$SCHILD_SELFTEST" ./build.sh
 fi
 
 [ -f "$ISO" ] || { echo "ERROR: $ISO not found (build first)" >&2; exit 1; }

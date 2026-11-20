@@ -24,6 +24,14 @@ if [ "${SCHILD_IOMMU:-0}" = "1" ] || [ "${SCHILD_IOMMU:-0}" = "ON" ]; then
   PREFIX_MAP_C+=(-DSCHILD_IOMMU=1)
 fi
 
+# M20: self-test fault injection (op=98 crash-containment / op=99 timeout) is
+# compiled OUT of production. SCHILD_SELFTEST=1 re-enables it for the QEMU
+# containment/timeout self-tests (run_tests.sh).
+SELFTEST_CFLAG=""
+if [ "${SCHILD_SELFTEST:-0}" = "1" ]; then
+  SELFTEST_CFLAG="-DSCHILD_SELFTEST"
+fi
+
 # Reproducible-build hardening: pin the build timestamp so __DATE__/__TIME__ and
 # compiler metadata are deterministic. Defaults to the last commit timestamp.
 SOURCE_DATE_EPOCH="${SOURCE_DATE_EPOCH:-$(git log -1 --format=%ct 2>/dev/null || echo 0)}"
@@ -125,7 +133,7 @@ done
     -c -o "$OBJ/schild_sel4_ipc.o" src/schild_sel4_ipc.c 2>&1
 
 "$TOOL/gcc" -m64 -nostdlib -nostdinc -fno-builtin -std=gnu11 \
-    -fno-stack-protector -mno-red-zone -ffreestanding -mgeneral-regs-only "${PREFIX_MAP_C[@]}" \
+    -fno-stack-protector -mno-red-zone -ffreestanding -mgeneral-regs-only "${PREFIX_MAP_C[@]}" $SELFTEST_CFLAG \
     -c -o "$OBJ/elf_blobs.o" src/elf_blobs.c 2>&1
 
 "$TOOL/gcc" -m64 -nostdlib -nostdinc -fno-builtin -std=gnu11 \
@@ -143,17 +151,17 @@ done
 
 # C compilation (MLS server thread)
 "$TOOL/gcc" -m64 -nostdlib -nostdinc -fno-builtin -std=gnu11 \
-    -fno-stack-protector -mno-red-zone -ffreestanding -mgeneral-regs-only "${PREFIX_MAP_C[@]}" \
+    -fno-stack-protector -mno-red-zone -ffreestanding -mgeneral-regs-only "${PREFIX_MAP_C[@]}" $SELFTEST_CFLAG \
     -c -o "$OBJ/mls_server_c.o" src/mls_server.c 2>&1
 
 # C compilation (Config Daemon thread — R3)
 "$TOOL/gcc" -m64 -nostdlib -nostdinc -fno-builtin -std=gnu11 \
-    -fno-stack-protector -mno-red-zone -ffreestanding -mgeneral-regs-only "${PREFIX_MAP_C[@]}" \
+    -fno-stack-protector -mno-red-zone -ffreestanding -mgeneral-regs-only "${PREFIX_MAP_C[@]}" $SELFTEST_CFLAG \
     -c -o "$OBJ/config_daemon_c.o" src/config_daemon.c 2>&1
 
 # C compilation (NetServer thread)
 "$TOOL/gcc" -m64 -nostdlib -nostdinc -fno-builtin -std=gnu11 \
-    -fno-stack-protector -mno-red-zone -ffreestanding -mgeneral-regs-only "${PREFIX_MAP_C[@]}" \
+    -fno-stack-protector -mno-red-zone -ffreestanding -mgeneral-regs-only "${PREFIX_MAP_C[@]}" $SELFTEST_CFLAG \
     -c -o "$OBJ/netserver_c.o" src/netserver.c 2>&1
 
 # C compilation (mini-bootstrap — root task as ELF-child, Phase A stub)
@@ -162,7 +170,7 @@ done
     -c -o "$OBJ/bootstrap_c.o" src/bootstrap.c 2>&1
 
 "$TOOL/gcc" -m64 -nostdlib -nostdinc -fno-builtin -std=gnu11 \
-    -fno-stack-protector -mno-red-zone -ffreestanding -mgeneral-regs-only "${PREFIX_MAP_C[@]}" \
+    -fno-stack-protector -mno-red-zone -ffreestanding -mgeneral-regs-only "${PREFIX_MAP_C[@]}" $SELFTEST_CFLAG \
     -c -o "$OBJ/fs_daemon_c.o" src/fs_daemon.c 2>&1
 
 # H87: build a separate fs_daemon.elf (delivered as a multiboot2 module, NOT
