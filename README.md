@@ -5,7 +5,7 @@ A **Trusted Computing Base (TCB)** research prototype: a formally verified core 
 [![OpenSSF Best Practices](https://www.bestpractices.dev/projects/16898/badge)](https://www.bestpractices.dev/projects/16898)
 [![CI (build+verify)](https://github.com/Nik0laic4/SchildTCB/actions/workflows/ci.yml/badge.svg)](https://github.com/Nik0laic4/SchildTCB/actions/workflows/ci.yml)
 [![ARM64 virtio-net](https://github.com/Nik0laic4/SchildTCB/actions/workflows/arm64-net.yml/badge.svg)](https://github.com/Nik0laic4/SchildTCB/actions/workflows/arm64-net.yml)
-[![SPARK Level 4](https://img.shields.io/endpoint?url=https://gist.githubusercontent.com/Nik0laic4/7221682b51fce1403d41fa9584f3d102/raw/spark-badge.json)](docs/technical/ASSURANCE.md)
+[![SPARK Level 4](https://github.com/Nik0laic4/SchildTCB/actions/workflows/spark-badge.yml/badge.svg)](https://github.com/Nik0laic4/SchildTCB/actions/workflows/spark-badge.yml)
 [![License: GPL-2.0-only](https://img.shields.io/badge/License-GPL--2.0--only-blue.svg)](LICENSE)
 
 ---

@@ -1,11 +1,8 @@
 name: SPARK badge
 
-# Dynamic SPARK Level-4 badge: runs the full kernel proof and updates a gist
-# badge, so the README badge turns red on any regression (not-proved > 0)
-# instead of being a static shields.io image. Requires two repo secrets:
-#   GIST_SECRET — a GitHub token with the `gist` scope
-#   GIST_ID     — the id of a gist owned by that token (the badge JSON lives in
-#                 spark-badge.json in that gist)
+# SPARK Level-4 badge: runs the full kernel proof on every push. The workflow's
+# status badge (spark-badge.yml/badge.svg) is green when not-proved = 0 and red
+# on any regression — a machine-checked fact, no gist/token needed.
 on:
   push:
     branches: [master]
@@ -43,29 +40,10 @@ jobs:
           echo "$HOME/.alire/bin" >> "$GITHUB_PATH"
 
       - name: Prove kernel (full SPARK sweep)
-        id: proof
         run: |
           cd src/schild_core
           bash scripts/prove_kernel.sh
           NP=$(python3 -c "import json; print(json.load(open('obj/proof/metrics.json'))['not_proved'])")
           echo "not_proved=$NP"
-          echo "not_proved=$NP" >> "$GITHUB_OUTPUT"
-
-      - name: Determine badge color
-        id: color
-        run: |
-          if [ "${{ steps.proof.outputs.not_proved }}" = "0" ]; then
-            echo "color=green" >> "$GITHUB_OUTPUT"
-          else
-            echo "color=red" >> "$GITHUB_OUTPUT"
-          fi
-
-      - name: Update SPARK badge
-        uses: schneegans/dynamic-badges-action@v1.9.0
-        with:
-          auth: ${{ secrets.GIST_SECRET }}
-          gistID: ${{ secrets.GIST_ID }}
-          filename: spark-badge.json
-          label: SPARK Level 4
-          message: "${{ steps.proof.outputs.not_proved }} unproved VCs"
-          color: ${{ steps.color.outputs.color }}
+          # prove_kernel.sh already gates (exits non-zero if not-proved > 0),
+          # so the workflow status badge turns red on any regression.
