@@ -19,6 +19,11 @@ C4 (syscall seam) — главный residual Tier A: 1475 строк SPARK_Off 
   **drift устранён** — `fs_daemon.c` вынес op-switch в `fs_dispatch()`, и харнес
   теперь `#include` реального `../src/fs_daemon.c` (seL4/Ada застаблены),
   фаззит `op`/`mr[0..3]` напрямую. 2 000 000 итераций, 0 нарушений (ASan/UBSan).
+- `tools/sel4/fuzz/mls_dispatch_fuzz.c` — host-харнес диспатча `mls_server.c`
+  (op/target_level-проверки + `u32`-касты в Ada-гейт) — 2 000 000 итераций,
+  0 нарушений (ASan/UBSan). *Drift-оговорка:* это копия диспатча — вынос в
+  общую функцию возмутил H87 size-sensitive раскладку ELF и сломал run_tests
+  (NetServer init hang), поэтому оставили копию и синхронизируем вручную.
 
 ## Что НЕ покрывает текущий харнес
 

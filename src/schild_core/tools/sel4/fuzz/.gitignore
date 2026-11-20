@@ -1,3 +1,4 @@
 seam_fuzz
 fs_dispatch_fuzz
+mls_dispatch_fuzz
 *.o
