@@ -1,0 +1,62 @@
+name: SPARK badge
+
+# Dynamic SPARK Level-4 badge: runs the full kernel proof and updates a gist
+# badge, so the README badge turns red on any regression (not-proved > 0)
+# instead of being a static shields.io image. Requires two repo secrets:
+#   GIST_SECRET — a GitHub token with the `gist` scope
+#   GIST_ID     — the id of a gist owned by that token (the badge JSON lives in
+#                 spark-badge.json in that gist)
+on:
+  push:
+    branches: [master]
+  workflow_dispatch:
+
+jobs:
+  spark-badge:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Alire
+        run: |
+          mkdir -p "$HOME/.local/bin"
+          curl -fsSL --retry 5 --retry-delay 10 --retry-all-errors -o alr.zip https://github.com/alire-project/alire/releases/download/v2.1.1/alr-2.1.1-bin-x86_64-linux.zip
+          unzip -o alr.zip -d alr-dist
+          cp "$(find alr-dist -name alr -type f | head -1)" "$HOME/.local/bin/alr"
+          chmod +x "$HOME/.local/bin/alr"
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+
+      - name: Cache Alire toolchains & releases
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.local/share/alire/toolchains
+            ~/.local/share/alire/releases
+            ~/.alire
+          key: alire-${{ runner.os }}-${{ runner.arch }}-v1
+
+      - name: Install Ada/SPARK toolchain
+        run: |
+          alr -n toolchain --select gnat_native=14.2.1
+          alr -n toolchain --select gprbuild=22.0.1
+          alr -n install gnatprove
+          echo "$HOME/.alire/bin" >> "$GITHUB_PATH"
+
+      - name: Prove kernel (full SPARK sweep)
+        id: proof
+        run: |
+          cd src/schild_core
+          bash scripts/prove_kernel.sh
+          NP=$(python3 -c "import json; print(json.load(open('obj/proof/metrics.json'))['not_proved'])")
+          echo "not_proved=$NP"
+          echo "not_proved=$NP" >> "$GITHUB_OUTPUT"
+
+      - name: Update SPARK badge
+        uses: schneegans/dynamic-badges-action@v1
+        with:
+          auth: ${{ secrets.GIST_SECRET }}
+          gistID: ${{ secrets.GIST_ID }}
+          filename: spark-badge.json
+          label: SPARK Level 4
+          message: "${{ steps.proof.outputs.not_proved }} unproved VCs"
+          color: ${{ steps.proof.outputs.not_proved == '0' && 'green' || 'red' }}

@@ -3,7 +3,7 @@
 A **Trusted Computing Base (TCB)** research prototype: a formally verified core (**seL4** microkernel + **Ada/SPARK 2022**) with an isolated-peripheral environment.
 
 [![OpenSSF Best Practices](https://www.bestpractices.dev/projects/16898/badge)](https://www.bestpractices.dev/projects/16898)
-[![CI](https://github.com/Nik0laic4/SchildTCB/actions/workflows/ci.yml/badge.svg)](https://github.com/Nik0laic4/SchildTCB/actions/workflows/ci.yml)
+[![CI (build+verify)](https://github.com/Nik0laic4/SchildTCB/actions/workflows/ci.yml/badge.svg)](https://github.com/Nik0laic4/SchildTCB/actions/workflows/ci.yml)
 [![ARM64 virtio-net](https://github.com/Nik0laic4/SchildTCB/actions/workflows/arm64-net.yml/badge.svg)](https://github.com/Nik0laic4/SchildTCB/actions/workflows/arm64-net.yml)
 [![SPARK Level 4](https://img.shields.io/badge/SPARK_Level_4-0_unproved_VCs-green)](docs/technical/ASSURANCE.md)
 [![License: GPL-2.0-only](https://img.shields.io/badge/License-GPL--2.0--only-blue.svg)](LICENSE)
@@ -31,7 +31,7 @@ The pipeline rules ("AI-agent constitution"), the escalation model, and the work
 
 ## Highlights
 
-- **Formal verification** — 188 kernel modules swept at **SPARK Level 4** (`gnatprove --level=4 --mode=all`) with **0 unproved VCs**: 132 proved, 48 outside proof scope (`SPARK_Mode => Off` drivers/platform code), 8 scaffold modules explicitly excluded (see [`ASSURANCE.md`](docs/technical/ASSURANCE.md) §2.2). 8 root-task proof units (root task + 7 libraries/models — MLS policy, capability/process/firewall models, boot manager, HM/launch models, watchdog) are also proved. *(A few modules — `schild_firewall`, `schild_signals`, `schild_frame_allocator`, `schild_server_security_policy` — are provable at Level 4 in a focused run but may be classified `SKIPPED` by the canonical `-j8` batch; the stable gate is `not-proved: 0`. See [`SPARK_PROOF_TECHNIQUES.md`](docs/technical/SPARK_PROOF_TECHNIQUES.md).)*
+- **Formal verification** — **188 kernel modules swept** at **SPARK Level 4** (`gnatprove --level=4 --mode=all`) — **180 in proof set: 132 proved, 48 skipped; 8 scaffold excluded** — with **0 unproved VCs** (see [`ASSURANCE.md`](docs/technical/ASSURANCE.md) §2.2). 8 root-task proof units (root task + 7 libraries/models — MLS policy, capability/process/firewall models, boot manager, HM/launch models, watchdog) are also proved. *(A few modules — `schild_firewall`, `schild_signals`, `schild_frame_allocator`, `schild_server_security_policy` — are provable at Level 4 in a focused run but may be classified `SKIPPED` by the canonical `-j8` batch; the stable gate is `not-proved: 0`. See [`SPARK_PROOF_TECHNIQUES.md`](docs/technical/SPARK_PROOF_TECHNIQUES.md).)*
 - **Isolated periphery** — network (e1000e → I219-V) and storage (NVMe + SchildFS) run in the isolated Ring-3 **NetServer**; a fault there cannot reach the proven core.
 - **MLS Bell-LaPadula** — 5 security levels in the seL4 layer (Public..Top_Secret), 4 in the bare-metal kernel.
 - **Crash containment** — faulting a driver is caught and contained without rebooting the platform.
@@ -55,6 +55,8 @@ The pipeline rules ("AI-agent constitution"), the escalation model, and the work
 | **C — Scaffold** | packet-filter crypto, full firewall rules | *Not implemented in this build*, explicitly labelled |
 
 Drivers (NVMe, e1000e, network stack) are **not proven** and are not claimed to be — hardware has no formal specification. They are isolated in separate domains instead.
+
+> **Note on `schild_firewall`:** it is split across tiers — the packet **verdicts** (token-bucket rate limiter) are Tier A and proved, while the full **ruleset/crypto** is Tier C scaffold (not implemented). This is an intentional boundary, not a missing firewall.
 
 Known upstream limitations (none in this codebase):
 
@@ -114,6 +116,8 @@ Contributions and feedback are welcome — see [`CONTRIBUTING.md`](CONTRIBUTING.
 
 - [`docs/GUIDE.md`](docs/GUIDE.md) — step-by-step tutorial (build → run → verify).
 - [`docs/README.md`](docs/README.md) — documentation index & single source of truth.
+- [`docs/GLOSSARY.md`](docs/GLOSSARY.md) — glossary (VC, Pre/Post, Tier A/B/C, Capability).
+- [`docs/methodology/`](docs/methodology/) — the "AI-agent constitution" and worked case studies.
 - [`PROJECT_PASSPORT.md`](PROJECT_PASSPORT.md) — project overview.
 - [`docs/technical/ASSURANCE.md`](docs/technical/ASSURANCE.md) — assurance case & hardening roadmap.
 - [`docs/technical/THREAT_MODEL.md`](docs/technical/THREAT_MODEL.md) — threat model & adversary model.
