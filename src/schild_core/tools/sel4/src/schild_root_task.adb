@@ -752,6 +752,29 @@ begin
          if F > 0 then Last_Seen (4) := RDTSC; end if;
       end;
 
+      -- H90-A: poll the shared timeout-fault endpoint.  A daemon's sporadic
+      -- scheduling-context budget overrun delivers a seL4_Fault_Timeout here
+      -- (MR[0] = SC badge).  On a timeout, mark the domain unhealthy and
+      -- restart it (liveness-recover, closes the C9 detect-only gap).
+      declare
+         B : Word := Schild_Sel4_Syscall.NBWait (Schild_Sel4_Syscall.Timeout_EP_Slot);
+      begin
+         if B > 0 then
+            declare
+               Badge : Word := Schild_Sel4_Syscall.Read_Recv_MR0;
+            begin
+               Put_Str ("[H90-A] timeout fault, SC badge=");
+               Put_Dec (Badge);
+               Put_Str (ASCII.CR & ASCII.LF);
+               if Badge >= 1 and then Badge <= 4 then
+                  Health_Ok (Natural (Badge)) := False;
+                  Schild_Sel4_Syscall.Health_Monitor
+                    (Schild_Sel4_Syscall.HM_Domain'Val (Natural (Badge) - 1));
+               end if;
+            end;
+         end if;
+      end;
+
       -- C9 health check (throttled): a domain stale > 500 ms is unhealthy
       -- (liveness-detect, not recover). Grace period skips the slow init.
       declare

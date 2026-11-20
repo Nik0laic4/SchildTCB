@@ -2181,6 +2181,17 @@ is
          Schild_Launch_Model.Launch
            (Launch_St, Schild_Launch_Model.FS_Daemon, Natural (FS_Fault_Root_Slot));
          Put_String ("[FS] daemon: OK" & ASCII.CR & ASCII.LF);
+
+         -- H90-A: switch the FS daemon to a sporadic SC (budget < period) so a
+         -- hung NVMe busy-wait poll overruns its budget and raises
+         -- seL4_Fault_Timeout (delivered to the shared Timeout_EP).  Init/mount
+         -- ran round-robin above; runtime append/write is sporadic.
+         Put_String ("[H90-A] FS SC -> sporadic (5000/100000)... ");
+         R := SchedControl_ConfigureFlags
+           (BI.all.SchedControl_Start, FS_SC_Slot, 5_000, 100_000, 0, 4, 0);
+         Put_Hex (R); Put_String (ASCII.CR & ASCII.LF);
+         if R /= 0 then return 3; end if;
+
          return 0;
       else
          Put_String ("[FS] daemon: FAILED (alive != 1)" & ASCII.CR & ASCII.LF);
