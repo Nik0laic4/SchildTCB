@@ -73,7 +73,7 @@ PML4/CSpace, NVMe BAR0 @0x620000), and `Persist_Audit_Log` reaches it over IPC
 
 | Claim | Mechanical check | Result (2026-11-15) |
 |-------|------------------|---------------------|
-| Tier-A modules have no unproved VCs | `bash scripts/prove_kernel.sh` | `not-proved: 0` (189 modules swept; 179 in proof set: 134 proved / 43 skipped / 2 no-output; 10 scaffold excluded, see H99) |
+| Tier-A modules have no unproved VCs | `bash scripts/prove_kernel.sh` | `not-proved: 0` (189 modules swept; 179 in proof set: 133 proved / 44 skipped / 2 no-output; 10 scaffold excluded, see H99) |
 | Level-4 root-task proof units prove (8: 1 daemon + 7 libraries/models) | `bash scripts/verify.sh` | "all verification conditions proved" (`not-proved: 0`) |
 | Kernel builds clean | `SCHILD_PROFILE=public ./build.sh` | 184 objects, 0 errors |
 | Boot chain works | `SKIP_BUILD=1 SEL4_PRIMARY=0 bash scripts/run_tests.sh` | PASS (Long Mode → e1000e → SMP → MLS → :80) |
