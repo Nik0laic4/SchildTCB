@@ -44,7 +44,11 @@ Schild TCB is a research project: a trusted computing base built on the seL4 + S
 
 Every chapter of this collection follows the same frame: a moment from the changelog (with version number and date), then the untangling through the repository's files — real code, a real comment, a real script gate — then an analysis of why it happened exactly the way it did, and finally the lesson: a generalized statement you can carry into any other project. Code in the chapters is quoted verbatim from the cloned repository's files (commit 8d67ecc), with paths given; long fragments are shortened with ellipses but never rewritten. The collection does not replace the project's documentation — it leads toward it, and each chapter ends by pointing at the repository document to read for the full context.
 
-The order of chapters runs from contracts to the execution environment: first the "software" (chapters 1–3: vacuity, weak spots, prover limitations), then "hardware and structure" (chapters 4–5: alignment, the slot map), then "isolation and mechanisms" (chapters 6–8: own CSpace, CPtr encoding, fault-injection gating), and the collection closes with the methodological chapters (9–10: what the oracle doesn't catch, how to read a changelog). All the quantitative numbers come from the project's canonical metrics: 188 modules in the sweep, 132 proved, 48 Off bodies, 8 scaffolds excluded, 0 unproved verification conditions.
+The order of chapters runs from contracts to the execution environment: first the "software" (chapters 1–3: vacuity, weak spots, prover limitations), then "hardware and structure" (chapters 4–5: alignment, the slot map), then "isolation and mechanisms" (chapters 6–8: own CSpace, CPtr encoding, fault-injection gating), and the collection closes with the methodological chapters (9–10: what the oracle doesn't catch, how to read a changelog) and the boundary cases where the oracle is powerless (chapters 11–15: PID reuse, the silent Persist, build-list drift, kernel patches, the dead gate). All the quantitative numbers come from the project's canonical metrics: 188 modules in the sweep, 132 proved, 48 Off bodies, 8 scaffolds excluded, 0 unproved verification conditions.
+
+![Fig. 1. The canonical module ledger: 132 proved / 48 Off bodies / 8 scaffolds (metrics.json)](textbook_assets/chart_tiers_en.png)
+
+*Fig. 1. The canonical module ledger: 132 proved / 48 Off bodies / 8 scaffolds (metrics.json)*
 
 ---
 
@@ -230,9 +234,6 @@ The key idea for the community: the map lives in data, not in code — a constan
 
 > **Lesson.** Keep static resources (slots, ports, addresses) in one constants file with boundary justifications and a history of moves, and back it with a machine uniqueness checker. A magic number in code is a future "Slot non-empty" that will only ever be caught by a hang.
 
-![Fig. 1. Layered defense: which gate gets which error class (per the cases.md catalog)](textbook_assets/chart_gates_en.png)
-
-*Fig. 1. Layered defense: which gate gets which error class (per the cases.md catalog)*
 ---
 
 ## Chapter 6. A daemon with its own CSpace: closing the "Signal arbitrary notifications" vector
@@ -322,9 +323,9 @@ This chapter gathers the conclusion of all the previous ones into a single table
 
 *Source: docs/methodology/cases.md "Common pattern", extended with the November 19 incident row*
 
-![Fig. 2. The canonical module ledger: 132 proved / 48 Off bodies / 8 scaffolds (metrics.json)](textbook_assets/chart_tiers_en.png)
+![Fig. 2. Layered defense: which gate gets which error class (per the cases.md catalog)](textbook_assets/chart_gates_en.png)
 
-*Fig. 2. The canonical module ledger: 132 proved / 48 Off bodies / 8 scaffolds (metrics.json)*
+*Fig. 2. Layered defense: which gate gets which error class (per the cases.md catalog)*
 
 The intellectual core of the chapter is the catalog's conclusion, quoted verbatim: "the oracle covers one axis (formal correctness inside the model); everything else is covered in echelons — review for vacuity, a runtime guard for Pre at Off, markers for the environment, scripts for drift; that is the architecture of the pipeline." For the community this table is a ready checklist: if your organization is buying a "formally verified" product, ask, row by row, which echelon catches that class at this particular vendor. If the answer is "the prover" all the way down — you are looking at a gap, not a guarantee.
 
