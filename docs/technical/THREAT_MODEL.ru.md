@@ -643,17 +643,18 @@ fault injection (crash-containment + timeout) вынесено за `#ifdef SCHI
 инжекции гейтится `schild_selftest_enabled()` (в `elf_blobs.c`). Production-сборка
 грузится до `Root Task ready` без достижимого fault-пути.
 
-**H107 / H88 уточнение политики (residual R23).** MLS-гейт
-(`Authorize_IPC_Levels`) — проверка *коммуникационного уровня* (`Can_IPC`,
-строгое equal-clearance), а не *per-file / per-operation*: он не различает
+**H107 / H88 уточнение политики — митигировано (2026-11-21, R23).** MLS-гейт
+(`Authorize_IPC_Levels`) был проверкой *коммуникационного уровня* (`Can_IPC`,
+строгое equal-clearance), а не *per-file / per-operation*: он не различал
 `Fs_Open("user.txt")` от `Fs_Open("audit.log")` на одном уровне, ни чтение от
-записи. Два конкретных пробела: (a) любой не-root **Top_Secret-пир** (например,
-`Audit_Logger`, тоже `Level_Top_Secret`) может `Fs_Delete("audit.log")` —
-equal-clearance, гейт проходит; (b) любой домен ниже уровнем не может даже
-`Fs_Is_Mounted` — гейт запрещает всё ниже Top_Secret. Для однокуровневого
-прототипа это безопасно, потому что единственный вызывающий держит cap FS-EP
-как root (role=0, bypass); мульти-уровневый требует per-file уровни +
-operation-aware гейт (Phase 2, Блок 5 L).
+записи. Два пробела: (a) любой не-root **Top_Secret-пир** (например,
+`Audit_Logger`, тоже `Level_Top_Secret`) мог `Fs_Delete("audit.log")` —
+equal-clearance, гейт проходил; (b) любой домен ниже уровнем не мог даже
+`Fs_Is_Mounted` — гейт запрещал всё ниже Top_Secret. Митигировано в v0.57:
+per-file уровни (`Dir_Entry.Level/Owner`, NVFS v5) + operation-aware гейт
+(`Authorize_File_Op`) — read→`Can_Read`, write→`Can_Write`, delete→только
+владелец, mount-control→любой аутентифицированный; отказ → `St_Denied`.
+Маркер `[R23] Fs_Open write-down denied`.
 
 **R2 root bypass (residual R24).** `sender_role = 0` (root-задача) полностью
 пропускает MLS-гейт — обход caller-side, а `Authorize_IPC_Levels` теперь чистый

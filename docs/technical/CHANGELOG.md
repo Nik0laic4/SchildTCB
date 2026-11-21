@@ -6,6 +6,17 @@
 > *pending* or *target* have not yet been validated. Formal-verification
 > coverage is stated per-module, never as an aggregate percentage.
 
+## v0.57 (2026-11-21) — R23 MLS per-file levels + operation-aware gate
+
+**Validated: per-file MLS levels (`Dir_Entry.Level/Owner`) + an operation-aware gate (`Authorize_File_Op`) on all seven FS operations — `run_tests 25/25` (incl. `[R23] Fs_Open write-down denied`), `verify.sh` 0, `verify_private.sh` 0, fs_core+schild_fs 0 unproved.**
+
+- **Gate (`Authorize_File_Op`, SPARK 17 checks):** read → `Can_Read` (no read-up), write → `Can_Write` (no write-down), delete → owner-only (root or `Owner_Role`), mount-control → any authenticated caller. Closes gap (a) arbitrary `Fs_Delete("audit.log")` and gap (b) lower-clearance `Fs_Is_Mounted` denial.
+- **Per-file metadata:** `Dir_Entry` 36→38 bytes (`Level`/`Owner` at 36/37), `Dir_Table` 14→13 entries, `NVFS_Version` 4→5; `Create_File` gains `Level/Owner` (audit.log = Top_Secret, test.txt = Public).
+- **FS operations gated:** `Fs_Open(Mode∈{Read,Write})`, `Fs_Read`/`Fs_Get_Entry` (Can_Read), `Fs_Write`/`Fs_Append`/`Fs_Create(Level)` (Can_Write), `Fs_Delete` (owner-only); `Fs_Is_Mounted`/`Fs_Is_Read_Only` open to any authenticated. Denial → `St_Denied` (7).
+- **Subject-info plumbing:** `fs_daemon.c` writes the badge role/level (`schild_set_fs_subject`) before dispatch; `schild_fs_server` reads them via C accessors (public + private overlay). `Fs_Create` takes `Level` in MR[3].
+- **End-to-end test:** the root task (Top_Secret) opens Public `test.txt` with `Mode=write` → denied (`St_Denied`, no write-down); marker `[R23] Fs_Open write-down denied`. Added a SPARK-friendly `schild_shared_put_byte` (the SPARK_Mode On root task cannot use `'Address`).
+- **gates:** build 0 (bare-metal 184/0, seL4 public+private Done), run_tests 25/25, verify.sh 0, verify_private.sh 0, fs_core+schild_fs 0 unproved.
+
 ## v0.56 (2026-11-20) — M20 fault-injection out of production + C9 overlay fix
 
 **Validated: `op=98`/`op=99` fault-injection compiled out of production behind `SCHILD_SELFTEST`, plus a C9 private-overlay link fix — `run_tests 24/24`, `verify.sh` 106 checks (no delta), `verify_private.sh` 0, production boot OK.**
