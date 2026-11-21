@@ -40,7 +40,8 @@ package body Schild_Schild_Fs with SPARK_Mode => Off is
 
    Mounted  : Boolean := False;
    Root_Dir : Dir_Table := (others => (Name => (others => ' '),
-                                        Start_LBA => 0, Size => 0, Checksum => 0));
+                                        Start_LBA => 0, Size => 0, Checksum => 0,
+                                        Level => 0, Owner => 0));
    Entry_Count : Unsigned_32 := 0;
 
    --  Engaged on CRC32 torn-write detection: blocks all write transactions
@@ -246,7 +247,7 @@ package body Schild_Schild_Fs with SPARK_Mode => Off is
       Hmac_Key      := Chosen.Hmac_Key;
 
       Entry_Count := Chosen.Root_Entries;
-      if Entry_Count > 16 then Entry_Count := 16; end if;
+      if Entry_Count > 13 then Entry_Count := 13; end if;
       Read_Block_512 (Unsigned_64 (Chosen.Root_Dir_LBA), Buf, Success);
       if not Success then return; end if;
       if CRC32 (Buf, 512) /= Chosen.Dir_Checksum then
@@ -256,7 +257,7 @@ package body Schild_Schild_Fs with SPARK_Mode => Off is
          Success := False; return;
       end if;
       for I in 0 .. Integer (Entry_Count) - 1 loop
-         Bytes_To_Dir_Entry (Buf, I * 36, Root_Dir (I));
+         Bytes_To_Dir_Entry (Buf, I * 38, Root_Dir (I));
       end loop;
 
       -- Audit H74 fallback: if the persisted Next_Free_LBA is invalid (legacy
@@ -475,7 +476,7 @@ package body Schild_Schild_Fs with SPARK_Mode => Off is
    begin
       Success := False;
       for I in 0 .. Integer (Entry_Count) - 1 loop
-         Dir_Entry_To_Bytes (Root_Dir (I), Dir_Buf, I * 36);
+         Dir_Entry_To_Bytes (Root_Dir (I), Dir_Buf, I * 38);
       end loop;
       Dir_CRC := CRC32 (Dir_Buf, 512);
       SB.Dir_Checksum := Dir_CRC;
@@ -514,7 +515,7 @@ package body Schild_Schild_Fs with SPARK_Mode => Off is
          C_Putln (Msg_RO'Address, Msg_RO'Length);
          return;
       end if;
-      if Entry_Count >= 14 then
+      if Entry_Count >= 13 then
          C_Putln (Msg_Full'Address, Msg_Full'Length);
          return;
       end if;
@@ -526,7 +527,7 @@ package body Schild_Schild_Fs with SPARK_Mode => Off is
          return;
       end if;
       declare
-         Ent : Dir_Entry := (Name => (others => ' '), Start_LBA => Start_LBA, Size => Size, Checksum => 0);
+         Ent : Dir_Entry := (Name => (others => ' '), Start_LBA => Start_LBA, Size => Size, Checksum => 0, Level => 0, Owner => 0);
       begin
          for J in Name'Range loop exit when J > Max_Name_Length;
             Ent.Name (J) := Name (J); end loop;
@@ -710,7 +711,8 @@ package body Schild_Schild_Fs with SPARK_Mode => Off is
          Root_Dir (I) := Root_Dir (I + 1);
       end loop;
       Root_Dir (Integer (Entry_Count) - 1) :=
-        (Name => (others => ' '), Start_LBA => 0, Size => 0, Checksum => 0);
+        (Name => (others => ' '), Start_LBA => 0, Size => 0, Checksum => 0,
+         Level => 0, Owner => 0);
       Entry_Count := Entry_Count - 1;
       --  Commit (directory + superblock, A/B atomic).
       declare
@@ -739,7 +741,8 @@ package body Schild_Schild_Fs with SPARK_Mode => Off is
    begin
       if not Mounted or Index >= Entry_Count then
          Success := False;
-         Dir_Ent := (Name => (others => ' '), Start_LBA => 0, Size => 0, Checksum => 0);
+         Dir_Ent := (Name => (others => ' '), Start_LBA => 0, Size => 0, Checksum => 0,
+                     Level => 0, Owner => 0);
          return;
       end if;
       Dir_Ent := Root_Dir (Integer (Index)); Success := True;

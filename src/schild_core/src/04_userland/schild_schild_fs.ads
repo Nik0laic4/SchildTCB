@@ -13,7 +13,7 @@ with Schild_Fs_Core;
 package Schild_Schild_Fs with SPARK_Mode => Off is
    use Interfaces; use Schild_Fs_Core;
 
-   type Dir_Table is array (0 .. 13) of Dir_Entry;  -- H62: 14 × 36 B = 504 B
+   type Dir_Table is array (0 .. 12) of Dir_Entry;  -- R23: 13 × 38 B = 494 B
 
    -- File handle for opened files
    type File_Info is record

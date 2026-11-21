@@ -138,7 +138,8 @@ package body Schild_Fs_Core with SPARK_Mode => On is
    procedure Bytes_To_Dir_Entry
      (Raw : Block_Buf; Off : Natural; Ent : out Dir_Entry) is
    begin
-      Ent := (Name => (others => ' '), Start_LBA => 0, Size => 0, Checksum => 0);
+      Ent := (Name => (others => ' '), Start_LBA => 0, Size => 0, Checksum => 0,
+              Level => 0, Owner => 0);
       for I in 0 .. 23 loop
          declare
             C : constant Unsigned_8 := Raw (Off + I);
@@ -162,6 +163,8 @@ package body Schild_Fs_Core with SPARK_Mode => On is
         or Shift_Left (Unsigned_32 (Raw (Off + 33)), 8)
         or Shift_Left (Unsigned_32 (Raw (Off + 34)), 16)
         or Shift_Left (Unsigned_32 (Raw (Off + 35)), 24);
+      Ent.Level := Raw (Off + 36);
+      Ent.Owner := Raw (Off + 37);
    end Bytes_To_Dir_Entry;
 
    -- Serialize one 32-byte directory entry at offset Off.
@@ -183,6 +186,8 @@ package body Schild_Fs_Core with SPARK_Mode => On is
       Raw (Off + 33) := Unsigned_8 (Shift_Right (Ent.Checksum, 8) and 255);
       Raw (Off + 34) := Unsigned_8 (Shift_Right (Ent.Checksum, 16) and 255);
       Raw (Off + 35) := Unsigned_8 (Shift_Right (Ent.Checksum, 24) and 255);
+      Raw (Off + 36) := Ent.Level;
+      Raw (Off + 37) := Ent.Owner;
    end Dir_Entry_To_Bytes;
 
 end Schild_Fs_Core;
