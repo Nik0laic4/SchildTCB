@@ -339,7 +339,8 @@ package body Schild_Schild_Fs with SPARK_Mode => Off is
                end if;
                File.Valid := True; File.Name := Ent.Name;
                File.Start_LBA := Ent.Start_LBA; File.Size := Ent.Size;
-               File.Curr_Off := 0; Success := True; return;
+               File.Curr_Off := 0; File.Level := Ent.Level; File.Owner := Ent.Owner;
+               Success := True; return;
             end if;
          end;
       end loop;

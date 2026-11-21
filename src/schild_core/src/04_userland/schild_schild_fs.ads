@@ -22,6 +22,8 @@ package Schild_Schild_Fs with SPARK_Mode => Off is
       Start_LBA : Unsigned_32 := 0;
       Size      : Unsigned_32 := 0;
       Curr_Off  : Unsigned_32 := 0;  -- current read position
+      Level     : Unsigned_8 := 0;   -- R23: file clearance (0..4)
+      Owner     : Unsigned_8 := 0;   -- R23: owner role (0 = root)
    end record;
 
    type Unsigned_8_Array is array (Natural range <>) of Unsigned_8;

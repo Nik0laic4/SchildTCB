@@ -27,7 +27,8 @@ extern volatile u64 fs_daemon_alive_flag;
 
 /* Ada exports (Schild_Fs_Server, Convention C).  out-params are pointers. */
 extern u32 schild_fs_init(void);
-extern u32 schild_fs_open(u32 name_len, u32* handle, u32* size);
+extern u32 schild_fs_open(u32 name_len, u32 mode, u32* handle, u32* size);
+extern void schild_set_fs_subject(unsigned int role, unsigned int level);
 extern u32 schild_fs_read(u32 handle, u32 offset, u32 len, u32* actual);
 extern u32 schild_fs_write(u32 handle, u32 offset, u32 len, u32* new_off);
 extern u32 schild_fs_create(u32 name_len, u32 size, u32* handle);
@@ -52,9 +53,9 @@ static void fs_dispatch(u64 op, u64 a, u64 b, u64 c,
     case 0:  /* Init: NVMe + SchildFS mount (single owner, H86). */
         result = (u64) schild_fs_init();
         break;
-    case 1: {  /* Open: name_len (name in shared), -> handle, size */
+    case 1: {  /* Open: name_len (MR[1]), mode (MR[2], 0=read 1=write) -> handle, size */
         u32 h = 0, s = 0;
-        result = (u64) schild_fs_open((u32)a, &h, &s);
+        result = (u64) schild_fs_open((u32)a, (u32)b, &h, &s);
         result1 = h; result2 = s;
         break;
     }
@@ -151,6 +152,8 @@ void fs_daemon_main(void) {
         u64 result3 = 0;
         int fault_after_reply = 0;
 
+        schild_set_fs_subject((unsigned int)sender_role,
+                              (unsigned int)sender_level);
         fs_dispatch(op, a, b, c, &result, &result1, &result2, &result3,
                     &fault_after_reply);
 

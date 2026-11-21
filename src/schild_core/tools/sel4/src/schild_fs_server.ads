@@ -12,6 +12,7 @@
 --   7 Is_Mounted, 8 Is_Read_Only, 9 Delete, 99 fault-injection (test)
 with Interfaces;
 with Schild_Schild_Fs;
+with Schild_MLS_Policy;
 
 use type Interfaces.Unsigned_32;
 
@@ -44,6 +45,7 @@ package Schild_Fs_Server with SPARK_Mode => Off is
    St_Bad_Op      : constant := 4;
    St_Read_Only   : constant := 5;
    St_No_Space    : constant := 6;
+   St_Denied      : constant := 7;   -- R23: MLS gate denied
 
    -- H65: initialize NVMe MMIO + SchildFS. Returns St_Ok on success.
    -- Root task calls this once at boot (after Launch_FS_Daemon).
@@ -51,9 +53,11 @@ package Schild_Fs_Server with SPARK_Mode => Off is
    pragma Export (C, Fs_Init, "schild_fs_init");
 
    -- Open a file by name (name bytes in shared frame @ 0x520000).
+   -- Mode: 0 = read (Can_Read), 1 = write (Can_Write) — R23.
    -- Reply: handle (index into Root_Dir), size.
    function Fs_Open
      (Name_Len : Interfaces.Unsigned_32;
+      Mode     : Interfaces.Unsigned_32;
       Handle   : out Interfaces.Unsigned_32;
       Size     : out Interfaces.Unsigned_32) return Interfaces.Unsigned_32;
    pragma Export (C, Fs_Open, "schild_fs_open");

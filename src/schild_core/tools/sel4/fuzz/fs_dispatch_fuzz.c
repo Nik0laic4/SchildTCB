@@ -35,7 +35,8 @@ unsigned int schild_mls_authorize_ipc_levels(unsigned int sender_level, unsigned
 
 /* Ada FS server stubs (Schild_Fs_Server, Convention C). */
 u32 schild_fs_init(void) { return 0; }
-u32 schild_fs_open(u32 n, u32 *h, u32 *s) { (void)n; if (h) *h = 0; if (s) *s = 0; return 0; }
+u32 schild_fs_open(u32 n, u32 m, u32 *h, u32 *s) { (void)n; (void)m; if (h) *h = 0; if (s) *s = 0; return 0; }
+void schild_set_fs_subject(unsigned int role, unsigned int level) { (void)role; (void)level; }
 u32 schild_fs_read(u32 h, u32 o, u32 l, u32 *a) { (void)h; (void)o; (void)l; if (a) *a = 0; return 0; }
 u32 schild_fs_write(u32 h, u32 o, u32 l, u32 *n) { (void)h; (void)o; (void)l; if (n) *n = 0; return 0; }
 u32 schild_fs_create(u32 n, u32 s, u32 *h) { (void)n; (void)s; if (h) *h = 0; return 0; }

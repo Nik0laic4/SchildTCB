@@ -145,6 +145,18 @@ void schild_shared_copy_to(const void *src, unsigned int len) {
     for (i = 0; i < len; i++) d[i] = s[i];
 }
 
+/* ─── R23: per-file/operation MLS gate context ───────────────────────────
+ * fs_daemon.c writes the badge role/level here before dispatching an FS op;
+ * the Ada FS server reads them to authorize read/write/delete against the
+ * per-file Dir_Entry.Level/Owner. */
+static unsigned int fs_subject_role  = 0;
+static unsigned int fs_subject_level = 0;
+void schild_set_fs_subject(unsigned int role, unsigned int level) {
+    fs_subject_role = role; fs_subject_level = level;
+}
+unsigned int schild_fs_subject_role(void)  { return fs_subject_role; }
+unsigned int schild_fs_subject_level(void) { return fs_subject_level; }
+
 /* ─── Stage 9: network debug bridge (real) ──────────────────────────────
  * The audit-log renderer is implemented in Ada (Schild_Audit_Logger's
  * Audit_Event type is an Ada record), exported as schild_audit_render.

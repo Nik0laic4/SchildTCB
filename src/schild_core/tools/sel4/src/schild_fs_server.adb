@@ -20,6 +20,12 @@ package body Schild_Fs_Server with SPARK_Mode => Off is
    procedure C_Putln (Addr : System.Address; Len : Integer);
    pragma Import (C, C_Putln, "schild_uart_putln");
 
+   --  R23: per-file/operation MLS gate context (set by fs_daemon.c).
+   function C_Fs_Subject_Role return Unsigned_32;
+   pragma Import (C, C_Fs_Subject_Role, "schild_fs_subject_role");
+   function C_Fs_Subject_Level return Unsigned_32;
+   pragma Import (C, C_Fs_Subject_Level, "schild_fs_subject_level");
+
    Initialized : Boolean := False;
 
    function Fs_Init return Unsigned_32 is
@@ -123,6 +129,7 @@ package body Schild_Fs_Server with SPARK_Mode => Off is
 
    function Fs_Open
      (Name_Len : Unsigned_32;
+      Mode     : Unsigned_32;
       Handle   : out Unsigned_32;
       Size     : out Unsigned_32) return Unsigned_32
    is
@@ -141,6 +148,16 @@ package body Schild_Fs_Server with SPARK_Mode => Off is
       end loop;
       Schild_Schild_Fs.Open (Name_Str (1 .. Integer (L)), F, Ok);
       if not Ok then return St_No_File; end if;
+      --  R23: per-file operation gate (Mode 0=read, 1=write).
+      if Schild_MLS_Policy.Authorize_File_Op
+           (Mode,
+            C_Fs_Subject_Level,
+            Unsigned_32 (F.Level),
+            C_Fs_Subject_Role,
+            Unsigned_32 (F.Owner)) = 0
+      then
+         return St_Denied;
+      end if;
       Handle := F.Start_LBA;
       Size   := F.Size;
       return St_Ok;
