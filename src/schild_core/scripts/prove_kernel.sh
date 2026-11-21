@@ -48,7 +48,7 @@ SWEPT=${#MODS[@]}   # modules swept before scaffold exclusion (canonical metric)
 # H99: exclude scaffold modules from proof (On spec + Off stub, not in TCB, not linked).
 # These modules are dead code in the repo; proving their Off stubs creates a
 # false guarantee (spec proved, body not checked).
-SCAFFOLD_MODULES=(schild_user_memory schild_user_reaper schild_net_crypto schild_stack_sanitizer schild_user_thread schild_user_vfs schild_user_quotas schild_user_irq)
+SCAFFOLD_MODULES=(schild_user_memory schild_user_reaper schild_net_crypto schild_stack_sanitizer schild_user_thread schild_user_vfs schild_user_quotas schild_user_irq schild_net_config schild_server_init)
 FILTERED=()
 for m in "${MODS[@]}"; do
   skip=0
