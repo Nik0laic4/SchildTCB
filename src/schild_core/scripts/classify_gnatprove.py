@@ -51,17 +51,16 @@ def blocks_from(path):
     return blocks
 
 
-def find_body(root_dir, module):
-    """Return the path to module.adb under root_dir/src, or None."""
+def find_unit(root_dir, module, ext):
+    """Return the path to module.<ext> under root_dir/src, or None."""
     for dirpath, _, files in os.walk(os.path.join(root_dir, "src")):
-        name = module + ".adb"
+        name = module + ext
         if name in files:
             return os.path.join(dirpath, name)
     return None
 
 
-def body_is_off(root_dir, module):
-    path = find_body(root_dir, module)
+def file_has_off(path):
     if path is None:
         return False
     try:
@@ -69,6 +68,14 @@ def body_is_off(root_dir, module):
             return bool(OFF_MODE_RE.search(f.read()))
     except OSError:
         return False
+
+
+def body_is_off(root_dir, module):
+    # SPARK_Mode => Off on the spec (.ads) OR the body (.adb) takes the whole
+    # unit out of proof scope (SKIPPED) — Off on the spec still silences the
+    # body's proof.
+    return (file_has_off(find_unit(root_dir, module, ".ads")) or
+            file_has_off(find_unit(root_dir, module, ".adb")))
 
 
 def verdict(block_lines, root_dir, module):
