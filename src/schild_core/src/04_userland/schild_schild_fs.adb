@@ -503,6 +503,7 @@ package body Schild_Schild_Fs with SPARK_Mode => Off is
 
 
    procedure Create_File (Name : in String; Size : in Unsigned_32;
+                          Level : in Unsigned_8; Owner : in Unsigned_8;
                           Success : out Boolean) is
       Msg_Full : constant String := "[NVFS] Directory full";
       Msg_NoSpace : constant String := "[NVFS] No space in GPT gap";
@@ -528,7 +529,7 @@ package body Schild_Schild_Fs with SPARK_Mode => Off is
          return;
       end if;
       declare
-         Ent : Dir_Entry := (Name => (others => ' '), Start_LBA => Start_LBA, Size => Size, Checksum => 0, Level => 0, Owner => 0);
+         Ent : Dir_Entry := (Name => (others => ' '), Start_LBA => Start_LBA, Size => Size, Checksum => 0, Level => Level, Owner => Owner);
       begin
          for J in Name'Range loop exit when J > Max_Name_Length;
             Ent.Name (J) := Name (J); end loop;

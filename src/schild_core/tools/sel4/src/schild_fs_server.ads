@@ -87,9 +87,11 @@ package Schild_Fs_Server with SPARK_Mode => Off is
    pragma Export (C, Fs_Write, "schild_fs_write");
 
    -- Create a file (name in shared frame, name_len). Size pre-allocates.
+   -- Level: R23 clearance (0..4) for the new file; Owner = caller role.
    function Fs_Create
      (Name_Len  : Interfaces.Unsigned_32;
       Size      : Interfaces.Unsigned_32;
+      Level     : Interfaces.Unsigned_32;
       Handle    : out Interfaces.Unsigned_32) return Interfaces.Unsigned_32;
    pragma Export (C, Fs_Create, "schild_fs_create");
 

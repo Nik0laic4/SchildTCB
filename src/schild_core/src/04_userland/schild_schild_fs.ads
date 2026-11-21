@@ -61,6 +61,8 @@ package Schild_Schild_Fs with SPARK_Mode => Off is
    procedure Create_File
      (Name    : in     String;
       Size    : in     Unsigned_32;
+      Level   : in     Unsigned_8;   -- R23: file clearance (0..4)
+      Owner   : in     Unsigned_8;   -- R23: owner role (0 = root)
       Success :    out Boolean);
 
    procedure Write_File

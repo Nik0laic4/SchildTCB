@@ -39,7 +39,7 @@ u32 schild_fs_open(u32 n, u32 m, u32 *h, u32 *s) { (void)n; (void)m; if (h) *h =
 void schild_set_fs_subject(unsigned int role, unsigned int level) { (void)role; (void)level; }
 u32 schild_fs_read(u32 h, u32 o, u32 l, u32 *a) { (void)h; (void)o; (void)l; if (a) *a = 0; return 0; }
 u32 schild_fs_write(u32 h, u32 o, u32 l, u32 *n) { (void)h; (void)o; (void)l; if (n) *n = 0; return 0; }
-u32 schild_fs_create(u32 n, u32 s, u32 *h) { (void)n; (void)s; if (h) *h = 0; return 0; }
+u32 schild_fs_create(u32 n, u32 s, u32 lv, u32 *h) { (void)n; (void)s; (void)lv; if (h) *h = 0; return 0; }
 u32 schild_fs_append(u32 n, u32 l, u32 *ns) { (void)n; (void)l; if (ns) *ns = 0; return 0; }
 u32 schild_fs_get_entry(u32 i) { (void)i; return 0; }
 u32 schild_fs_is_mounted(void) { return 0; }

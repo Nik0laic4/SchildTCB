@@ -31,7 +31,7 @@ extern u32 schild_fs_open(u32 name_len, u32 mode, u32* handle, u32* size);
 extern void schild_set_fs_subject(unsigned int role, unsigned int level);
 extern u32 schild_fs_read(u32 handle, u32 offset, u32 len, u32* actual);
 extern u32 schild_fs_write(u32 handle, u32 offset, u32 len, u32* new_off);
-extern u32 schild_fs_create(u32 name_len, u32 size, u32* handle);
+extern u32 schild_fs_create(u32 name_len, u32 size, u32 level, u32* handle);
 extern u32 schild_fs_append(u32 name_len, u32 len, u32* new_size);
 extern u32 schild_fs_get_entry(u32 index);
 extern u32 schild_fs_is_mounted(void);
@@ -71,9 +71,9 @@ static void fs_dispatch(u64 op, u64 a, u64 b, u64 c,
         result1 = no;
         break;
     }
-    case 4: {  /* Create: name_len (name in shared), size -> handle */
+    case 4: {  /* Create: name_len (MR[1]), size (MR[2]), level (MR[3]) -> handle */
         u32 h = 0;
-        result = (u64) schild_fs_create((u32)a, (u32)b, &h);
+        result = (u64) schild_fs_create((u32)a, (u32)b, (u32)c, &h);
         result1 = h;
         break;
     }

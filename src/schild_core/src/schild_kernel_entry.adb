@@ -348,7 +348,7 @@ begin
          Schild_Schild_Fs.Init (FS_OK);
          if FS_OK then
             C_Putln (Msg_FS1'Address, Msg_FS1'Length);
-            Schild_Schild_Fs.Create_File ("test.txt", 512, OK);
+            Schild_Schild_Fs.Create_File ("test.txt", 512, 0, 0, OK);
             if OK then
                C_Putln (Msg_FS2'Address, Msg_FS2'Length);
                Schild_Schild_Fs.Open ("test.txt", F, OK);

@@ -63,7 +63,7 @@ package body Schild_Fs_Server with SPARK_Mode => Off is
          -- Audit H77: open first, create only if missing.
          Schild_Schild_Fs.Open ("test.txt", F, Ok);
          if not Ok then
-            Schild_Schild_Fs.Create_File ("test.txt", 512, Ok);
+            Schild_Schild_Fs.Create_File ("test.txt", 512, 0, 0, Ok);
          end if;
          if Ok then
             C_Putln (Msg_Ready'Address, Msg_Ready'Length);
@@ -109,9 +109,9 @@ package body Schild_Fs_Server with SPARK_Mode => Off is
       Idx  : Unsigned_32 := 0;
    begin
       loop
-         -- Audit H110: explicit upper bound (Dir_Table 0..13) so the scan
+         -- Audit H110: explicit upper bound (Dir_Table 0..12) so the scan
          -- cannot run past the directory table.
-         exit when Idx > 13;
+         exit when Idx > 12;
          Schild_Schild_Fs.Get_Entry (Idx, Ent, Ok);
          exit when not Ok;
          if Ent.Start_LBA = Handle then
@@ -120,6 +120,8 @@ package body Schild_Fs_Server with SPARK_Mode => Off is
             F.Start_LBA := Ent.Start_LBA;
             F.Size      := Ent.Size;
             F.Curr_Off  := 0;
+            F.Level     := Ent.Level;   -- R23
+            F.Owner     := Ent.Owner;   -- R23
             return True;
          end if;
          Idx := Idx + 1;
@@ -176,6 +178,13 @@ package body Schild_Fs_Server with SPARK_Mode => Off is
       Actual := 0;
       if not Initialized then return St_Not_Mounted; end if;
       if not Find_By_Start_LBA (Handle, F) then return St_No_File; end if;
+      --  R23: per-file read gate (Can_Read).
+      if Schild_MLS_Policy.Authorize_File_Op
+           (0, C_Fs_Subject_Level, Unsigned_32 (F.Level),
+            C_Fs_Subject_Role, Unsigned_32 (F.Owner)) = 0
+      then
+         return St_Denied;
+      end if;
       F.Curr_Off := Offset;
       Schild_Schild_Fs.Read (F, Buf (0 .. Integer (L) - 1), Got, Ok);
       if not Ok then return St_Io_Error; end if;
@@ -199,6 +208,13 @@ package body Schild_Fs_Server with SPARK_Mode => Off is
       if not Initialized then return St_Not_Mounted; end if;
       if Schild_Schild_Fs.Is_Read_Only then return St_Read_Only; end if;
       if not Find_By_Start_LBA (Handle, F) then return St_No_File; end if;
+      --  R23: per-file write gate (Can_Write).
+      if Schild_MLS_Policy.Authorize_File_Op
+           (1, C_Fs_Subject_Level, Unsigned_32 (F.Level),
+            C_Fs_Subject_Role, Unsigned_32 (F.Owner)) = 0
+      then
+         return St_Denied;
+      end if;
       Shared_Copy_From (Buf (0)'Address, L);
       F.Curr_Off := Offset;
       Schild_Schild_Fs.Write_File (F, Buf (0 .. Integer (L) - 1), Ok);
@@ -208,7 +224,7 @@ package body Schild_Fs_Server with SPARK_Mode => Off is
    end Fs_Write;
 
    function Fs_Create
-     (Name_Len : Unsigned_32; Size : Unsigned_32;
+     (Name_Len : Unsigned_32; Size : Unsigned_32; Level : Unsigned_32;
       Handle   : out Unsigned_32) return Unsigned_32
    is
       Name_Buf : Schild_Schild_Fs.Unsigned_8_Array (0 .. 31) := (others => 0);
@@ -221,11 +237,20 @@ package body Schild_Fs_Server with SPARK_Mode => Off is
       if not Initialized then return St_Not_Mounted; end if;
       if Schild_Schild_Fs.Is_Read_Only then return St_Read_Only; end if;
       if L = 0 then return St_Bad_Op; end if;
+      --  R23: write gate on the target level (no write-down).
+      if Schild_MLS_Policy.Authorize_File_Op
+           (1, C_Fs_Subject_Level, Level,
+            C_Fs_Subject_Role, C_Fs_Subject_Role) = 0
+      then
+         return St_Denied;
+      end if;
       Shared_Copy_From (Name_Buf (0)'Address, L);
       for I in 0 .. Integer (L) - 1 loop
          Name_Str (I + 1) := Character'Val (Name_Buf (I));
       end loop;
-      Schild_Schild_Fs.Create_File (Name_Str (1 .. Integer (L)), Size, Ok);
+      Schild_Schild_Fs.Create_File (Name_Str (1 .. Integer (L)), Size,
+                                    Unsigned_8 (Level),
+                                    Unsigned_8 (C_Fs_Subject_Role), Ok);
       if not Ok then return St_No_Space; end if;
       Schild_Schild_Fs.Open (Name_Str (1 .. Integer (L)), F, Ok);
       if Ok then Handle := F.Start_LBA; end if;
@@ -249,10 +274,17 @@ package body Schild_Fs_Server with SPARK_Mode => Off is
       -- file grows via Write_File extend. Append position = current Size.
       Schild_Schild_Fs.Open ("audit.log", F, Ok);
       if not Ok then
-         Schild_Schild_Fs.Create_File ("audit.log", 0, Ok);
+         Schild_Schild_Fs.Create_File ("audit.log", 0, 4, 0, Ok);
          if not Ok then return St_No_Space; end if;
          Schild_Schild_Fs.Open ("audit.log", F, Ok);
          if not Ok then return St_Io_Error; end if;
+      end if;
+      --  R23: per-file write gate (Can_Write).
+      if Schild_MLS_Policy.Authorize_File_Op
+           (1, C_Fs_Subject_Level, Unsigned_32 (F.Level),
+            C_Fs_Subject_Role, Unsigned_32 (F.Owner)) = 0
+      then
+         return St_Denied;
       end if;
       F.Curr_Off := F.Size;
       if L > 0 then
@@ -267,6 +299,7 @@ package body Schild_Fs_Server with SPARK_Mode => Off is
    function Fs_Delete (Name_Len : Unsigned_32) return Unsigned_32 is
       Name_Buf : Schild_Schild_Fs.Unsigned_8_Array (0 .. 31) := (others => 0);
       Name_Str : String (1 .. 24) := (others => ' ');
+      F        : Schild_Schild_Fs.File_Info;
       Ok       : Boolean;
       L        : constant Unsigned_32 := (if Name_Len > 24 then 24 else Name_Len);
    begin
@@ -277,6 +310,15 @@ package body Schild_Fs_Server with SPARK_Mode => Off is
       for I in 0 .. Integer (L) - 1 loop
          Name_Str (I + 1) := Character'Val (Name_Buf (I));
       end loop;
+      --  R23: owner-only delete — resolve the owner first.
+      Schild_Schild_Fs.Open (Name_Str (1 .. Integer (L)), F, Ok);
+      if not Ok then return St_No_File; end if;
+      if Schild_MLS_Policy.Authorize_File_Op
+           (2, C_Fs_Subject_Level, Unsigned_32 (F.Level),
+            C_Fs_Subject_Role, Unsigned_32 (F.Owner)) = 0
+      then
+         return St_Denied;
+      end if;
       Schild_Schild_Fs.Delete_File (Name_Str (1 .. Integer (L)), Ok);
       if not Ok then return St_No_File; end if;
       return St_Ok;
@@ -289,6 +331,13 @@ package body Schild_Fs_Server with SPARK_Mode => Off is
    begin
       Schild_Schild_Fs.Get_Entry (Index, Ent, Ok);
       if not Ok then return St_No_File; end if;
+      --  R23: per-file read gate (Can_Read) on metadata.
+      if Schild_MLS_Policy.Authorize_File_Op
+           (0, C_Fs_Subject_Level, Unsigned_32 (Ent.Level),
+            C_Fs_Subject_Role, Unsigned_32 (Ent.Owner)) = 0
+      then
+         return St_Denied;
+      end if;
       for I in 0 .. 23 loop
          Raw (I) := Character'Pos (Ent.Name (I + 1));
       end loop;
