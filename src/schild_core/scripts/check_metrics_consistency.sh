@@ -24,10 +24,12 @@ SWEPT="$(num swept)"
 IN_PROOF="$(num in_proof)"
 PROVED="$(num proved)"
 SKIPPED="$(num skipped)"
+NOTPROVED="$(num not_proved)"
+NOOUTPUT="$(num no_output)"
 SCAFFOLD="$(num scaffold_excluded)"
 
-if [ "$((PROVED + SKIPPED))" -ne "$IN_PROOF" ]; then
-  echo "ERROR: proved($PROVED)+skipped($SKIPPED) != in_proof($IN_PROOF)" >&2
+if [ "$((PROVED + NOTPROVED + SKIPPED + NOOUTPUT))" -ne "$IN_PROOF" ]; then
+  echo "ERROR: proved($PROVED)+not_proved($NOTPROVED)+skipped($SKIPPED)+no_output($NOOUTPUT) != in_proof($IN_PROOF)" >&2
   exit 1
 fi
 if [ "$((IN_PROOF + SCAFFOLD))" -ne "$SWEPT" ]; then
@@ -46,4 +48,4 @@ if ! grep -q "$IN_PROOF in proof\|$IN_PROOF proved\|$IN_PROOF-module" "$README";
   exit 1
 fi
 
-echo "metrics consistency OK: swept=$SWEPT in_proof=$IN_PROOF proved=$PROVED skipped=$SKIPPED scaffold=$SCAFFOLD"
+echo "metrics consistency OK: swept=$SWEPT in_proof=$IN_PROOF proved=$PROVED not_proved=$NOTPROVED skipped=$SKIPPED no_output=$NOOUTPUT scaffold=$SCAFFOLD"

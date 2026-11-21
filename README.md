@@ -125,6 +125,7 @@ Contributions and feedback are welcome — see [`CONTRIBUTING.md`](CONTRIBUTING.
 - [`docs/technical/ROADMAP.md`](docs/technical/ROADMAP.md) — canonical "what's next".
 - [`docs/technical/CHANGELOG.md`](docs/technical/CHANGELOG.md) — verified results only.
 - [`docs/SCHILD_TCB_AUDIT_REPORT.md`](docs/SCHILD_TCB_AUDIT_REPORT.md) — internal technical review (author's self-assessment).
+- [`docs/technical/AI_BLIND_AUDIT_2026-11.md`](docs/technical/AI_BLIND_AUDIT_2026-11.md) — independent static audit (report and [author's response](docs/technical/AI_BLIND_AUDIT_RESPONSE.md)).
 
 ## License
 

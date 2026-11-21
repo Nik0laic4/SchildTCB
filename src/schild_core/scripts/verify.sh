@@ -58,9 +58,9 @@ echo "Proving verify.gpr (mode=all, level=4) ..."
 mkdir -p obj/verify/gnatprove
 LOG="obj/verify/gnatprove/gnatprove.stdout"
 gnatprove -P verify.gpr --mode=all --level=4 2>&1 | tee "$LOG"
-if grep -qE ' (medium|high):' "$LOG"; then
+if grep -qE ' (low|medium|high):' "$LOG"; then
   echo "ERROR: SPARK verification conditions remain UNPROVED." >&2
-  grep -nE '^[[:space:]]*(medium|high):' "$LOG" >&2 || true
+  grep -nE '^[[:space:]]*(low|medium|high):' "$LOG" >&2 || true
   exit 1
 fi
 echo "SPARK proof passed: all verification conditions proved."

@@ -83,8 +83,10 @@ jobs:
           cd src/schild_core
           bash scripts/verify_private.sh
 
-  # Manual-only: the full 180-module SPARK Level-4 proof takes tens of minutes,
-  # so it is NOT run on every push. Trigger: Actions -> CI -> Run workflow.
+  # Full 180-module SPARK Level-4 proof. It IS run on every push by
+  # spark-badge.yml (workflow-status badge); this workflow_dispatch job keeps a
+  # manual full-proof path that also uploads the proof report artifact.
+  # Trigger: Actions -> CI -> Run workflow.
   prove-full:
     if: github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest

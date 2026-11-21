@@ -70,16 +70,14 @@ is
      (Sender_Clearance   : Clearance;
       Receiver_Clearance : Clearance) return Access_Result
    with
-     Post => (if Check_Send'Result = Allowed then
-                Sender_Clearance = Receiver_Clearance);
+     Post => (Check_Send'Result = Allowed) = (Sender_Clearance = Receiver_Clearance);
 
    -- Check if a process can read data at a given clearance
    function Check_Read
      (Reader_Clearance : Clearance;
       Data_Clearance   : Clearance) return Access_Result
    with
-     Post => (if Check_Read'Result = Allowed then
-                Reader_Clearance >= Data_Clearance);
+     Post => (Check_Read'Result = Allowed) = (Reader_Clearance >= Data_Clearance);
 
    -- ─── Process registry ───
    Max_Processes : constant := 32;
@@ -103,8 +101,14 @@ is
       PID    : Process_ID;
       Level  : Clearance)
    with
-     Pre  => Daemon.Num_Processes < Max_Processes,
-     Post => Daemon.Num_Processes = Daemon.Num_Processes'Old + 1;
+     Pre  => Daemon.Num_Processes < Max_Processes
+             and (for all I in 1 .. Daemon.Num_Processes =>
+                    Daemon.Processes (I).PID /= PID),
+     Post => Daemon.Num_Processes = Daemon.Num_Processes'Old + 1
+             and Daemon.Processes (Daemon.Num_Processes) =
+                   (PID => PID, Level => Level, Active => True)
+             and (for all I in 1 .. Daemon.Num_Processes'Old =>
+                    Daemon.Processes (I) = Daemon.Processes'Old (I));
 
    -- Look up a process clearance. Unknown PIDs return the lowest clearance
    -- (Public) so an unregistered process is fail-closed: it can neither read
@@ -140,7 +144,18 @@ is
      (Op           : Unsigned_32;
       Sender_Level : Unsigned_32;
       Target_Level : Unsigned_32) return Unsigned_32
-   with Export, Convention => C, External_Name => "schild_mls_authorize_op";
+   with Export, Convention => C, External_Name => "schild_mls_authorize_op",
+        Pre => Op in 0 .. 2 and Sender_Level in 0 .. 4 and Target_Level in 0 .. 4,
+        Post => Mls_Authorize_Op'Result =
+                  (if Op = 0 then
+                     (if Can_Read (Level_Map (Integer (Sender_Level)),
+                                   Level_Map (Integer (Target_Level))) then 1 else 0)
+                   elsif Op = 1 then
+                     (if Can_Write (Level_Map (Integer (Sender_Level)),
+                                    Level_Map (Integer (Target_Level))) then 1 else 0)
+                   else
+                     (if Can_IPC (Level_Map (Integer (Sender_Level)),
+                                  Level_Map (Integer (Target_Level))) then 1 else 0));
 
 
    --  H88: C-callable IPC gate with root-task bypass (R2).

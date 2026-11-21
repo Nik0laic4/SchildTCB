@@ -124,6 +124,7 @@ SKIP_BUILD=1 SEL4_PRIMARY=0 bash scripts/run_tests.sh
 - [`docs/technical/ROADMAP.md`](docs/technical/ROADMAP.md) — каноничное «что дальше».
 - [`docs/technical/CHANGELOG.md`](docs/technical/CHANGELOG.md) — только проверенные результаты.
 - [`docs/SCHILD_TCB_AUDIT_REPORT.md`](docs/SCHILD_TCB_AUDIT_REPORT.md) — внутренний технический обзор (самооценка автора).
+- [`docs/technical/AI_BLIND_AUDIT_2026-11.md`](docs/technical/AI_BLIND_AUDIT_2026-11.md) — независимый статический аудит (отчёт и [ответ автора](docs/technical/AI_BLIND_AUDIT_RESPONSE.md)).
 
 ## Лицензия
 

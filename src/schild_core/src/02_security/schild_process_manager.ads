@@ -118,7 +118,11 @@ is
    --  Return the stored context of a process.
    function Get_Process_Context
      (Table : Process_Table;
-      Pid   : Process_Id) return Process_Context;
+      Pid   : Process_Id) return Process_Context
+   with Post => (if (for some I in Table'Range =>
+                       Table (I).Pid = Pid and Table (I).State /= Dead)
+                 then Get_Process_Context'Result.Pid = Pid
+                 else Get_Process_Context'Result = Process_Context'(others => <>));
 
    --  True when two processes are at the same MLS level.
    function Check_Mls_Compatibility
@@ -128,7 +132,11 @@ is
 
    --  Deliver all pending signals in the table.
    procedure Deliver_Pending_Signals
-     (Table : in out Process_Table);
+     (Table : in out Process_Table)
+   with Post => (for all I in Table'Range =>
+                   (if Table'Old (I).State /= Running
+                      and Table'Old (I).State /= Ready
+                    then Table (I) = Table'Old (I)));
 
    --  H97: log exited (Zombie) processes without reclaiming them. The name
    --  "Reap" was misleading — reaping is the parent's Wait, not this scan.

@@ -300,6 +300,11 @@ is
       Handled : Boolean;
    begin
       for I in Table'Range loop
+         pragma Loop_Invariant
+           (for all J in Table'Range =>
+              (if Table'Loop_Entry (J).State /= Running
+                 and Table'Loop_Entry (J).State /= Ready
+               then Table (J) = Table'Loop_Entry (J)));
          if Table (I).State = Running or else Table (I).State = Ready then
             if Has_Pending_Signals (Table (I).Signals) then
                Deliver_Pending_Signal (Table (I).Signals, Signal, Handled);

@@ -47,3 +47,8 @@ jobs:
           echo "not_proved=$NP"
           # prove_kernel.sh already gates (exits non-zero if not-proved > 0),
           # so the workflow status badge turns red on any regression.
+
+      - name: Metrics consistency (README vs metrics.json)
+        run: |
+          cd src/schild_core
+          bash scripts/check_metrics_consistency.sh

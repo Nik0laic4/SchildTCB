@@ -83,7 +83,7 @@ EOF
   rm -rf obj/proof/gnatprove
   gnatprove -P /tmp/proof_batch.gpr --level=4 --mode=all -j$(nproc) > /tmp/proof_batch.log 2>&1
   outfile=obj/proof/gnatprove/gnatprove.out
-  python3 "$ROOT_DIR/scripts/classify_gnatprove.py" "$outfile" "${chunk[@]}" >> "$OUT"
+  python3 "$ROOT_DIR/scripts/classify_gnatprove.py" "$outfile" "$ROOT_DIR" "${chunk[@]}" >> "$OUT"
   echo "chunk $((i/BATCH+1))/$(( (TOTAL+BATCH-1)/BATCH )) done" >&2
 done
 
@@ -92,11 +92,13 @@ echo "total      : $TOTAL" >> "$OUT"
 echo "proved     : $(grep -c '^PROVED' "$OUT" || true)" >> "$OUT"
 echo "not-proved : $(grep -c '^NOT-PROVED' "$OUT" || true)" >> "$OUT"
 echo "skipped    : $(grep -c '^SKIPPED' "$OUT" || true)" >> "$OUT"
+echo "no-output  : $(grep -c '^NO-OUTPUT' "$OUT" || true)" >> "$OUT"
 
 # Canonical metrics JSON (machine-generated; README/CI consume this, not hand numbers).
 PROVED=$(grep -c '^PROVED' "$OUT" || true)
 NOTPROVED=$(grep -c '^NOT-PROVED' "$OUT" || true)
 SKIPPED=$(grep -c '^SKIPPED' "$OUT" || true)
+NOOUTPUT=$(grep -c '^NO-OUTPUT' "$OUT" || true)
 SCAFFOLD=${#SCAFFOLD_MODULES[@]}
 cat > obj/proof/metrics.json <<JSON
 {
@@ -105,6 +107,7 @@ cat > obj/proof/metrics.json <<JSON
   "proved": $PROVED,
   "skipped": $SKIPPED,
   "not_proved": $NOTPROVED,
+  "no_output": $NOOUTPUT,
   "scaffold_excluded": $SCAFFOLD
 }
 JSON
