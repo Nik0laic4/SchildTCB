@@ -6,6 +6,15 @@
 > *pending* or *target* have not yet been validated. Formal-verification
 > coverage is stated per-module, never as an aggregate percentage.
 
+## v0.58 (2026-11-21) — W10 crypto no-OOB + metrics triage
+
+**Validated: two crypto bodies proved no-OOB (`aes_ni_core` On, `schild_sha256_compress` extracted On) + classifier/scaffold metrics triage — `run_tests 25/25`, `verify.sh`/`verify_private.sh` 0, KAT AES 2/2 + HMAC 9/9.**
+
+- **aes_ni_core** (W10): body `SPARK_Mode Off → On`, proved 0 unproved (S-box/block arrays are constrained-type indexed; pre-init `W`/`T`/`RK` closes the wavefront). KAT FIPS-197 2/2.
+- **sha256_compress** (W10): the 64-round message schedule + round loop extracted from the Off `schild_hmac_sha256` body into a proved package (0 unproved). `hmac_sha256` keeps the padding/length (Off; RFC 4231/NIST KAT 9/9). The full hmac no-OOB proof was attempted but the prover timed out on `SHA256_Core`'s `Data'Length/64` division (residual).
+- **metrics triage**: `classify_gnatprove.py` now checks `SPARK_Mode Off` in the `.ads` too (`schild_kernel_state`/`schild_framebuffer` → SKIPPED); spec-only `schild_net_config`/`schild_server_init` → SCAFFOLD. Canonical: **189 swept / 179 in-proof / 133 proved / 44 skipped / 2 no-output / 10 scaffold** (0 unproved).
+- **gates:** bare-metal 185/0, seL4 public+private Done, verify.sh/verify_private.sh 0, run_tests 25/25.
+
 ## v0.57 (2026-11-21) — R23 MLS per-file levels + operation-aware gate
 
 **Validated: per-file MLS levels (`Dir_Entry.Level/Owner`) + an operation-aware gate (`Authorize_File_Op`) on all seven FS operations — `run_tests 25/25` (incl. `[R23] Fs_Open write-down denied`), `verify.sh` 0, `verify_private.sh` 0, fs_core+schild_fs 0 unproved.**

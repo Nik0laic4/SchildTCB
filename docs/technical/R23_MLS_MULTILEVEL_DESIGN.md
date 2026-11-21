@@ -1,6 +1,6 @@
 # R23 — MLS per-file levels + operation-aware gate (дизайн)
 
-> Статус: **дизайн одобрен**; реализация — escalation (Tier A MLS policy + Schild_Schild_Fs).
+> Статус: **реализовано (v0.57)** — гейт `Authorize_File_Op` на всех 7 FS-операциях, end-to-end маркер `[R23] Fs_Open write-down denied`, residual закрыт в THREAT_MODEL/ASSURANCE. Документ сохранён как дизайн-история.
 
 ## 1. Проблема (THREAT_MODEL §H107/H88, residual R23)
 
