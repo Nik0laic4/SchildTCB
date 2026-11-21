@@ -1,90 +1,82 @@
 # R23 — MLS per-file levels + operation-aware gate (дизайн)
 
-> Статус: **дизайн** (перед кодом). Реализация — escalation (Tier A MLS policy + новый IPC-контракт).
+> Статус: **дизайн одобрен**; реализация — escalation (Tier A MLS policy + Schild_Schild_Fs).
 
 ## 1. Проблема (THREAT_MODEL §H107/H88, residual R23)
 
-Текущий гейт `Authorize_IPC_Levels` — **коммуникационного уровня**: строгое equal-clearance
-(`Can_IPC`). Он не различает файлы и операции:
+Текущий гейт `Authorize_IPC_Levels` — **коммуникационного уровня** (equal-clearance), не различает
+файлы и операции: (a) любой не-root Top_Secret-пир может `Fs_Delete("audit.log")`; (b) домен ниже
+уровнем не может даже `Fs_Is_Mounted`. Нужны per-file уровни + operation-aware гейт.
 
-- **(a)** любой не-root **Top_Secret**-пир (например `Audit_Logger`) может `Fs_Delete("audit.log")`
-  — уровни равны, гейт пропускает;
-- **(b)** домен ниже уровнем не может даже `Fs_Is_Mounted` — гейт режет всё ниже Top_Secret.
-
-Для одноуровневого прототипа это безопасно (FS-EP cap держит только root, role=0 bypass). Для
-мульти-уровневой системы нужны **per-file уровни** + **operation-aware гейт**.
-
-## 2. Классификация операций FS
+## 2. Классификация операций (финальная)
 
 | Класс | Операции | Правило |
 |---|---|---|
-| **read** | `Fs_Open` (read), `Fs_Read`, `Fs_Get_Entry` | `Can_Read` — subject ≥ file_level (no read up) |
-| **write** | `Fs_Write`, `Fs_Create`, `Fs_Append`, `Fs_Delete` | `Can_Write` — subject ≤ file_level (no write down) |
-| **mount-control** | `Fs_Is_Mounted`, `Fs_Is_Read_Only` | любой аутентифицированный (не per-file; закрывает gap b) |
+| **read** | `Fs_Open` (Read), `Fs_Read`, `Fs_Get_Entry` | `Can_Read` — subject ≥ file_level (no read up) |
+| **write** | `Fs_Open` (Write), `Fs_Write`, `Fs_Create`, `Fs_Append` | `Can_Write` — subject ≤ file_level (no write down) |
+| **delete** | `Fs_Delete` | **owner-only**: `subject_role = 0 (root)` или `subject_role = Owner_Role` |
+| **mount-control** | `Fs_Is_Mounted`, `Fs_Is_Read_Only` | любой аутентифицированный (закрывает gap b) |
 | **init** | `Fs_Init` | только root (role=0) |
 
-## 3. Предлагаемый дизайн
+## 3. Дизайн
 
-### 3.1. Per-file уровень
-- В `Dir_Entry` (schild_fs_core) добавить поле `Level : Security_Level`.
-- `Fs_Create` принимает уровень файла (явный параметр; default `Public`).
-- `audit.log` создаётся как `Top_Secret`; пользовательские файлы — уровень создателя.
+### 3.1. Per-file метаданные
+- `Dir_Entry` (schild_fs_core) + `Level : Security_Level` и `Owner : Owner_Role`.
+- `Fs_Create` принимает уровень файла (явный параметр, default `Public`); `Owner` = роль создателя.
+- `Fs_Open` принимает `Mode ∈ {Read, Write}` — авторизация на границе (закрывает утечку
+  существования файла неавторизованному).
 
 ### 3.2. Operation-aware gate (Tier A, SPARK)
-В `schild_mls_policy` добавить чистый предикат (по образцу `Authorize_IPC_Levels`):
-
 ```ada
+type File_Op_Class is (Read, Write, Delete, Mount_Control);
+
 function Authorize_File_Op
-  (Op           : File_Op_Class;      -- Read / Write / Mount_Control
+  (Op            : File_Op_Class;
    Subject_Level : Security_Level;
-   File_Level    : Security_Level) return Boolean
+   File_Level    : Security_Level;
+   Subject_Role  : Unsigned_32;      -- badge role (0 = root)
+   Owner_Role    : Unsigned_32) return Boolean
 with Post => Authorize_File_Op'Result =
   (case Op is
-     when Read         => Can_Read  (Subject_Level, File_Level),
-     when Write        => Can_Write (Subject_Level, File_Level),
-     when Mount_Control=> True);
+     when Read          => Can_Read  (Subject_Level, File_Level),
+     when Write         => Can_Write (Subject_Level, File_Level),
+     when Delete        => Subject_Role = 0 or Subject_Role = Owner_Role,
+     when Mount_Control => True);
 ```
 
 ### 3.3. Интеграция
-- `fs_daemon.c`: dispatch классифицирует op (0..9) в `File_Op_Class` и вызывает Ada-гейт
-  **до** обращения к `schild_fs_*` (аналогично текущему MLS-гейту в `fs_daemon_main`).
-- `schild_fs_server`: операции read/write получают `Subject_Level` (из badge) + `File_Level`
-  (из `Dir_Entry`) и возвращают `SCHILD_EMLSDENIED` при отказе.
+- `fs_daemon.c`: dispatch классифицирует op в `File_Op_Class`, передаёт badge-role/level и
+  вызывает Ada-гейт **до** `schild_fs_*`.
+- `schild_fs_server`: `Fs_Open(Mode, …)` гейтится на входе; read/write возвращают
+  `SCHILD_EMLSDENIED` при отказе.
 
-## 4. Затронутые файлы (все Tier A / escalation)
+## 4. Затронутые файлы (Tier A / escalation)
 
 | Файл | Что |
 |---|---|
-| `schild_mls_policy.ads/.adb` | `Authorize_File_Op` + `File_Op_Class` (escalation §4 #9) |
-| `schild_fs_core.ads/.adb` | `Dir_Entry.Level` + парсинг (escalation §4 #4 `Schild_Schild_Fs`) |
-| `schild_fs_server.ads/.adb` | гейт в операциях (Tier A allowlist) |
-| `fs_daemon.c` / `config_daemon.c` | классификация op → gate (Tier B/C) |
-| `THREAT_MODEL` / `ASSURANCE` | закрыть R23 (claims — человек) |
+| `schild_mls_policy.ads/.adb` | `File_Op_Class` + `Authorize_File_Op` (escalation §4 #9) |
+| `schild_fs_core.ads/.adb` | `Dir_Entry.Level` + `Dir_Entry.Owner` + парсинг (escalation §4 #4) |
+| `schild_fs_server.ads/.adb` | `Fs_Open(Mode)`, owner-only delete, gate (Tier A allowlist) |
+| `fs_daemon.c` | op → класс → гейт (Tier B/C) |
+| `THREAT_MODEL`/`ASSURANCE`/`CHANGELOG` | закрыть R23 (claims — человек) |
 
-## 5. Открытые вопросы (для решения человеком)
+## 5. Решённые вопросы
 
-1. **Уровень файла:** явный параметр при `Fs_Create` (рекомендую) или наследование от
-   создателя?
-2. **Delete:** `Can_Write` (subject ≤ file_level) или отдельное более строгое правило
-   «только владелец» (не в BL)?
-3. **Mount-control для не-root:** подтвердить, что `Fs_Is_Mounted`/`Fs_Is_Read_Only`
-   разрешены любому аутентифицированному (закрывает gap b).
-4. **Backward-compat:** `Fs_Open` без указания read/write-намерения — нужен ли флаг
-   `Read_Intent`/`Write_Intent`, или уровень операции определяется её типом?
+1. **Уровень файла:** явный параметр при `Fs_Create`.
+2. **Delete:** только владелец (`Owner_Role`) или root — закрывает gap (a).
+3. **Mount-control:** любой аутентифицированный (закрывает gap b).
+4. **Fs_Open:** флаг `Mode ∈ {Read, Write}` (Вариант B).
 
-## 6. Порядок реализации (после одобрения дизайна)
+## 6. Порядок реализации
 
-1. `schild_mls_policy`: `Authorize_File_Op` + `File_Op_Class` (SPARK, prove).
-2. `schild_fs_core`: `Dir_Entry.Level` + версия layout (миграция NVFS версии).
-3. `schild_fs_server`: гейт + `SCHILD_EMLSDENIED`.
+1. `schild_mls_policy`: `File_Op_Class` + `Authorize_File_Op` (SPARK, prove).
+2. `schild_fs_core`: `Dir_Entry.Level` + `Owner` + bump `NVFS_Version`.
+3. `schild_fs_server`: `Fs_Open(Mode)`, owner-only delete, gate.
 4. `fs_daemon.c`: op → класс → гейт.
-5. `run_tests.sh`: маркеры R23 (мульти-уровневые сценарии).
-6. Docs (THREAT_MODEL/ASSURANCE/CHANGELOG) — человек.
+5. `run_tests.sh`: маркеры R23.
+6. Docs (человек).
 
 ## 7. Зависимости и риски
 
-- **Layout NVFS:** добавление поля в `Dir_Entry` меняет on-disk layout → bump `NVFS_Version`
-  + авто-переформат (см. H60/H75-путь). Риск потери совместимости с существующими образами.
-- **H87 size-sensitivity:** изменение FS-сервера сдвигает раскладку ELF (см. грабли M20) —
-  не добавлять root_task-only символы в общие `.c`, проверять `run_tests` после каждого шага.
-- **Производительность:** per-op gate — один чистый предикат, накладные расходы минимальны.
+- **Layout NVFS:** добавление полей меняет on-disk layout → bump `NVFS_Version` + авто-переформат (H60/H75).
+- **H87 size-sensitivity:** сдвиг раскладки ELF (см. грабли M20) — проверять `run_tests` после каждого шага.
