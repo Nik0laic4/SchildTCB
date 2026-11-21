@@ -74,7 +74,7 @@ FS-демон — Tier B, **не** часть Верифицированного
 
 | Claim | Механическая проверка | Результат (2026-11-15) |
 |-------|-----------------------|------------------------|
-| Tier-A модули не имеют unproved VCs | `bash scripts/prove_kernel.sh` | `not-proved: 0` (188 модулей swept; 180 в proof-наборе: 132 proved / 48 skipped; 8 scaffold исключено, см. H99) |
+| Tier-A модули не имеют unproved VCs | `bash scripts/prove_kernel.sh` | `not-proved: 0` (188 модулей swept; 180 в proof-наборе: 133 proved / 41 skipped / 6 no-output; 8 scaffold исключено, см. H99) |
 | Level-4 proof-юниты root-задачи доказаны (8: 1 демон + 7 библиотек/моделей) | `bash scripts/verify.sh` | "all verification conditions proved" (`not-proved: 0`) |
 | Ядро собирается чисто | `SCHILD_PROFILE=public ./build.sh` | 184 объекта, 0 ошибок |
 | Цепочка загрузки работает | `SKIP_BUILD=1 SEL4_PRIMARY=0 bash scripts/run_tests.sh` | PASS (Long Mode → e1000e → SMP → MLS → :80) |

@@ -1,4 +1,4 @@
-pragma Spark_Mode (Off);
+pragma Spark_Mode (On);
 
 with Interfaces;
 use Interfaces;
@@ -64,9 +64,10 @@ package body Schild_Aes_Ni_Core is
      (Key : in  Aes_Block_Type;
       RK  : out Round_Keys_Type)
    is
-      W : array (0 .. 175) of Unsigned_8;
-      T : array (0 .. 3) of Unsigned_8;
+      W : array (0 .. 175) of Unsigned_8 := (others => 0);
+      T : array (0 .. 3) of Unsigned_8 := (others => 0);
    begin
+      RK := (others => (others => 0));
       for I in 0 .. 15 loop
          W (I) := Key (I);
       end loop;
