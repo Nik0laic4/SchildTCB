@@ -12,10 +12,11 @@ A **Trusted Computing Base (TCB)** research prototype: a formally verified core 
 
 ## What is this
 
-Schild TCB is a research prototype of a microkernel-based trusted computing base. It is two artifacts, not one:
+Schild TCB is a research prototype of a microkernel-based trusted computing base. It is three artifacts, not one:
 
 1. **A bare-metal OS** written from scratch in Ada — bootloader, NVMe driver, e1000e NIC driver, TCP/IP stack, HTTP server. Runs on a ThinkPad T580 and in QEMU. Answers *"does it work"*.
 2. **An seL4-based artifact** — the microkernel is upstream seL4 (formally verified; locally patched for x86_64 MCS and hardware support, see [`SEL4_PATCHES_ANALYSIS.md`](docs/technical/SEL4_PATCHES_ANALYSIS.md)), and the contribution is an Ada/SPARK **root task** plus several daemons. Network and storage run **isolated in Ring 3** processes, communicating over IPC. Answers *"is it proven"*.
+3. **A methodology & case-study corpus** — building a formal system requires more than a compiler; it requires a process. We document the pitfalls of AI-assisted formal verification, the *dead gates* that passed vacuously, and daemon isolation — a practical handbook for high-assurance engineering ([`textbook_ru.md`](docs/methodology/textbook_ru.md), original Russian · [`textbook_en.md`](docs/methodology/textbook_en.md)).
 
 **This is not a product, not a Linux replacement, and not a certified system.** It is an open reference architecture and methodology for building trusted computing bases on seL4. The value is in the approach, the assurance case, and the documented engineering decisions, not in shipping a ready-to-use OS.
 
@@ -36,6 +37,7 @@ The pipeline rules ("AI-agent constitution"), the escalation model, and the work
 - **MLS Bell-LaPadula** — 5 security levels in the seL4 layer (Public..Top_Secret), 4 in the bare-metal kernel.
 - **Crash containment** — faulting a driver is caught and contained without rebooting the platform.
 - **Boots on real hardware** — ThinkPad T580 (32 GB) and QEMU.
+- **Lessons from the trenches** — a case-study textbook: how a fully verified HMAC module silently hung on an 8-byte stack misalignment, why a tautological contract passed every formal gate, and the dead gate that could never fail. [`textbook_en.md`](docs/methodology/textbook_en.md) / [`textbook_ru.md`](docs/methodology/textbook_ru.md).
 
 ## Architecture
 
