@@ -145,6 +145,13 @@ void schild_shared_copy_to(const void *src, unsigned int len) {
     for (i = 0; i < len; i++) d[i] = s[i];
 }
 
+/* SPARK-friendly byte write: the Ada root task cannot use 'Address, so it
+ * writes names/bytes one element at a time through this helper. */
+void schild_shared_put_byte(unsigned int offset, unsigned char value) {
+    unsigned char *d = (unsigned char *)(unsigned long)SHARED_FRAME_VADDR;
+    d[offset] = value;
+}
+
 /* ─── R23: per-file/operation MLS gate context ───────────────────────────
  * fs_daemon.c writes the badge role/level here before dispatching an FS op;
  * the Ada FS server reads them to authorize read/write/delete against the

@@ -538,6 +538,37 @@ begin
       end;
    end if;
 
+   -- R23: per-file MLS gate — the root task (level Top_Secret=4) writing a
+   -- Public file (test.txt, level 0) is "write-down" and must be denied with
+   -- St_Denied (7).  Put "test.txt" into the shared frame, then call
+   -- Fs_Open(Mode=1, write).
+   if FS_EP_Slot > 0 then
+      declare
+         Name_Test : constant String := "test.txt";
+         R : Word;
+         M : Word;
+      begin
+         for I in Name_Test'Range loop
+            Schild_Sel4_Syscall.Shared_Put_Byte
+              (Unsigned_32 (I - Name_Test'First),
+               Unsigned_8 (Character'Pos (Name_Test (I))));
+         end loop;
+         R := Schild_Sel4_Syscall.Call_IPC4
+           (Schild_Sel4_Syscall.Root_FS_EP_Badged_Slot,
+            1, Word (Name_Test'Length), 1, 0);
+         M := Schild_Sel4_Syscall.Read_IPC_MR0;
+         if M = 7 then
+            Put_Str ("[R23] Fs_Open write-down denied" & ASCII.CR & ASCII.LF);
+         else
+            Put_Str ("[R23] FAIL: expected St_Denied (7), got ");
+            Put_Hex (M);
+            Put_Str (", replyinfo=");
+            Put_Hex (R);
+            Put_Str (ASCII.CR & ASCII.LF);
+         end if;
+      end;
+   end if;
+
    -- H82: persist the audit trail now that the FS daemon owns NVMe and is
    -- mounted (it ran at Stage 7.2 before storage was ready — that is exactly
    -- why the old direct call silently failed).  Persist writes the snapshot

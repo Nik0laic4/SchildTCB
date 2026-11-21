@@ -114,6 +114,7 @@ if [ "$SEL4_PRIMARY" = "1" ]; then
     "[FS] daemon: OK"
     "[FS] Is_Mounted: OK"
     "[H88] Authorize_IPC_Levels: eq=4/4=0000000000000001 up=1/4=0000000000000000 dn=4/1=0000000000000000"
+    "[R23] Fs_Open write-down denied"
     "[NVME] Init OK — queues ready"
     "[NVFS] Read-back VERIFY OK"
     "==== Root Task ready ===="

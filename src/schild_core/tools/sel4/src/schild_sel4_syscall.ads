@@ -450,6 +450,12 @@ is
      with Import, Convention => C, External_Name => "schild_shared_copy_to",
           Global => null;
 
+   -- R23: SPARK-friendly single-byte write to the shared frame (the Ada root
+   -- task cannot use 'Address, so it writes names one byte at a time).
+   procedure Shared_Put_Byte (Offset : Unsigned_32; Value : Unsigned_8)
+     with Import, Convention => C, External_Name => "schild_shared_put_byte",
+          Global => null;
+
    -- Read the secondary reply word (reply MR[1]) captured by Call_IPC.
    function Read_IPC_MR1 return Word
      with Import, Convention => C, External_Name => "schild_read_ipc_mr1",
