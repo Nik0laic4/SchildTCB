@@ -173,4 +173,31 @@ is
           Authorize_IPC_Levels'Result =
             (if Can_IPC (Level_Map (Integer (Sender_Level)),
                          Level_Map (Integer (Receiver_Level))) then 1 else 0);
+
+
+   --  R23: C-callable per-file/operation gate for the FS daemon.
+   --  Op: 0 = read, 1 = write, 2 = delete, 3 = mount-control.
+   --  Subject_Level/File_Level: 0..4 (Public..Top_Secret).
+   --  Subject_Role/Owner_Role: badge role (0 = root). Delete is owner-only
+   --  (root or the file's owner); mount-control is open to any authenticated
+   --  caller (closes THREAT_MODEL R23 gap b). Returns 1 = allowed, 0 = denied.
+   function Authorize_File_Op
+     (Op            : Unsigned_32;
+      Subject_Level : Unsigned_32;
+      File_Level    : Unsigned_32;
+      Subject_Role  : Unsigned_32;
+      Owner_Role    : Unsigned_32) return Unsigned_32
+   with Export, Convention => C, External_Name => "schild_mls_authorize_file_op",
+        Pre => Op in 0 .. 3 and Subject_Level in 0 .. 4 and File_Level in 0 .. 4,
+        Post => Authorize_File_Op'Result =
+                  (if Op = 0 then
+                     (if Can_Read (Level_Map (Integer (Subject_Level)),
+                                   Level_Map (Integer (File_Level))) then 1 else 0)
+                   elsif Op = 1 then
+                     (if Can_Write (Level_Map (Integer (Subject_Level)),
+                                    Level_Map (Integer (File_Level))) then 1 else 0)
+                   elsif Op = 2 then
+                     (if Subject_Role = 0 or Subject_Role = Owner_Role then 1 else 0)
+                   else
+                     1);
 end Schild_MLS_Policy;

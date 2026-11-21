@@ -145,4 +145,30 @@ is
       return (if Can_IPC (Level_Map (Integer (Sender_Level)),
                           Level_Map (Integer (Receiver_Level))) then 1 else 0);
    end Authorize_IPC_Levels;
+
+
+   --  R23: per-file/operation gate. Malformed requests are denied (fail-closed).
+   function Authorize_File_Op
+     (Op            : Unsigned_32;
+      Subject_Level : Unsigned_32;
+      File_Level    : Unsigned_32;
+      Subject_Role  : Unsigned_32;
+      Owner_Role    : Unsigned_32) return Unsigned_32
+   is
+   begin
+      if Op > 3 or Subject_Level > 4 or File_Level > 4 then
+         return 0;  --  malformed request -> deny
+      end if;
+      if Op = 0 then
+         return (if Can_Read (Level_Map (Integer (Subject_Level)),
+                              Level_Map (Integer (File_Level))) then 1 else 0);
+      elsif Op = 1 then
+         return (if Can_Write (Level_Map (Integer (Subject_Level)),
+                               Level_Map (Integer (File_Level))) then 1 else 0);
+      elsif Op = 2 then
+         return (if Subject_Role = 0 or Subject_Role = Owner_Role then 1 else 0);
+      else
+         return 1;  --  mount-control: any authenticated caller
+      end if;
+   end Authorize_File_Op;
 end Schild_MLS_Policy;
