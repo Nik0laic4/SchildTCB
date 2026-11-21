@@ -76,6 +76,14 @@ fi
 echo "  [RT] Building Ada root task..."
 
 # Ada compilation
+# SHA-256 compression core (proved) — dependency of HMAC-SHA256; compile first.
+if ! "$TOOL/gcc" -c --RTS="$(pwd)/../../bare_runtime" -gnat2022 -gnatwa -gnato -gnatVa -g -O0 "${PREFIX_MAP_ADA[@]}" \
+    -I"$OBJ" -Isrc -I../../src -I../../src/03_crypto \
+    -o "$OBJ/schild_sha256_compress.o" ../../src/03_crypto/schild_sha256_compress.adb 2>&1; then
+    echo "  [RT] ERROR: schild_sha256_compress.adb"
+    exit 1
+fi
+
 # HMAC-SHA256 lives in ../../src/03_crypto (single source of truth); compile it
 # first so its dependents (Boot Manager) can resolve the spec/ALI.
 if ! "$TOOL/gcc" -c --RTS="$(pwd)/../../bare_runtime" -gnat2022 -gnatwa -gnato -gnatVa -g -O0 "${PREFIX_MAP_ADA[@]}" \
@@ -187,7 +195,7 @@ done
     "$OBJ/schild_mls_policy.o" \
     "$OBJ/schild_fs_server.o" "$OBJ/schild_schild_fs.o" "$OBJ/schild_fs_core.o" "$OBJ/schild_nvme.o" \
     "$OBJ/schild_sel4_ipc.o" "$OBJ/schild_sel4_syscalls.o" "$OBJ/message_info.o" \
-    "$OBJ/schild_net_runtime.o" "$OBJ/schild_hmac_sha256.o" "$OBJ/schild_pci_scanner.o" \
+    "$OBJ/schild_net_runtime.o" "$OBJ/schild_sha256_compress.o" "$OBJ/schild_hmac_sha256.o" "$OBJ/schild_pci_scanner.o" \
     "$OBJ/schild_audit_logger.o" "$OBJ/schild_uart_driver.o" \
     "$OBJ/daemon_stubs.o" \
     "$OBJ/audit_stub.o" 2>&1
@@ -215,7 +223,7 @@ done
     "$OBJ/schild_net_server.o" "$OBJ/schild_e1000e.o" \
     "$OBJ/schild_arp_handler.o" "$OBJ/schild_ipv4_handler.o" "$OBJ/schild_tcp_handler.o" \
     "$OBJ/schild_http_core.o" "$OBJ/schild_http_server.o" "$OBJ/schild_net_stack.o" "$OBJ/schild_net_config.o" \
-    "$OBJ/schild_pci_scanner.o" "$OBJ/schild_net_runtime.o" "$OBJ/schild_hmac_sha256.o" \
+    "$OBJ/schild_pci_scanner.o" "$OBJ/schild_net_runtime.o" "$OBJ/schild_sha256_compress.o" "$OBJ/schild_hmac_sha256.o" \
     "$OBJ/schild_mls_policy.o" "$OBJ/schild_config_daemon.o" \
     "$OBJ/schild_sel4_ipc.o" "$OBJ/schild_sel4_syscalls.o" "$OBJ/message_info.o" \
     "$OBJ/schild_audit_logger.o" "$OBJ/schild_uart_driver.o" \
@@ -231,6 +239,7 @@ done
 # Link
 "$TOOL/ld" -T src/rt_linker.ld -o root_task.elf \
     "$OBJ/rt_start.o" \
+    "$OBJ/schild_sha256_compress.o" \
     "$OBJ/schild_hmac_sha256.o" \
     "$OBJ/schild_mls_policy.o" \
     "$OBJ/schild_audit_logger.o" \
@@ -285,6 +294,7 @@ echo "  [RT] root_task.elf: $(wc -c < root_task.elf) bytes"
 "$TOOL/ld" -T src/rt_linker.ld -o "$OBJ/bootstrap.elf" \
     "$OBJ/bootstrap.o" \
     "$OBJ/schild_bootstrap.o" \
+    "$OBJ/schild_sha256_compress.o" \
     "$OBJ/schild_hmac_sha256.o" \
     "$OBJ/schild_mls_policy.o" \
     "$OBJ/schild_audit_logger.o" \
