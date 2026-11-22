@@ -85,8 +85,13 @@ is
    Shared_Frame_Slot      : constant Cap_Ref := Slot_Base + 29; -- 4125
    Shared_Frame_Copy_Slot : constant Cap_Ref := Slot_Base + 30; -- 4126
 
-   -- W2: ECAM (MMCONFIG) window frame — 2 MiB large page @ 0xF0000000.
+   -- W2: ECAM (MMCONFIG) window frames — 64 x 2 MiB large pages (128 MiB,
+   -- bus 0..0x7F; T580 NVMe sits on bus 0x6C behind root port 1d.0).
    Ecam_Frame_Slot        : constant Cap_Ref := Slot_Base + 31; -- 4127
+   -- W2: NVMe BAR0 frames retyped early (T580: NVMe sits in the same
+   -- device-untyped as the NIC, BEFORE the NIC BAR0).
+   Nvme_Frame_Slot        : constant Cap_Ref := Slot_Base + 93; -- 4189
+   Ecam_Frames_Base       : constant Cap_Ref := Slot_Base + 8192; -- 12288
 
    -- R4 per-level MLS rings: frames/mints (20 slots, 4130..4149)
    MLS_Rings_Data_Base      : constant Cap_Ref := Slot_Base + 34; -- 4130
@@ -138,6 +143,9 @@ is
    procedure Pause
      with Import, Convention => C, External_Name => "schild_pause",
           Global => null;
+
+   function Is_Real_Nic return Boolean
+     with Global => null;
 
    procedure Fault_Guard
      with Global => null;

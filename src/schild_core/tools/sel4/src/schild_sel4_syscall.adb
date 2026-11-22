@@ -1003,6 +1003,8 @@ is
    Nic_Func    : Word := 0;
    Nic_Is_Real : Boolean := False;
 
+   function Is_Real_Nic return Boolean is (Nic_Is_Real);
+
    -- W7: NVMe storage discovery (ECAM) for the seL4 NetServer.
    Nvme_BAR0   : Word := 0;
 
@@ -1013,6 +1015,10 @@ is
    Nic_UT_PAddr     : Word := 0;
    Nic_UT_Bits      : Word := 0;
    Nic_UT_Rem_Start : Word := 0;
+
+   -- T580: the NVMe BAR0 frames were retyped early (from the shared NIC/NVMe
+   -- device-untyped) into Nvme_Frame_Slot; the FS daemon just maps them.
+   Nvme_Frames_Ready : Boolean := False;
 
    -- H86: first cap slot above the frames the NetServer MMIO window already
    -- consumed.  The device untyped can span hundreds of frames (QEMU i440fx
@@ -1071,7 +1077,8 @@ is
       return False;
    end Program_MSI;
 
-   -- Map the ECAM window (2 MiB large frame @ 0xF0000000) into the root VSpace.
+   -- Map the ECAM window (2 x 2 MiB large frames @ 0xF0000000 = bus 0..3) into
+   -- the root VSpace. The T580's NVMe sits on bus 3, past the old 2 MiB window.
    function Map_Ecam return Word is
       BI          : constant BI_Access := Get_BootInfo;
       Ecam_Phys   : constant Word := 16#F000_0000#;
@@ -1100,17 +1107,19 @@ is
          return 1;
       end if;
 
-      R := Retype_Object (Dev_UT, Object_LargePage, 21, CNode_Slot, 0, Ecam_Frame_Slot, 1);
+      R := Retype_Object (Dev_UT, Object_LargePage, 21, CNode_Slot, 0, Ecam_Frames_Base, 64);
       if R /= 0 then
          Put_String ("[W2] ECAM retype FAIL "); Put_Hex (R); Put_String (ASCII.CR & ASCII.LF);
          return 2;
       end if;
 
-      R := Page_Map (Ecam_Frame_Slot, Root_VSpace, Ecam_VAddr);
-      if R /= 0 then
-         Put_String ("[W2] ECAM map FAIL "); Put_Hex (R); Put_String (ASCII.CR & ASCII.LF);
-         return 3;
-      end if;
+      for I in Word range 0 .. 63 loop
+         R := Page_Map (Ecam_Frames_Base + I, Root_VSpace, Ecam_VAddr + I * 16#20_0000#);
+         if R /= 0 then
+            Put_String ("[W2] ECAM map FAIL "); Put_Hex (R); Put_String (ASCII.CR & ASCII.LF);
+            return 3;
+         end if;
+      end loop;
 
       Put_String ("[W2] ECAM window mapped @0x"); Put_Hex (Ecam_VAddr);
       Put_String (ASCII.CR & ASCII.LF);
@@ -1171,7 +1180,7 @@ is
    -- the scan finds nothing and we fall back to the fixed QEMU NVMe BAR0.
    function Init_NetServer_NVMe return Word is
    begin
-      for Bus in Word range 0 .. 1 loop
+      for Bus in Word range 0 .. 127 loop
          for Slot in Word range 0 .. 31 loop
             for Fn in Word range 0 .. 7 loop
                declare
@@ -1355,23 +1364,58 @@ is
 
       --  Consume the frames before BAR0 as don't-care 2MiB large pages (one
       --  slot per 512 pages) + a 4K remainder, so the slot window stays small.
-      --  T580: BAR0 sits ~12MB into the device-untyped, so retyping the whole
-      --  offset as 4K frames blew the slot window past #7612 into the
-      --  FS/Bootstrap range.
+      --  T580: the NVMe BAR0 sits in the SAME device-untyped BEFORE the NIC
+      --  BAR0 (NVMe 0xE8000000 < NIC 0xE8200000), so retype its 8 pages into
+      --  Nvme_Frame_Slot first, otherwise the don't-care offset swallows them.
       declare
-         Big_Frames   : constant Word := Offset_Frames / 512;
-         Small_Frames : constant Word := Offset_Frames mod 512;
+         Nvme_Before : Word := 0;
+         Split       : Boolean := False;
       begin
-         if Big_Frames > 0 then
-            R := Retype_Object (Dev_UT, Object_LargePage, 21, CNode_Slot, 0, Slot_Cur, Big_Frames);
-            if R /= 0 then Put_String ("[S8.2] MMIO offset retype FAIL"); Put_Hex (R); Put_String (ASCII.CR & ASCII.LF); return 2; end if;
-            Slot_Cur := Slot_Cur + Big_Frames;
+         if Nvme_BAR0 >= UT_PAddr and then Nvme_BAR0 < Net_BAR0 then
+            Split := True;
+            Nvme_Before := (Nvme_BAR0 - UT_PAddr) / 16#1000#;
+            declare
+               Big_B   : constant Word := Nvme_Before / 512;
+               Small_B : constant Word := Nvme_Before mod 512;
+            begin
+               if Big_B > 0 then
+                  R := Retype_Object (Dev_UT, Object_LargePage, 21, CNode_Slot, 0, Slot_Cur, Big_B);
+                  if R /= 0 then Put_String ("[S8.2] NVMe-before retype FAIL"); Put_Hex (R); Put_String (ASCII.CR & ASCII.LF); return 2; end if;
+                  Slot_Cur := Slot_Cur + Big_B;
+               end if;
+               if Small_B > 0 then
+                  R := Retype_Object (Dev_UT, Object_Frame, 12, CNode_Slot, 0, Slot_Cur, Small_B);
+                  if R /= 0 then Put_String ("[S8.2] NVMe-before retype FAIL"); Put_Hex (R); Put_String (ASCII.CR & ASCII.LF); return 2; end if;
+                  Slot_Cur := Slot_Cur + Small_B;
+               end if;
+            end;
+            R := Retype_Object (Dev_UT, Object_Frame, 12, CNode_Slot, 0, Nvme_Frame_Slot, 8);
+            if R /= 0 then Put_String ("[S8.2] NVMe frames retype FAIL"); Put_Hex (R); Put_String (ASCII.CR & ASCII.LF); return 2; end if;
+            Nvme_Frames_Ready := True;
          end if;
-         if Small_Frames > 0 then
-            R := Retype_Object (Dev_UT, Object_Frame, 12, CNode_Slot, 0, Slot_Cur, Small_Frames);
-            if R /= 0 then Put_String ("[S8.2] MMIO offset retype FAIL"); Put_Hex (R); Put_String (ASCII.CR & ASCII.LF); return 2; end if;
-            Slot_Cur := Slot_Cur + Small_Frames;
-         end if;
+
+         declare
+            Rest    : constant Word := Offset_Frames - Nvme_Before - (if Split then 8 else 0);
+            Big_R   : constant Word := Rest / 512;
+            Small_R : constant Word := Rest mod 512;
+            Done    : Word := 0;
+         begin
+            if Big_R > 0 then
+               R := Retype_Object (Dev_UT, Object_LargePage, 21, CNode_Slot, 0, Slot_Cur, Big_R);
+               if R /= 0 then Put_String ("[S8.2] MMIO offset retype FAIL"); Put_Hex (R); Put_String (ASCII.CR & ASCII.LF); return 2; end if;
+               Slot_Cur := Slot_Cur + Big_R;
+            end if;
+            while Done < Small_R loop
+               declare
+                  Chunk : constant Word := Word'Min (256, Small_R - Done);
+               begin
+                  R := Retype_Object (Dev_UT, Object_Frame, 12, CNode_Slot, 0, Slot_Cur, Chunk);
+                  if R /= 0 then Put_String ("[S8.2] MMIO offset retype FAIL"); Put_Hex (R); Put_String (ASCII.CR & ASCII.LF); return 2; end if;
+                  Slot_Cur := Slot_Cur + Chunk;
+                  Done := Done + Chunk;
+               end;
+            end loop;
+         end;
       end;
 
       --  Retype just the Net_Pages BAR frames into the MMIO slot window.
@@ -1390,6 +1434,12 @@ is
       Nic_UT_Bits      := UT_Size_Bits;
       Nic_UT_Rem_Start := UT_PAddr + Total_Frames * 16#1000#;
       Next_Free_Slot   := Slot_Cur + Word (Net_Pages);
+      Put_String ("[S8.2] BAR0=0x"); Put_Hex (Net_BAR0);
+      Put_String (" UT=0x"); Put_Hex (UT_PAddr);
+      Put_String (" off="); Put_Dec (Offset_Frames);
+      Put_String (" tot="); Put_Dec (Total_Frames);
+      Put_String (" rem=0x"); Put_Hex (Nic_UT_Rem_Start);
+      Put_String (ASCII.CR & ASCII.LF);
 
       -- H86: the NVMe BAR0 is no longer mapped into the NetServer VSpace.
       -- Launch_FS_Daemon -> Map_Nvme_Into_FS maps it into the FS daemon and
@@ -1873,6 +1923,25 @@ is
          return 0;
       end if;
 
+      --  T580 fast path: the NVMe frames were retyped early into
+      --  Nvme_Frame_Slot (before the NIC don't-care offset swallowed them).
+      --  Just map them into the FS daemon VSpace.
+      if Nvme_Frames_Ready then
+         for J in 0 .. Pages - 1 loop
+            R := Page_Map (Nvme_Frame_Slot + Word (J), PML4,
+                           VAddr + Word (J) * 16#1000#);
+            if R /= 0 then
+               Put_String ("[FS] NVMe map FAIL"); Put_Hex (R);
+               Put_String (ASCII.CR & ASCII.LF);
+               return 1;
+            end if;
+         end loop;
+         Nvme_Set_Mmio (VAddr);
+         Put_String ("[FS] NVMe BAR0 mapped @0x"); Put_Hex (VAddr);
+         Put_String (ASCII.CR & ASCII.LF);
+         return 0;
+      end if;
+
       -- Case A: same device-untyped as the NIC (QEMU i440fx style), continuing
       -- after the NIC frames the root task already retyped.
       if Nic_UT_Cap /= 0 and then Nic_UT_Bits < 64 then
@@ -1916,25 +1985,46 @@ is
       end if;
 
       Off_Frames := (Nvme_BAR0 - Rem_Start) / 16#1000#;
-      while Created < Off_Frames + Pages loop
-         declare
-            Chunk : constant Word := Word'Min (256, Off_Frames + Pages - Created);
-         begin
-            R := Retype_Object (Dev_UT, Object_Frame, 12, CNode_Slot, 0, Slot, Chunk);
+
+      --  Consume the offset as don't-care 2MiB large pages + a 4K remainder,
+      --  same as the NIC MMIO (T580: the NVMe BAR0 sits far into the shared
+      --  PCI window, so 4K frames blew the slot window past #7612).
+      declare
+         Big_Frames   : constant Word := Off_Frames / 512;
+         Small_Frames : constant Word := Off_Frames mod 512;
+      begin
+         if Big_Frames > 0 then
+            R := Retype_Object (Dev_UT, Object_LargePage, 21, CNode_Slot, 0, Slot, Big_Frames);
             if R /= 0 then
-               Put_String ("[FS] NVMe retype FAIL"); Put_Hex (R);
+               Put_String ("[FS] NVMe offset retype FAIL"); Put_Hex (R);
                Put_String (ASCII.CR & ASCII.LF);
                return 1;
             end if;
-            Created := Created + Chunk;
-            Slot    := Slot + Chunk;
-         end;
-      end loop;
+            Slot := Slot + Big_Frames;
+         end if;
+         if Small_Frames > 0 then
+            R := Retype_Object (Dev_UT, Object_Frame, 12, CNode_Slot, 0, Slot, Small_Frames);
+            if R /= 0 then
+               Put_String ("[FS] NVMe offset retype FAIL"); Put_Hex (R);
+               Put_String (ASCII.CR & ASCII.LF);
+               return 1;
+            end if;
+            Slot := Slot + Small_Frames;
+         end if;
+      end;
 
-      Next_Free_Slot := Slot;
+      --  Retype just the Pages (8) BAR0 frames.
+      R := Retype_Object (Dev_UT, Object_Frame, 12, CNode_Slot, 0, Slot, Pages);
+      if R /= 0 then
+         Put_String ("[FS] NVMe retype FAIL"); Put_Hex (R);
+         Put_String (ASCII.CR & ASCII.LF);
+         return 1;
+      end if;
+
+      Next_Free_Slot := Slot + Pages;
 
       for J in 0 .. Pages - 1 loop
-         R := Page_Map (Start + Off_Frames + Word (J), PML4,
+         R := Page_Map (Slot + Word (J), PML4,
                         VAddr + Word (J) * 16#1000#);
          if R /= 0 then
             Put_String ("[FS] NVMe map FAIL"); Put_Hex (R);
@@ -1956,6 +2046,7 @@ is
       -- retypes SC and Reply from one UT).
       UT_EP, UT_TCB, UT_IPC, UT_CN, UT_SC, UT_REPLY : Cap_Ref := 0;
       UT_ELF : Cap_Ref := 0;   -- H87: RAM untyped for the fs_daemon.elf frames
+      FS_Elf_Phys : Word := 0; -- H87: physical base of the fs_daemon.elf (for DMA offset)
       Found : Natural := 0;
       CNode_Slot : constant Cap_Ref := 2;
       ASID_Pool  : constant Cap_Ref := 6;   -- seL4_CapInitThreadASIDPool (shared)
@@ -2009,6 +2100,7 @@ is
                UT_REPLY := BI.all.Untyped_Start + Word (Idx - 1); Found := Found + 1;
             elsif UT_ELF = 0 then
                UT_ELF := BI.all.Untyped_Start + Word (Idx - 1); Found := Found + 1;
+               FS_Elf_Phys := BI.all.Untyped_List (Idx).PAddr;
             end if;
          end if;
       end loop;
@@ -2185,7 +2277,7 @@ is
       -- FS daemon gets CPU (Call blocks root task until Reply). If daemon did
       -- not start, Call hangs (diagnostic: no reply, then timeout kill).
       Put_String ("[FS] IPC Call (init)... ");
-      R := Call_IPC (FS_EP_Slot, 0, 0);
+      R := Call_IPC (FS_EP_Slot, 0, FS_Elf_Phys);
       Put_Hex (R); Put_String (ASCII.CR & ASCII.LF);
       Put_String ("[FS] Reply status: ");
       Put_Hex (Read_IPC_MR0); Put_String (ASCII.CR & ASCII.LF);

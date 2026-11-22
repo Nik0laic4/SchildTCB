@@ -18,6 +18,7 @@ extern i64 schild_sel4_recv(u64 src, u64 reply);
 extern i64 schild_sel4_replyrecv(u64 src, u64 info, u64 reply);
 extern i64 schild_sel4_reply_only(u64 reply, u64 info);
 extern i64 schild_sel4_signal(u64 dest);
+extern void schild_set_dma_offset(unsigned long long off);
 extern unsigned int schild_mls_authorize_ipc_levels(unsigned int sender_level, unsigned int receiver_level);
 extern volatile u64 fs_reply_cptr;
 extern volatile u64 fs_endpoint_cptr;
@@ -146,6 +147,12 @@ void fs_daemon_main(void) {
         u64 a  = schild_recv_mr[1];
         u64 b  = schild_recv_mr[2];
         u64 c  = schild_recv_mr[3];
+
+        /* H86/T580: init carries the fs_daemon.elf physical base in MR[1];
+         * derive the virtual->physical DMA offset for schild_dma_phys. */
+        if (op == 0 && a != 0) {
+            schild_set_dma_offset(a - 0x400000ULL);
+        }
         u64 result  = 0;
         u64 result1 = 0;
         u64 result2 = 0;

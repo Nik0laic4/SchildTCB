@@ -139,6 +139,18 @@ package body Schild_Nvme with SPARK_Mode => Off is
          exit when Done;
       end loop;
 
+      --  DEBUG (T580 bring-up): surface the failure mode.
+      declare
+         Msg_Timeout : constant String := "[NVME] Admin timeout (no completion)";
+         Msg_Status  : constant String := "[NVME] Admin completion status non-zero";
+      begin
+         if not Done then
+            C_Putln (Msg_Timeout'Address, Msg_Timeout'Length);
+         elsif not Success then
+            C_Putln (Msg_Status'Address, Msg_Status'Length);
+         end if;
+      end;
+
       if Success then
          -- Wrap CQ head doorbell for 2-entry queue
          declare
