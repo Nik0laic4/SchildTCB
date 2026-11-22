@@ -15,6 +15,7 @@ extern i64 schild_sel4_recv(u64 src, u64 reply);
 extern i64 schild_sel4_replyrecv(u64 src, u64 info, u64 reply);
 extern i64 schild_sel4_reply_only(u64 reply, u64 info);
 extern i64 schild_sel4_signal(u64 dest);
+extern void schild_set_dma_offset(unsigned long long off);
 extern unsigned int schild_mls_authorize_ipc_levels(unsigned int sender_level, unsigned int receiver_level);
 extern volatile u64 net_reply_cptr;
 extern volatile u64 schild_recv_mr[4];
@@ -61,6 +62,13 @@ void netserver_main(void) {
         int fault_after_reply = 0;   /* set by the crash-containment op */
 
         if (op == 0) {
+            /* Init carries the netserver.elf physical base in MR[1]; derive the
+             * virtual->physical DMA offset for schild_dma_phys (the e1000e RX/TX
+             * descriptor rings must use physical addresses). */
+            u64 phys = schild_recv_mr[1];
+            if (phys != 0) {
+                schild_set_dma_offset(phys - 0x400000ULL);
+            }
             result = schild_net_init();
         } else if (op == 1) {
             result = schild_net_poll();

@@ -1005,6 +1005,8 @@ is
 
    -- W7: NVMe storage discovery (ECAM) for the seL4 NetServer.
    Nvme_BAR0   : Word := 0;
+   -- H87: physical base of the netserver.elf image (for its own DMA offset).
+   Net_Image_Phys : Word := 0;
 
    -- H86: what is left of the NIC device-untyped once the NIC frames are
    -- retyped.  The FS daemon maps its NVMe frames from the same capability,
@@ -1469,6 +1471,7 @@ is
           return 2;
        end if;
        Phys_Base := Read_IPC_MR0;
+       Net_Image_Phys := Phys_Base;
        Set_DMA_Offset (Phys_Base - 16#400000#);
        Put_String ("[S8.1C] image phys base 0x");
        Put_Hex (Phys_Base);
@@ -1646,7 +1649,7 @@ is
 
        -- 11. IPC test: Call op=0 (init) -> expect reply status 0
        Put_String ("[S8.1D] IPC Call (init)... ");
-       R := Call_IPC (Net_EP_Slot, 0, 0);
+       R := Call_IPC (Net_EP_Slot, 0, Net_Image_Phys);
        Put_Hex (R); Put_String (ASCII.CR & ASCII.LF);
        Put_String ("[S8.1D] Reply status: ");
        Put_Hex (Read_IPC_MR0); Put_String (ASCII.CR & ASCII.LF);
