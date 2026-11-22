@@ -11,7 +11,7 @@ Assurance Case; дополняется по мере готовности Бло
 |---|---|---|
 | **GNAT Pro compiler** (`gnat_native_14.2.1_06bb3def`) | сборка Ada/SPARK root task + daemons | доверен; код Ada — `SPARK_Mode => On` (доказан gnatprove) |
 | **gnatprove** | верификация SPARK (контракты, `not-proved: 0`) | доверен (уровень 4 для ядра политики) |
-| **gcc / ld** (`-m64 -ffreestanding -nostdlib`) | C-шимы + линковка | доверен; C-шимы runtime-tested (run_tests 24/24) |
+| **gcc / ld** (`-m64 -ffreestanding -nostdlib`) | C-шимы + линковка | доверен; C-шимы runtime-tested (run_tests 25/25) + host-KAT + libFuzzer |
 | **seL4 kernel** (7 локальных патчей) | ядро (ring-0), CSpace/VSpace/scheduler | доказан upstream; патчи — `SEL4_PATCHES_ANALYSIS.md` (только `object-zeroing` затрагивает доказанный `createObject`, остальные — boot/MMIO/framebuffer) |
 | **mkschildfs.py** | генерация FS-образа | доверен (offline, host) |
 | **QEMU** (i440fx, e1000 82540EM) | runtime-валидация | доверен как test-harness (не TCB) |

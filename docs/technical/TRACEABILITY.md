@@ -1,6 +1,6 @@
 # Schild TCB — Traceability Matrix (Assurance Case, Block 4)
 
-**Version:** v0.1 (draft) | **Date:** 2026-11-15
+**Version:** v0.2 (draft) | **Date:** 2026-11-22
 **Scope:** связь «требование → код → тест» для Assurance Case. Заполняется по мере
 готовности блоков; записи для ещё не закрытых единиц помечены ⏳.
 
@@ -24,10 +24,15 @@
 | AS6 — syscall seam ABI | `seam_abi_test` (host) | host-KAT `seam-abi` PASS (msgInfo round-trip/clamp/offset) |
 | AS6 — spec | `SYSCALL_SEAM_ABI_SPEC.md` | (документ) |
 | H88 — MLS IPC gate | `Schild_MLS_Policy.Authorize_IPC_Levels` | run_tests `[H88]` root/eq/up/dn + C-демоны |
-| H99 — proof scope | scaffold-модули исключены | `prove_kernel` 180 modules (0 not-proved) |
-| C1 — ring-0 C audit | `RING0_C_AUDIT.md` + `schild_uart_putc_raw` | build 184/0 + run_tests 24/24 (refactor, семантика не менялась) |
+| H99 — proof scope | scaffold-модули исключены | `prove_kernel` 189 swept / 179 in-proof / 133 proved / 0 not-proved / 10 scaffold |
+| C1 — ring-0 C audit | `RING0_C_AUDIT.md` + `schild_uart_putc_raw` | build 185/0 + run_tests 25/25 (refactor, семантика не менялась) |
 | H62/H63 — CRC32 + per-file CRC | `Schild_Fs_Core.CRC32` | host-KAT `fs-core-kat` (0xCBF43926) |
 | H61 — HMAC-SHA256 superblock | `Schild_HMAC_SHA256` | host-KAT `hmac_kat` + `[NVFS] VERIFY OK` |
+| R23 — MLS per-file gate | `Schild_Schild_Fs.Authorize_File_Op` (7 FS-операций) | run_tests `[R23] Fs_Open write-down denied` + SPARK (per-file Level/Owner, delete owner-only) |
+| W10 — AES-128 core no-OOB | `Schild_Aes_Ni_Core` (SPARK On) | gnatprove 0 unproved + KAT FIPS-197 2/2 |
+| W10 — SHA-256 compress no-OOB | `Schild_Sha256_Compress` (SPARK On) | gnatprove 0 unproved + KAT RFC 4231/NIST 9/9 |
+| Д3 — C9 liveness-detect | `Schild_Health_Monitor` (Update_Health + Record_Heartbeat/Set_Grace/Mark_Unhealthy) | gnatprove 0 unproved + run_tests 25/25 |
+| C4 — shim fuzz (coverage-guided) | `shared_frame/seam/fs_dispatch/mls_dispatch_libfuzzer.c` | libFuzzer 60с: 0 crash (1.5M–24.8M runs, ASan/UBSan) |
 
 ### 2.1 Ключевые T/AS/R/C требования (THREAT_MODEL)
 
