@@ -10,6 +10,7 @@ with System;
 with Schild_MLS_Policy;     use Schild_MLS_Policy;
 with Schild_Audit_Logger;  use Schild_Audit_Logger;
 with Schild_Watchdog;
+with Schild_Health_Monitor; use Schild_Health_Monitor;
 
 procedure Schild_Root_Task with SPARK_Mode => On is
    -- Read the seL4 BootInfo frame as a VALUE (via a C memcpy shim) instead of
@@ -40,12 +41,12 @@ procedure Schild_Root_Task with SPARK_Mode => On is
 
    -- C9 heartbeat: last-seen RDTSC per domain (Net=1, MLS=2, Config=3, FS=4).
    -- Initialized to the boot timestamp at each launch (grace period).
-   Last_Seen : array (1 .. 4) of Word := (others => 0);
+   Last_Seen : Word_Array_4 := (others => 0);
    -- C9 health verdict per domain (True = alive within the threshold).
-   Health_Ok : array (1 .. 4) of Boolean := (others => True);
+   Health_Ok : Bool_Array_4 := (others => True);
    -- Grace deadline per domain (skip the health check until the daemon has had
    -- time to finish its slow init, e.g. FS NVMe mount). FS=5s, others=1s.
-   Grace_Until : array (1 .. 4) of Word := (others => 0);
+   Grace_Until : Word_Array_4 := (others => 0);
    Grace_Ms    : constant array (1 .. 4) of Word := (1000, 1000, 1000, 5000);
    Last_Check  : Word := 0;  -- throttle: last health-check timestamp
    Last_Mls_Probe : Word := 0;  -- throttle: last MLS functional probe timestamp
@@ -822,14 +823,7 @@ begin
       begin
          if Last_Check = 0 or else Now - Last_Check > Check_Interval then
             Last_Check := Now;
-            for D in 1 .. 4 loop
-               if Now > Grace_Until (D)
-                 and then (Last_Seen (D) = 0
-                           or else Now - Last_Seen (D) > Threshold)
-               then
-                  Health_Ok (D) := False;
-               end if;
-            end loop;
+            Update_Health (Now, Threshold, Grace_Until, Last_Seen, Health_Ok);
          end if;
       end;
 

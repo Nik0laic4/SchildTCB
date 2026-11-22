@@ -93,6 +93,14 @@ if ! "$TOOL/gcc" -c --RTS="$(pwd)/../../bare_runtime" -gnat2022 -gnatwa -gnato -
     exit 1
 fi
 
+# C9 health monitor (proved) — dependency of the root task; compile first.
+if ! "$TOOL/gcc" -c --RTS="$(pwd)/../../bare_runtime" -gnat2022 -gnatwa -gnato -gnatVa -g -O0 "${PREFIX_MAP_ADA[@]}" \
+    -I"$OBJ" -Isrc -I../../src -I../../src/03_crypto \
+    -o "$OBJ/schild_health_monitor.o" src/schild_health_monitor.adb 2>&1; then
+    echo "  [RT] ERROR: schild_health_monitor.adb"
+    exit 1
+fi
+
 for src in schild_mls_policy schild_audit_logger schild_config_daemon schild_boot_manager schild_hm_model schild_launch_model schild_watchdog schild_root_task schild_sel4_syscall schild_sel4_bootinfo schild_net_server schild_elf_loader schild_bootstrap; do
     SF="src/${src}.adb"
     [ -f "$OVERLAY/${src}.adb" ] && SF="$OVERLAY/${src}.adb"
@@ -248,6 +256,7 @@ done
     "$OBJ/schild_hm_model.o" \
     "$OBJ/schild_launch_model.o" \
     "$OBJ/schild_watchdog.o" \
+    "$OBJ/schild_health_monitor.o" \
     "$OBJ/schild_root_task.o" \
     "$OBJ/schild_sel4_syscall.o" \
     "$OBJ/schild_sel4_bootinfo.o" \

@@ -63,5 +63,12 @@ if grep -qE ' (low|medium|high):' "$LOG"; then
   grep -nE '^[[:space:]]*(low|medium|high):' "$LOG" >&2 || true
   exit 1
 fi
+# Surface flow/init warnings too: "unused assignment" and "might not be
+# initialized" indicate a contract gap that the severity gate does not flag
+# (e.g. C9 detect was runtime-only until the health-monitor extraction).
+WARN=$(grep -cE 'unused assignment|might not be initialized' "$LOG" || true)
+if [ "$WARN" -gt 0 ]; then
+  echo "NOTE: $WARN flow/init warnings (unused assignment / might not be initialized) — review, may be a contract gap." >&2
+fi
 echo "SPARK proof passed: all verification conditions proved."
 
