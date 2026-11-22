@@ -1171,33 +1171,36 @@ is
    -- the scan finds nothing and we fall back to the fixed QEMU NVMe BAR0.
    function Init_NetServer_NVMe return Word is
    begin
-      for Slot in Word range 0 .. 31 loop
-         for Fn in Word range 0 .. 7 loop
-            declare
-               D   : constant Word := Ecam_Read (0, Slot, Fn, 0);
-               Vid : constant Word := D and 16#FFFF#;
-               Did : constant Word := Shift_Right (D, 16) and 16#FFFF#;
-            begin
-               if Vid = 16#FFFF# then
-                  exit when Fn = 0;
-               elsif (Shift_Right (Ecam_Read (0, Slot, Fn, 16#08#), 16) and 16#FFFF#) = 16#0108#  -- any NVMe (class 01h/08h)
-                 or else (Vid = 16#144D# and then Did = 16#A808#)   -- Samsung SM981 (T580)
-                 or else (Vid = 16#1B36# and then Did = 16#0010#)   -- QEMU NVMe
-                 or else (Vid = 16#8086# and then Did = 16#5845#)   -- Intel NVMe
-               then
-                  Nvme_BAR0 := Ecam_Read (0, Slot, Fn, 16#10#) and 16#FFFF_FFF0#;
-                  declare
-                     Cmd : constant Word := Ecam_Read (0, Slot, Fn, 16#04#);
-                  begin
-                     Ecam_Write (0, Slot, Fn, 16#04#, Cmd or 16#0004#);
-                  end;
-                  Put_String ("[W7] NVMe found 0x"); Put_Hex (Vid);
-                  Put_String (":"); Put_Hex (Did);
-                  Put_String (" BAR0=0x"); Put_Hex (Nvme_BAR0);
-                  Put_String (ASCII.CR & ASCII.LF);
-                  return 0;
-               end if;
-            end;
+      for Bus in Word range 0 .. 1 loop
+         for Slot in Word range 0 .. 31 loop
+            for Fn in Word range 0 .. 7 loop
+               declare
+                  D   : constant Word := Ecam_Read (Bus, Slot, Fn, 0);
+                  Vid : constant Word := D and 16#FFFF#;
+                  Did : constant Word := Shift_Right (D, 16) and 16#FFFF#;
+               begin
+                  if Vid = 16#FFFF# then
+                     exit when Fn = 0;
+                  elsif (Shift_Right (Ecam_Read (Bus, Slot, Fn, 16#08#), 16) and 16#FFFF#) = 16#0108#  -- any NVMe (class 01h/08h)
+                    or else (Vid = 16#144D# and then Did = 16#A808#)   -- Samsung SM981 (T580)
+                    or else (Vid = 16#1B36# and then Did = 16#0010#)   -- QEMU NVMe
+                    or else (Vid = 16#8086# and then Did = 16#5845#)   -- Intel NVMe
+                  then
+                     Nvme_BAR0 := Ecam_Read (Bus, Slot, Fn, 16#10#) and 16#FFFF_FFF0#;
+                     declare
+                        Cmd : constant Word := Ecam_Read (Bus, Slot, Fn, 16#04#);
+                     begin
+                        Ecam_Write (Bus, Slot, Fn, 16#04#, Cmd or 16#0004#);
+                     end;
+                     Put_String ("[W7] NVMe found 0x"); Put_Hex (Vid);
+                     Put_String (":"); Put_Hex (Did);
+                     Put_String (" bus="); Put_Dec (Bus);
+                     Put_String (" BAR0=0x"); Put_Hex (Nvme_BAR0);
+                     Put_String (ASCII.CR & ASCII.LF);
+                     return 0;
+                  end if;
+               end;
+            end loop;
          end loop;
       end loop;
 
