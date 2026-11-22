@@ -3,6 +3,7 @@
 **Доверенная вычислительная база (TCB)** — исследовательский прототип: формально верифицированное ядро (**seL4** + **Ada/SPARK 2022**) со средой изолированной периферии.
 
 [![OpenSSF Best Practices](https://www.bestpractices.dev/projects/16898/badge)](https://www.bestpractices.dev/projects/16898)
+[![DOI](https://zenodo.org/badge/1432059527.svg)](https://doi.org/10.5281/zenodo.24446686)
 [![CI (build+verify)](https://github.com/Nik0laic4/SchildTCB/actions/workflows/ci.yml/badge.svg)](https://github.com/Nik0laic4/SchildTCB/actions/workflows/ci.yml)
 [![ARM64 virtio-net](https://github.com/Nik0laic4/SchildTCB/actions/workflows/arm64-net.yml/badge.svg)](https://github.com/Nik0laic4/SchildTCB/actions/workflows/arm64-net.yml)
 [![SPARK Level 4](https://github.com/Nik0laic4/SchildTCB/actions/workflows/spark-badge.yml/badge.svg)](https://github.com/Nik0laic4/SchildTCB/actions/workflows/spark-badge.yml)

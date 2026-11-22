@@ -4,8 +4,9 @@ authors:
   - family-names: Irganov
     given-names: Alexander
 title: "Schild TCB — a Trusted Computing Base (TCB) research prototype on seL4 (Ada/SPARK)"
-version: 1.0.0-pre
-date-released: 2026-10-24
+version: 1.0.0-textbook
+date-released: 2026-11-22
+doi: 10.5281/zenodo.24446687
 license: GPL-2.0-only
 url: "https://github.com/Nik0laic4/SchildTCB"
 repository-code: "https://github.com/Nik0laic4/SchildTCB"
