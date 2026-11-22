@@ -1862,6 +1862,9 @@ is
       procedure Nvme_Set_Mmio (Base : Word)
         with Import, Convention => C, External_Name => "schild_nvme_set_mmio";
    begin
+      Put_String ("[FS] NVMe BAR0 phys=0x"); Put_Hex (Nvme_BAR0);
+      Put_String ("  rem_start=0x"); Put_Hex (Nic_UT_Rem_Start);
+      Put_String (ASCII.CR & ASCII.LF);
       if Nvme_BAR0 = 0 then
          Put_String ("[FS] NVMe: no BAR0 (storage disabled)" & ASCII.CR & ASCII.LF);
          return 0;
