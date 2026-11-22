@@ -1180,7 +1180,8 @@ is
             begin
                if Vid = 16#FFFF# then
                   exit when Fn = 0;
-               elsif (Vid = 16#144D# and then Did = 16#A808#)   -- Samsung SM981 (T580)
+               elsif (Shift_Right (Ecam_Read (0, Slot, Fn, 16#08#), 16) and 16#FFFF#) = 16#0108#  -- any NVMe (class 01h/08h)
+                 or else (Vid = 16#144D# and then Did = 16#A808#)   -- Samsung SM981 (T580)
                  or else (Vid = 16#1B36# and then Did = 16#0010#)   -- QEMU NVMe
                  or else (Vid = 16#8086# and then Did = 16#5845#)   -- Intel NVMe
                then
