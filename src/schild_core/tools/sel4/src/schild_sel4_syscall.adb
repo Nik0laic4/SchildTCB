@@ -1977,15 +1977,16 @@ is
         with Import, Convention => C, External_Name => "schild_fs_daemon_elf_size";
    begin
       -- Block A: find 6 RAM untyped (VSpace + kernel objects).
-      -- Range 0x800000..0x20000000 matches NetServer; leftover UT1..UT6 is reused
-      -- (seL4 keeps remaining memory in the same cap). QEMU 512M ends at 0x20000000.
+      -- Range 0x800000.. covers the whole RAM; QEMU ends at 0x20000000 but the
+      -- T580 has 32GB, so the old 0x20000000 cap starved the FS daemon of the
+      -- 7 small untypeds it needs (null FS endpoint #4179). leftover UT1..UT6
+      -- is reused (seL4 keeps remaining memory in the same cap).
       for Idx in 1 .. N_UNTYPED loop
          exit when Found >= 7;
          if BI.all.Untyped_List (Idx).Size_Bits > 0
            and then Word (BI.all.Untyped_List (Idx).Size_Bits) >= Min_Size_Bits
            and then BI.all.Untyped_List (Idx).Is_Device = 0
            and then BI.all.Untyped_List (Idx).PAddr >= 16#800000#
-           and then BI.all.Untyped_List (Idx).PAddr < 16#20000000#
          then
             if UT_EP = 0 then
                UT_EP := BI.all.Untyped_Start + Word (Idx - 1); Found := Found + 1;
