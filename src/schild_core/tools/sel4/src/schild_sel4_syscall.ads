@@ -144,9 +144,6 @@ is
      with Import, Convention => C, External_Name => "schild_pause",
           Global => null;
 
-   function Is_Real_Nic return Boolean
-     with Global => null;
-
    procedure Fault_Guard
      with Global => null;
 

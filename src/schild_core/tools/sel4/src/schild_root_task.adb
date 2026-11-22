@@ -570,20 +570,6 @@ begin
       end;
    end if;
 
-   -- T580 bring-up aid: hold the FS-section result on screen (~3s) so it can
-   -- be photographed (the framebuffer has no scrollback and the log flies by).
-   -- Only on real hardware (QEMU TCG makes a long busy-wait far too slow).
-   if Schild_Sel4_Syscall.Is_Real_Nic then
-      declare
-         I : Word := 0;
-      begin
-         while I < 1_000_000_000 loop
-            Schild_Sel4_Syscall.Pause;
-            I := I + 1;
-         end loop;
-      end;
-   end if;
-
    -- H82: persist the audit trail now that the FS daemon owns NVMe and is
    -- mounted (it ran at Stage 7.2 before storage was ready — that is exactly
    -- why the old direct call silently failed).  Persist writes the snapshot

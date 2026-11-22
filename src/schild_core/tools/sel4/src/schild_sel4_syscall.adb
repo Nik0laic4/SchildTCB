@@ -1003,8 +1003,6 @@ is
    Nic_Func    : Word := 0;
    Nic_Is_Real : Boolean := False;
 
-   function Is_Real_Nic return Boolean is (Nic_Is_Real);
-
    -- W7: NVMe storage discovery (ECAM) for the seL4 NetServer.
    Nvme_BAR0   : Word := 0;
 
