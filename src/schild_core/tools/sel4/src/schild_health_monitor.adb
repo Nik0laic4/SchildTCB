@@ -27,4 +27,30 @@ package body Schild_Health_Monitor is
       end loop;
    end Update_Health;
 
+   procedure Record_Heartbeat
+     (Last_Seen : in out Word_Array_4;
+      D         : Positive;
+      Now       : Unsigned_64)
+   is
+   begin
+      Last_Seen (D) := Now;
+   end Record_Heartbeat;
+
+   procedure Set_Grace
+     (Grace_Until : in out Word_Array_4;
+      D           : Positive;
+      Deadline    : Unsigned_64)
+   is
+   begin
+      Grace_Until (D) := Deadline;
+   end Set_Grace;
+
+   procedure Mark_Unhealthy
+     (Health_Ok : in out Bool_Array_4;
+      D         : Positive)
+   is
+   begin
+      Health_Ok (D) := False;
+   end Mark_Unhealthy;
+
 end Schild_Health_Monitor;

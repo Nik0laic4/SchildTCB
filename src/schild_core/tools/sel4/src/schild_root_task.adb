@@ -385,8 +385,8 @@ begin
    begin
       if R = 0 then
          Put_Str ("[S7.7] MLS Server: OK" & ASCII.CR & ASCII.LF);
-         Last_Seen (2) := RDTSC;  -- C9 grace period
-         Grace_Until (2) := RDTSC + Grace_Ms (2) * Schild_Sel4_Syscall.Get_Cycles_Per_Us;
+         Record_Heartbeat (Last_Seen, 2, RDTSC);  -- C9 grace period
+         Set_Grace (Grace_Until, 2, RDTSC + Grace_Ms (2) * Schild_Sel4_Syscall.Get_Cycles_Per_Us);
       else
          Put_Str ("[S7.7] MLS Server: FAILED (code=");
          Put_Dec (R);
@@ -440,8 +440,8 @@ begin
          begin
             if LR = 0 then
                Put_Str ("[S8.1D] NetServer: OK" & ASCII.CR & ASCII.LF);
-               Last_Seen (1) := RDTSC;  -- C9 grace period
-               Grace_Until (1) := RDTSC + Grace_Ms (1) * Schild_Sel4_Syscall.Get_Cycles_Per_Us;
+               Record_Heartbeat (Last_Seen, 1, RDTSC);  -- C9 grace period
+               Set_Grace (Grace_Until, 1, RDTSC + Grace_Ms (1) * Schild_Sel4_Syscall.Get_Cycles_Per_Us);
             else
                Put_Str ("[S8.1D] NetServer: FAILED (code=");
                Put_Dec (LR);
@@ -494,8 +494,8 @@ begin
    begin
       if CD_R = 0 then
          Put_Str ("[R3] Config Daemon: OK" & ASCII.CR & ASCII.LF);
-         Last_Seen (3) := RDTSC;  -- C9 grace period
-         Grace_Until (3) := RDTSC + Grace_Ms (3) * Schild_Sel4_Syscall.Get_Cycles_Per_Us;
+         Record_Heartbeat (Last_Seen, 3, RDTSC);  -- C9 grace period
+         Set_Grace (Grace_Until, 3, RDTSC + Grace_Ms (3) * Schild_Sel4_Syscall.Get_Cycles_Per_Us);
       else
          Put_Str ("[R3] Config Daemon: FAILED (code=");
          Put_Dec (CD_R);
@@ -509,8 +509,8 @@ begin
    begin
       if FS_R = 0 then
          Put_Str ("[FS] daemon: OK" & ASCII.CR & ASCII.LF);
-         Last_Seen (4) := RDTSC;  -- C9 grace period
-         Grace_Until (4) := RDTSC + Grace_Ms (4) * Schild_Sel4_Syscall.Get_Cycles_Per_Us;
+         Record_Heartbeat (Last_Seen, 4, RDTSC);  -- C9 grace period
+         Set_Grace (Grace_Until, 4, RDTSC + Grace_Ms (4) * Schild_Sel4_Syscall.Get_Cycles_Per_Us);
       else
          Put_Str ("[FS] daemon: FAILED (code=");
          Put_Dec (FS_R);
@@ -785,10 +785,10 @@ begin
          C : Word := Schild_Sel4_Syscall.NBWait (Schild_Sel4_Syscall.Config_Ping_Ntfn_Slot);
          F : Word := Schild_Sel4_Syscall.NBWait (Schild_Sel4_Syscall.FS_Ping_Ntfn_Slot);
       begin
-         if N > 0 then Last_Seen (1) := RDTSC; end if;
-         if M > 0 then Last_Seen (2) := RDTSC; end if;
-         if C > 0 then Last_Seen (3) := RDTSC; end if;
-         if F > 0 then Last_Seen (4) := RDTSC; end if;
+         if N > 0 then Record_Heartbeat (Last_Seen, 1, RDTSC); end if;
+         if M > 0 then Record_Heartbeat (Last_Seen, 2, RDTSC); end if;
+         if C > 0 then Record_Heartbeat (Last_Seen, 3, RDTSC); end if;
+         if F > 0 then Record_Heartbeat (Last_Seen, 4, RDTSC); end if;
       end;
 
       -- H90-A: poll the shared timeout-fault endpoint.  A daemon's sporadic
@@ -806,7 +806,7 @@ begin
                Put_Dec (Badge);
                Put_Str (ASCII.CR & ASCII.LF);
                if Badge >= 1 and then Badge <= 4 then
-                  Health_Ok (Natural (Badge)) := False;
+                  Mark_Unhealthy (Health_Ok, Natural (Badge));
                   Schild_Sel4_Syscall.Health_Monitor
                     (Schild_Sel4_Syscall.HM_Domain'Val (Natural (Badge) - 1));
                end if;
@@ -844,7 +844,7 @@ begin
                     (Schild_Sel4_Syscall.Root_MLS_EP_Badged_Slot, 2, 4);
                begin
                   if Schild_Sel4_Syscall.Read_IPC_MR0 /= 1 then
-                     Health_Ok (2) := False;
+                     Mark_Unhealthy (Health_Ok, 2);
                   end if;
                end;
             end if;
