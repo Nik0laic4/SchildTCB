@@ -41,10 +41,16 @@ C4 (syscall seam) — главный residual Tier A: 1475 строк SPARK_Off 
 
 1. `schild_sel4_recv`/`replyrecv`/`call` (asm) — ассемблерный харнес или
    `#ifdef HOST_TEST`-обёртка, где `syscall` → возврат 0.
-2. libFuzzer/AFL вместо xorshift (структурное покрытие + corpus).
+2. ~~libFuzzer/AFL вместо xorshift (структурное покрытие + corpus).~~ ✅
+   сделано (2026-11-22): `shared_frame_libfuzzer.c`, `seam_libfuzzer.c`,
+   `fs_dispatch_libfuzzer.c`, `mls_dispatch_libfuzzer.c` — те же no-drift
+   oracle'ы, но через `LLVMFuzzerTestOneInput` (coverage-guided). Сборка/прогон:
+   `./fuzz_libfuzzer.sh all` (clang `-fsanitize=fuzzer,address,undefined`,
+   60 с каждый). Результат 60-с прогона: 1.5M/16.9M/19.9M/24.8M runs, 0 crash
+   (shared/seam/fs/mls соответственно).
 3. ~~Даемонные dispatch (C) — fuzz `schild_recv_mr[0..3]` + shared-frame копии.~~
    ✅ сделано: fs/mls dispatch (`fs_dispatch_fuzz`, `mls_dispatch_fuzz`) + shared-frame
-   копии (`shared_frame_fuzz`). Осталось: libFuzzer/AFL (нужен clang — не установлен).
+   копии (`shared_frame_fuzz`) + libFuzzer-версии (п. 2).
 
 ## Честная формулировка для ASSURANCE
 
