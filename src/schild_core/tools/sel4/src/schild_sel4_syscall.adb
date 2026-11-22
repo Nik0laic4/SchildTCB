@@ -1219,9 +1219,8 @@ is
       MMIO_VAddr   : constant Word := 16#600000#;
       IPC_VAddr    : constant Word := 16#510000#;
       Frame_Base   : constant Cap_Ref := MMIO_Frame_Base;
-      Fan_Out      : constant Word := 256;
       RAM_UT, Dev_UT : Cap_Ref := 0;
-      UT_PAddr, UT_Size_Bits, Offset_Frames, Total_Frames, Created : Word := 0;
+      UT_PAddr, UT_Size_Bits, Offset_Frames, Total_Frames : Word := 0;
       Slot_Cur     : Cap_Ref := Frame_Base;
       Frame        : Cap_Ref;
       VAddr        : Word;
@@ -1349,18 +1348,34 @@ is
       end if;
       Offset_Frames := (Net_BAR0 - UT_PAddr) / 16#1000#;
       Total_Frames  := Offset_Frames + Word (Net_Pages);
-      while Created < Total_Frames loop
-         declare
-            Chunk : constant Word := Word'Min (Fan_Out, Total_Frames - Created);
-         begin
-            R := Retype_Object (Dev_UT, Object_Frame, 12, CNode_Slot, 0, Slot_Cur, Chunk);
-            if R /= 0 then Put_String ("[S8.2] MMIO retype FAIL"); Put_Hex (R); Put_String (ASCII.CR & ASCII.LF); return 2; end if;
-            Created  := Created + Chunk;
-            Slot_Cur := Slot_Cur + Chunk;
-         end;
-      end loop;
+
+      --  Consume the frames before BAR0 as don't-care 2MiB large pages (one
+      --  slot per 512 pages) + a 4K remainder, so the slot window stays small.
+      --  T580: BAR0 sits ~12MB into the device-untyped, so retyping the whole
+      --  offset as 4K frames blew the slot window past #7612 into the
+      --  FS/Bootstrap range.
+      declare
+         Big_Frames   : constant Word := Offset_Frames / 512;
+         Small_Frames : constant Word := Offset_Frames mod 512;
+      begin
+         if Big_Frames > 0 then
+            R := Retype_Object (Dev_UT, Object_LargePage, 21, CNode_Slot, 0, Slot_Cur, Big_Frames);
+            if R /= 0 then Put_String ("[S8.2] MMIO offset retype FAIL"); Put_Hex (R); Put_String (ASCII.CR & ASCII.LF); return 2; end if;
+            Slot_Cur := Slot_Cur + Big_Frames;
+         end if;
+         if Small_Frames > 0 then
+            R := Retype_Object (Dev_UT, Object_Frame, 12, CNode_Slot, 0, Slot_Cur, Small_Frames);
+            if R /= 0 then Put_String ("[S8.2] MMIO offset retype FAIL"); Put_Hex (R); Put_String (ASCII.CR & ASCII.LF); return 2; end if;
+            Slot_Cur := Slot_Cur + Small_Frames;
+         end if;
+      end;
+
+      --  Retype just the Net_Pages BAR frames into the MMIO slot window.
+      R := Retype_Object (Dev_UT, Object_Frame, 12, CNode_Slot, 0, Slot_Cur, Word (Net_Pages));
+      if R /= 0 then Put_String ("[S8.2] MMIO retype FAIL"); Put_Hex (R); Put_String (ASCII.CR & ASCII.LF); return 2; end if;
+
       for J in 0 .. Net_Pages - 1 loop
-         R := Page_Map (Frame_Base + Offset_Frames + Word (J), PML4_Slot,
+         R := Page_Map (Slot_Cur + Word (J), PML4_Slot,
                         MMIO_VAddr + Word (J) * 16#1000#);
          if R /= 0 then Put_String ("[S8.2] MMIO map FAIL"); Put_Hex (R); Put_String (ASCII.CR & ASCII.LF); return 2; end if;
       end loop;
@@ -1370,7 +1385,7 @@ is
       Nic_UT_PAddr     := UT_PAddr;
       Nic_UT_Bits      := UT_Size_Bits;
       Nic_UT_Rem_Start := UT_PAddr + Total_Frames * 16#1000#;
-      Next_Free_Slot   := Slot_Cur;
+      Next_Free_Slot   := Slot_Cur + Word (Net_Pages);
 
       -- H86: the NVMe BAR0 is no longer mapped into the NetServer VSpace.
       -- Launch_FS_Daemon -> Map_Nvme_Into_FS maps it into the FS daemon and
