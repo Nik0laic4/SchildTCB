@@ -37,14 +37,14 @@ if [ "$((IN_PROOF + SCAFFOLD))" -ne "$SWEPT" ]; then
   exit 1
 fi
 
-# README must state the canonical "swept / in proof" figures.
+# The generated metrics block must state the canonical "swept / in proof".
 README="$ROOT_DIR/../../README.md"
-if ! grep -q "$SWEPT kernel modules swept" "$README"; then
-  echo "ERROR: README.md does not state \"$SWEPT kernel modules swept\"." >&2
+if ! grep -q "\*\*$SWEPT swept\*\*" "$README"; then
+  echo "ERROR: README.md metrics block does not state \"$SWEPT swept\" (run scripts/generate_metrics.py)." >&2
   exit 1
 fi
-if ! grep -q "$IN_PROOF in proof\|$IN_PROOF proved\|$IN_PROOF-module" "$README"; then
-  echo "ERROR: README.md does not state the in-proof count $IN_PROOF." >&2
+if ! grep -q "\*\*$IN_PROOF in proof\*\*" "$README"; then
+  echo "ERROR: README.md metrics block does not state \"$IN_PROOF in proof\" (run scripts/generate_metrics.py)." >&2
   exit 1
 fi
 
