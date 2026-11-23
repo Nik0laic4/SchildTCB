@@ -1,27 +1,33 @@
 # Schild TCB: A Reference Architecture for Formally Verified Services on seL4
 
-> Draft compiled from existing docs (`THREAT_MODEL.md`, `ARCHITECTURE.md`,
-> `GUIDE.md`, `ASSURANCE.md`). Screenshots are placeholders to be inserted by
-> the author; the SPARK numbers are generated from `obj/proof/metrics.json`
-> (see the metrics block in Results).
+**Alexander Irganov** · Independent researcher, Russia
+
+**v1.0 — 2026-11-23** (replaces the 2026-11-01 draft, commit `fd97c120`)
+
+> Updated from the first draft. The SPARK numbers are generated from
+> `obj/proof/metrics.json` (see the block in Results); a companion community
+> textbook (15 case studies, RU+EN) and the Zenodo archive are cited.
 >
-> Concept DOI (all versions): [10.5281/zenodo.24446686](https://doi.org/10.5281/zenodo.24446686) · This release (v1.0.0-textbook): [10.5281/zenodo.24446687](https://doi.org/10.5281/zenodo.24446687)
+> Concept DOI (all versions): [10.5281/zenodo.24446686](https://doi.org/10.5281/zenodo.24446686) ·
+> This release (v1.0.0-textbook): [10.5281/zenodo.24446687](https://doi.org/10.5281/zenodo.24446687)
 
 ## Abstract
 
 Schild TCB is a research prototype of a Trusted Computing Base that pairs the
 formally verified seL4 microkernel [Klein2009] with an Ada/SPARK 2022 user-space
-environment.
-The security-critical core — an MLS Bell-LaPadula policy, a capability model, a
-process table, and firewall verdicts — is proved at SPARK Level 4 with zero
-unproved verification conditions (the canonical module counts are generated
-from `obj/proof/metrics.json`; see the metrics block in Results). Untrusted
-periphery (network driver and storage) runs isolated in Ring 3, so a fault or compromise
-there cannot reach the proved core. The system boots on a ThinkPad T580 and in
-QEMU, with an ARM64 (Raspberry Pi 4B) port in progress. This paper describes the
-architecture, the threat model, and the contract-driven verification approach,
-and states the honest limits of the current prototype (no DMA isolation, weaker
-x86_64 MCS verification).
+environment. The security-critical core — an MLS Bell-LaPadula policy, a
+capability model, a process table, and firewall verdicts — is proved at SPARK
+Level 4 with zero unproved verification conditions (**133 modules proved, 0
+unproved VCs**; see the metrics block in Results).
+Untrusted periphery (network driver and storage) runs isolated in Ring 3, so a
+fault or compromise there cannot reach the proved core.
+
+The system boots on a ThinkPad T580 (32 GB) and in QEMU, with an ARM64
+(Raspberry Pi 4B) port in progress. A companion community textbook (15 case
+studies, RU+EN) untangles the engineering changelog through the code. This
+paper describes the architecture, the threat model, and the contract-driven
+verification approach, and states the honest limits of the current prototype
+(no DMA isolation, weaker x86_64 MCS verification).
 
 ## Introduction
 
@@ -40,6 +46,10 @@ kernel-enforced isolation (THREAT_MODEL §3.2). Schild TCB is an experiment in
 building exactly that: a proved core plus contained periphery.
 
 The code and proofs are open: <https://github.com/Nik0laic4/SchildTCB>.
+A companion "community textbook" — fifteen case studies that untangle the
+engineering changelog through the code, from a vacuous contract to the dead
+gate — is published alongside the repository (RU+EN) and archived on Zenodo
+(concept DOI 10.5281/zenodo.24446686; version 10.5281/zenodo.24446687).
 
 ## Architecture
 
@@ -50,18 +60,13 @@ Two artifacts, separated by the syscall ABI:
 - **Root task** (Ring 3) — Ada/SPARK 2022, ~239 KB with NetServer. Orchestrates
   daemons and the two-level ARINC-653 schedule [ARINC653, Rushby1999].
 
-```
-Ring 3 ── Root Task (Ada/SPARK)
-             ├ Config Daemon · A/B Boot Manager · MLS Policy · Audit Logger  (SPARK L4)
-             ├ MLS Server (Bell-LaPadula IPC filter)
-             └ NetServer (e1000e + TCP/IP, MMIO + DMA)   ← isolated, contained
-──────────────── syscall ABI ────────────────
-Ring 0 ── seL4 microkernel (GPL-2.0-only)
-```
+*(The block diagram is Figure 1.)*
 
 Isolation is three-fold: **CSpace** (own CNode), **VSpace** (own ASID-bound page
 table), and **IRQ/DMA** (dedicated notifications + DMA frame). A fault in
-NetServer is caught by the fault handler and contained without rebooting.
+NetServer is caught by the fault handler and contained without rebooting. Each
+daemon runs as a separately loaded ELF with its own CSpace and VSpace, so a
+compromise of one daemon cannot mint capabilities into another's slot map.
 
 Trust is split by tier (ASSURANCE.md): **Tier A** (proved core: MLS, capability
 model, process table, firewall verdicts), **Tier B** (contained periphery:
@@ -95,13 +100,25 @@ Representative proved properties: CBC chaining (`schild_aes_cbc_engine`),
 maximum-priority scheduling + ARINC-653 MTF (`schild_scheduler`, `schild_mtf`),
 Bell-LaPadula no-read-up/no-write-down (`schild_server_security_policy`,
 `schild_file_descriptors`), and memory-safe network parsers
-(`schild_arp/ipv4/icmp/udp/tcp_handler`). Techniques and gotchas are collected
-in `SPARK_PROOF_TECHNIQUES.md`; a build→run→verify tutorial is `GUIDE.md`.
+(`schild_arp/ipv4/icmp/udp/tcp_handler`). Two cryptographic bodies
+(`schild_aes_ni_core`, the extracted `schild_sha256_compress`) are proved with no
+out-of-bounds access; the MLS storage layer gained per-file levels and an
+operation-aware gate (`Authorize_File_Op`) covering all seven filesystem
+operations. Techniques and gotchas are collected in
+`SPARK_PROOF_TECHNIQUES.md`; a build→run→verify tutorial is `GUIDE.md`.
+
+The quantitative claim is a **single machine-generated taxonomy**, not a hand-
+edited figure: a deterministic classifier (`classify_gnatprove.py`) sorts every
+module into `PROVED` / `SKIPPED` (body `SPARK_Mode => Off`) / `NO-OUTPUT` /
+`NOT-PROVED` / `scaffold`, and `prove_kernel.sh` writes the result to
+`obj/proof/metrics.json`; the numbers below are regenerated into every public
+artifact with an explicit commit marker, so the README, the textbook, and this
+paper cannot drift apart.
 
 ## Results
 
 <!-- METRICS:START (generated by scripts/generate_metrics.py — do not edit) -->
-**SPARK metrics** (commit `b874871`, 2026-11-23): **189 swept** · **179 in proof** (133 proved · 44 skipped · 2 no-output) · **10 scaffold excluded** · **0 unproved VCs**.
+**SPARK metrics** (commit `9e70389`, 2026-11-23): **189 swept** · **179 in proof** (133 proved · 44 skipped · 2 no-output) · **10 scaffold excluded** · **0 unproved VCs**.
 
 Accounting: `swept` = all modules; `in_proof` = `swept` − `scaffold_excluded`; `proved + skipped + no_output + not_proved` = `in_proof`. Source: `obj/proof/metrics.json`.
 <!-- METRICS:END -->
@@ -109,18 +126,18 @@ Accounting: `swept` = all modules; `in_proof` = `swept` − `scaffold_excluded`;
 - 8 root-task daemons proved (`verify.sh`); full private bodies (`verify_private.sh`).
 - Build: **184 objects, 0 errors**; boots on a **ThinkPad T580 (32 GB)** and QEMU.
 
-> `[SCREENSHOT: gnatprove summary — 0 unproved VCs]`
-
-The fault-containment and temporal-isolation markers are shown in
-Listing~\ref{lst:containment}.
+The fault-containment and temporal-isolation markers are shown in the listing
+below (Figure 2).
 
 ## Limitations & Future Work
 
+- **Locally patched seL4** — the kernel patches (SMAP, object zeroing, the framebuffer trio, bootinfo-8k, max-num-drhu, load-image, log-ringbuffer) are self-reviewed, not re-proven. Only object-zeroing touches code inside the refinement proof; the rest lie in upstream's documented unverified scope (boot code, cache maintenance). See `SEL4_PATCHES_ANALYSIS.md`.
+- **Ring-0 C code** — `runtime_stubs.c`, `interrupt_handlers.c`, `hw_io.c`, `boot.S` are trusted, not contained: memory-unsafe, and containment does not apply (THREAT_MODEL §12.5).
 - **No DMA isolation** — IOMMU/VT-d is upstream-experimental; the Pi 4 has no SMMU. Isolation is process-level, not bus-level (P3 remains a residual risk).
 - **x86_64 MCS** is formally verified weaker than ARM MCS (upstream).
 - **Unproven C code** (C shims, drivers) — memory-unsafe, backed only by containment.
 - **No signed boot / HWRoT** — SHA-256 detects corruption, not malice.
-- **PID reuse** (CVE-2026-SCHILD-02 #005) — noted, not mitigated.
+- **Identity management** — PID reuse was mitigated via monotonic generation (v0.36), but true capability-based process identity remains a long-term architectural goal.
 
 Next: a pilot use case ("protected network gateway with MLS", `USE_CASE.md`),
 the ARM64/GENET port when hardware is available, and per-property contract
@@ -137,123 +154,64 @@ isolation, signed boot) stated honestly rather than hidden.
 
 ## References
 
-> In-text keys (`[Klein2009]`, `[AdaCoreSPARK]`, …) map 1:1 to the BibTeX entries
-> below; copy them into the LaTeX `\bibliography`. The repository link is stated
+> The in-text keys map 1:1 to the entries below; the repository link is stated
 > in the Introduction.
 
-```bibtex
-% seL4 formal verification (Klein et al., 2009)
-@inproceedings{Klein2009,
-  author    = {Klein, Gerwin and Elphinstone, Kevin and Heiser, Gernot and
-               Andronick, June and Cock, David and Derrin, Philip and
-               Elkaduwe, Dhammika and Engelhardt, Kai and Kolanski, Rafal and
-               Norrish, Michael and Sewell, Thomas and Tuch, Harvey and
-               Winwood, Simon},
-  title     = {{seL4: Formal Verification of an OS Kernel}},
-  booktitle = {Proceedings of the 22nd ACM Symposium on Operating Systems
-               Principles (SOSP '09)},
-  pages     = {207--220},
-  year      = {2009},
-  publisher = {ACM},
-  address   = {Big Sky, Montana, USA},
-  doi       = {10.1145/1629575.1629596}
-}
+**[Klein2009]** G. Klein et al. "seL4: Formal Verification of an OS Kernel." SOSP '09, ACM, 2009. doi:10.1145/1629575.1629596.
 
-% SPARK 2014 / GNATprove Level 4 (AdaCore official guide)
-@manual{AdaCoreSPARK,
-  author       = {{AdaCore}},
-  title        = {{SPARK 2014 User's Guide}},
-  organization = {AdaCore},
-  year         = {2024},
-  url          = {https://docs.adacore.com/spark2014-docs/html/ug/},
-  note         = {Accessed 2026-11-01}
-}
+**[AdaCoreSPARK]** AdaCore. "SPARK 2014 User's Guide." 2024. <https://docs.adacore.com/spark2014-docs/html/ug/>.
 
-% AI-discovered Linux kernel vulnerability (use-after-free in TCP SYN handling).
-@misc{CVE202698432,
-  title        = {{CVE-2026-98432}: Linux kernel use-after-free via race in
-                   IPv4 TCP SYN/SYN-ACK handling (remote code execution with
-                   root privileges when an MPTCP listener is present)},
-  howpublished = {\url{https://nvd.nist.gov/vuln/detail/CVE-2026-98432}},
-  year         = {2026},
-  note         = {Also recorded at
-                   \url{https://www.cve.org/CVERecord?id=CVE-2026-98432};
-                   present since kernel 4.4}
-}
+**[CVE202698432]** "CVE-2026-98432: Linux kernel use-after-free via race in IPv4 TCP SYN/SYN-ACK handling." NVD, 2026. <https://nvd.nist.gov/vuln/detail/CVE-2026-98432>.
 
-% Anthropic — primary source for the AI-assisted discovery of CVE-2026-98432.
-@misc{Anthropic2026Claude,
-  author       = {{Anthropic}},
-  title        = {{Discovering Vulnerabilities with Claude}},
-  howpublished = {\url{https://www.anthropic.com/research/discovering-vulnerabilities-with-claude}},
-  year         = {2026},
-  note         = {Primary source for the AI-assisted discovery of CVE-2026-98432}
-}
+**[Anthropic2026Claude]** Anthropic. "Discovering Vulnerabilities with Claude." 2026. <https://www.anthropic.com/research/discovering-vulnerabilities-with-claude>.
 
-% ARINC 653 standard (partitioned / two-level scheduling)
-@techreport{ARINC653,
-  author      = {{Airlines Electronic Engineering Committee (AEEC)}},
-  title       = {{ARINC Specification 653: Avionics Application Software
-                  Standard Interface}},
-  institution = {Aeronautical Radio, Inc.},
-  year        = {2003}
-}
+**[ARINC653]** ARINC Specification 653: Avionics Application Software Standard Interface. Aeronautical Radio, Inc., 2003.
 
-% Partitioning in avionics — rationale for the ARINC-653 scheduler model
-@techreport{Rushby1999,
-  author      = {Rushby, John},
-  title       = {{Partitioning in Avionics Architectures: Requirements,
-                  Mechanisms, and Assurance}},
-  institution = {SRI International},
-  year        = {1999},
-  note        = {NASA Contractor Report CR-1999-209347}
-}
-```
+**[Rushby1999]** J. Rushby. "Partitioning in Avionics Architectures." SRI International, 1999. NASA CR-1999-209347.
 
-## Figures & Tables (for LaTeX)
+**[SchildTextbook]** A. Irganov. "Schild TCB: A Field Guide to Walking a Minefield." 2026. doi:10.5281/zenodo.24446687 (concept 10.5281/zenodo.24446686).
+
+**[SchildTCB]** A. Irganov. "Schild TCB — a TCB research prototype on seL4 (Ada/SPARK)." 2026. doi:10.5281/zenodo.24446687.
+
+**[OpenSSF]** OpenSSF Best Practices Badge — Schild TCB. <https://www.bestpractices.dev/projects/16898>.
+
+## Figures & Tables
 
 ### Figure 1 — Architecture (block diagram)
 
-Mermaid source — paste into <https://mermaid.live>, or draw.io → Arrange → Insert
-→ Advanced → Mermaid (draw.io imports Mermaid directly):
+\begin{figure}[ht]
+\centering
+\begin{tikzpicture}[
+    font=\small,
+    box/.style={draw, rounded corners, align=center, inner sep=6pt, minimum width=4.0cm}
+]
+\node [box] (rt) at (0,2.4) {Root Task\\(Ada/SPARK 2022)};
+\node [box] (d) at (-4.4,0.5) {Daemons\\Config · Boot\\MLS Policy · Audit};
+\node [box] (ms) at (0,0.5) {MLS Server\\(Bell-LaPadula\\IPC filter)};
+\node [box, draw=red] (ns) at (4.4,0.5) {NetServer\\e1000e + TCP/IP\\isolated · contained};
+\node [box, fill=blue!8] (k0) at (0,-1.3) {seL4 microkernel\\(Ring 0, GPL-2.0-only)};
+\draw [->] (rt) -- (d);
+\draw [->] (rt) -- (ms);
+\draw [->] (rt) -- (ns);
+\draw [->] (d) -- (k0);
+\draw [->] (ms) -- (k0);
+\draw [->] (ns) -- (k0);
+\node at (0,-0.35) [font=\small\bfseries] {syscall ABI};
+\end{tikzpicture}
+\caption{Architecture: Ring 3 (Root Task + four daemons, MLS Server, NetServer) over the syscall ABI to the Ring 0 seL4 microkernel. NetServer is isolated and contained.}
+\label{fig:arch}
+\end{figure}
 
-```mermaid
-flowchart TB
-    subgraph R3["<b>Ring 3</b> — user space (Ada/SPARK)"]
-        direction TB
-        RT["<b>Root Task</b> (schild_root_task.adb)"]
-        subgraph D["Daemons — SPARK Level 4"]
-            CD["Config Daemon"]
-            BM["A/B Boot Manager"]
-            MP["MLS Policy"]
-            AL["Audit Logger"]
-        end
-        MS["MLS Server<br/>(Bell-LaPadula IPC filter)"]
-        NS["NetServer<br/>(e1000e + TCP/IP, MMIO + DMA)<br/><i>isolated · contained</i>"]
-        RT --> D
-        RT --> MS
-        RT --> NS
-    end
-    R3 -- "syscall ABI" --> K0
-    K0["<b>seL4 microkernel</b><br/>(Ring 0, GPL-2.0-only)"]
-    style NS fill:#ffe6e6,stroke:#c00
-    style K0 fill:#e6f0ff,stroke:#06c
-```
+*(Draw.io/Excalidraw spec for the diagram: two horizontal bands — top «Ring 3 (user space)», bottom «Ring 0». Top band: one «Root Task» box with three children (a group of 4 daemons, the MLS Server, the NetServer) connected by arrows. NetServer tinted red («isolated · contained»); a dashed line labelled «syscall ABI» separates the bands; seL4 box tinted blue.)*
 
-Layout spec for draw.io/Excalidraw (manual redraw): two horizontal bands —
-top «Ring 3 (user space)», bottom «Ring 0». Top band: one «Root Task» box with
-three children (a group of 4 daemons, the MLS Server, the NetServer) connected
-by arrows. NetServer tinted red («isolated · contained»); a dashed line labelled
-«syscall ABI» separates the bands; seL4 box tinted blue.
+### Table 1 — Verification results
 
-### Table 1 — Verification results (LaTeX, booktabs)
-
-```latex
 \begin{table}[ht]
 \centering
+\footnotesize
 \caption{Representative proved properties and the mechanical check that discharges them.}
 \label{tab:verification}
-\begin{tabular}{@{}llll@{}}
+\begin{tabular}{@{}lp{6.6cm}ll@{}}
 \toprule
 \textbf{Module} & \textbf{Proved property} & \textbf{Verification} & \textbf{Status} \\
 \midrule
@@ -270,11 +228,9 @@ e1000e / NVMe / network stack & drivers — not proven (no hardware spec) & run\
 \bottomrule
 \end{tabular}
 \end{table}
-```
 
-### Figure 2 — Containment markers (listing)
+### Figure 2 — Containment markers
 
-```latex
 \begin{lstlisting}[language=bash, caption={Runtime validation of fault containment and temporal isolation on QEMU.}, label={lst:containment}]
 PASS  [CONTAINMENT] injecting fault into NetServer
 PASS  [FAULT] Caught fault
@@ -284,5 +240,3 @@ PASS  [CONTAINMENT] MLS server contained
 PASS  [TIMEOUT] Caught budget overrun
 PASS  ==== Root Task ready ====
 \end{lstlisting}
-```
-
