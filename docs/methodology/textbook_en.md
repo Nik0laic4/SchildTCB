@@ -12,6 +12,8 @@
 | **Prepared by** | Alexander Irganov (project author) |
 | **Stack** | Ada/SPARK + seL4 + QEMU + real laptops |
 | **Date** | November 21, 2026 |
+| **Concept DOI (all versions)** | [10.5281/zenodo.24446686](https://doi.org/10.5281/zenodo.24446686) |
+| **This release DOI (v1.0.0-textbook)** | [10.5281/zenodo.24446687](https://doi.org/10.5281/zenodo.24446687) |
 
 ---
 
