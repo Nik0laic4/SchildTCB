@@ -32,6 +32,7 @@ ARTIFACTS = {
     "docs/methodology/textbook_ru.md": "ru",
     "docs/technical/ASSURANCE.md": "en",
     "docs/technical/ASSURANCE.ru.md": "ru",
+    "docs/ARTICLE.md": "en",
 }
 
 _EN = {

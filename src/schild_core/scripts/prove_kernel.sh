@@ -119,5 +119,12 @@ if [ "$NOTPROVED" -ne 0 ]; then
   exit 1
 fi
 
+# Regenerate the canonical numbers into every public artifact (README, textbook,
+# ASSURANCE, ARTICLE) so the published figures never drift from this run. A
+# failure here is a warning, not a proof failure.
+python3 "$ROOT_DIR/scripts/generate_metrics.py" || {
+  echo "WARNING: generate_metrics.py failed — artifacts not refreshed." >&2
+}
+
 echo "Report: $OUT"
 echo "Metrics: obj/proof/metrics.json"

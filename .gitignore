@@ -27,7 +27,6 @@ __pycache__/
 # (No other private/ overlay exists; there is no distributed-ledger tree here.)
 
 # Publication drafts (kept locally until ready for the repo)
-docs/ARTICLE.md
 
 # Agent working docs (session handoff, rules, audit registry) — kept local, not for master
 START/
