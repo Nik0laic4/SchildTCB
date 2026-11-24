@@ -13,23 +13,8 @@ UNTYPED_CAPS can grow to 500.
    so it keeps its size alignment; relax the compile_assert to >= PageBits;
    map each page in create_bi_frame_cap (first cap -> seL4_CapBootInfoFrame,
    the rest via provide_cap).
-
-diff --git a/libsel4/include/sel4/bootinfo_types.h b/libsel4/include/sel4/bootinfo_types.h
-index 66c97aa..33ae8ac 100644
---- a/libsel4/include/sel4/bootinfo_types.h
-+++ b/libsel4/include/sel4/bootinfo_types.h
-@@ -81,7 +81,7 @@ typedef struct seL4_BootInfo {
-  * structure. Due to internal restrictions, the size must be of the form 2^n and
-  * the minimum is one page.
-  */
--#define seL4_BootInfoFrameBits  seL4_PageBits
-+#define seL4_BootInfoFrameBits  (seL4_PageBits + 1)
- #define seL4_BootInfoFrameSize  LIBSEL4_BIT(seL4_BootInfoFrameBits)
- 
- SEL4_COMPILE_ASSERT(
-
 diff --git a/src/kernel/boot.c b/src/kernel/boot.c
-index 412e1b1..bbf53e0 100644
+index 412e1b1..69e0fa6 100644
 --- a/src/kernel/boot.c
 +++ b/src/kernel/boot.c
 @@ -212,12 +212,21 @@ BOOT_CODE static void create_rootserver_objects(pptr_t start, v_region_t it_v_re
@@ -86,9 +71,9 @@ index 412e1b1..bbf53e0 100644
 +    word_t n_pages = BIT(seL4_BootInfoFrameBits) / BIT(seL4_PageBits);
 +    for (word_t i = 0; i < n_pages; i++) {
 +        cap_t cap = create_mapped_it_frame_cap(pd_cap,
-+                                                rootserver.boot_info + i * BIT(seL4_PageBits),
-+                                                vptr + i * BIT(seL4_PageBits),
-+                                                IT_ASID, false, false);
++                                               rootserver.boot_info + i * BIT(seL4_PageBits),
++                                               vptr + i * BIT(seL4_PageBits),
++                                               IT_ASID, false, false);
 +        if (i == 0) {
 +            /* create a cap of it and write it into the root CNode */
 +            write_slot(SLOT_PTR(pptr_of_cap(root_cnode_cap), seL4_CapBootInfoFrame), cap);
