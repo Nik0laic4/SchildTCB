@@ -89,6 +89,13 @@ Accounting: `swept` = all modules; `in_proof` = `swept` − `scaffold_excluded`;
 
 > **The 2 no-output units.** `schild_kernel_entry` (the bare-metal entry point, exported to C via `pragma Export`, with inline asm and external calls) and `schild_main` (the top-level main program) are top-level procedures, not package proof units, so gnatprove emits no verdict block for them. Their bodies are exercised by the boot/containment tests rather than SPARK proof.
 
+> **Vacuity witnesses.** The critical Posts have executable witnesses, not just
+> a discharged prover goal: the audit chain `Is_Chain_Valid` (two-level KAT in
+> `tools/sel4/tests/run_two_level_kat.sh`), the crypto KATs (AES-128 in
+> `run_aes_kat.sh`, SHA-256 compress, HMAC-SHA256). The tautology audit — no
+> `Post => A or not A` — is clean, and `Post => True` is a pre-commit gate
+> (`forbidden_check.sh`).
+
 > **Note (approximate count).** The `130 proved / 56 skipped` split (2026-11-01)
 > is approximate: gnatprove's parallel prover (`-j8`) flips a few modules (e.g.
 > `schild_execution_fabric`, `schild_sentinel`) between `PROVED` and
