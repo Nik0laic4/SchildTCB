@@ -228,3 +228,18 @@ kernel (не модуль) и/или сократить `MaxNumBootinfoUntypedCa
 - `github.com/seL4/seL4/pull/721` — `CONFIG_MAX_NUM_BOOTINFO_UNTYPED_CAPS`.
 - `github.com/seL4/seL4/commit/03c71b6` — preemptible zeroing for retype.
 - `github.com/seL4/seL4/commit/41a13993` — remove `memzero` from `createObject` for SC/Reply.
+
+---
+
+## Upstream plan (2026-11-24, «Неделя 0»)
+
+Rebase на seL4 **17.0.0** (вышел 30.10.2026): все **9/9 патчей** ложатся чисто
+(`git apply --check`; `max-num-drhu` перегенерирован — был бит hunk-счётчик).
+Bootinfo-тест: в 4 КиБ (`seL4_BootInfoFrameSize`) влезает максимум **244** untyped-капа
+(`sizeof(seL4_BootInfo) = 184 + 16N`), поэтому `KernelMaxNumBootinfoUntypedCaps=500`
+требует рамки 8 КиБ — `seL4-bootinfo-8k-untyped.patch` **необходим**.
+
+План подачи (см. `START/AS8_UPSTREAM_PLAYBOOK.md`):
+- **Tier 1:** `smap` → `load-image-above-kernel` → `max-num-drhu` → `bootinfo-8k-untyped`.
+- **Tier 2:** `framebuffer` (тег MB2) → `framebuffer-wc` → `framebuffer-console`.
+- **Не подавать:** `object-zeroing` (proof-gate, локально).

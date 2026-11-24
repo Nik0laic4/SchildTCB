@@ -354,7 +354,7 @@ bash scripts/prove_kernel.sh                                # full SPARK sweep �
 | Risk | Attack scenario | Mitigation (today) | Blocking dependency |
 |---|---|---|---|
 | **C4** syscall seam (1475 lines SPARK_Off + C shims) | bug in the seam breaks Tier-A isolation (the trust root) | code review; seam is the trust root of every Tier-A claim | **C4 fuzzing** (planned, `C4_FUZZING_PLAN.md`) |
-| **AS8** 7 local seL4 patches | patch regresses a proven kernel property | per-patch review; full analysis in `SEL4_PATCHES_ANALYSIS.md` | **upstream attempt** (framebuffer/bootinfo) |
+| **AS8** 7 local seL4 patches | patch regresses a proven kernel property | per-patch review; full analysis in `SEL4_PATCHES_ANALYSIS.md` | **upstream attempt** (Tier 1: bootinfo, max-num-drhu, smap, load-image; Tier 2: framebuffer ×3) |
 | **C9** heartbeat detect-not-recover | ~~daemon hangs are detected but not auto-recovered~~ | `Health_Ok[D]=False` → boot-manager failover + **H90-A**: MCS timeout-fault → `Health_Monitor` restart | **mitigated (H90-A, 2026-11-20)** |
 | **H112** MLS/Config in root CNode | ~~compromised MLS/Config signals `IRQ_Ntfn`/`Timeout_EP`/`Root_Fault_EP` (fake-fault)~~ | **mitigated (2026-11-19):** MLS/Config have their own CSpace (CNode 4128/4129) with only ep/reply/ping caps | — (closed) |
 | **C8** boot counter not persistent | boot counter not yet read/written (NVMe deferred) | deferred (not active) | NVMe persistence + Tier-A counter store |

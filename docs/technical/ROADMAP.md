@@ -94,7 +94,7 @@
 `PAddr >= 16#800000#` (8 мест) — пропускает BIOS `[0..1 МиБ)` и boot-reuse
 `[1..8 МиБ)`, ретайпит только из freemem (≥ 8 МиБ).
 
-**`patches/seL4-max-num-drhu.patch` — оптимизация, не фикс:** cap
+**`patches/seL4-max-num-drhu.patch` — фикс T580-зависания (подан в апстрим):** cap
 `MAX_NUM_DRHU := 8` уменьшает `.boot.bss` (6 МБ→5 КБ) и `ki_boot_end` 8→2 МиБ,
 но ханг **не воспроизводится и без патча** (re-test 2026-10-24, `seL4/seL4#1790`).
 
