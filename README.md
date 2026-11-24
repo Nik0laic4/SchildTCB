@@ -2,6 +2,14 @@
 
 A **Trusted Computing Base (TCB)** research prototype: a formally verified core (**seL4** microkernel + **Ada/SPARK 2022**) with an isolated-peripheral environment.
 
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="assets/brand/04_wordmark_dark_512.png">
+    <source media="(prefers-color-scheme: light)" srcset="assets/brand/04_wordmark_color_512.png">
+    <img alt="Schild TCB" src="assets/brand/04_wordmark_color_512.png" width="400">
+  </picture>
+</p>
+
 [![OpenSSF Best Practices](https://www.bestpractices.dev/projects/16898/badge)](https://www.bestpractices.dev/projects/16898)
 [![DOI](https://zenodo.org/badge/1432059527.svg)](https://doi.org/10.5281/zenodo.24446686)
 [![CI (build+verify)](https://github.com/Nik0laic4/SchildTCB/actions/workflows/ci.yml/badge.svg)](https://github.com/Nik0laic4/SchildTCB/actions/workflows/ci.yml)
