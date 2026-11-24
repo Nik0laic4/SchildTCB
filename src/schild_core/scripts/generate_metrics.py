@@ -72,6 +72,44 @@ def commit_sha():
     return out.strip()
 
 
+def tier_a_metric():
+    """Tier-A coverage (review #7): On subprograms vs total, source-level.
+
+    Counts procedure/function declarations in the Tier-A units; a unit whose
+    body declares SPARK_Mode => Off is counted as Off (the documented trusted
+    seams: syscall shim, boot manager, drivers). Approximates the requested
+    'X subprograms On / Y total' — the gnatprove invocation emits text only,
+    not the per-subprogram XML, so this is a cheap deterministic count."""
+    import re
+    allow = [
+        "schild_sel4_syscall", "schild_root_task", "schild_boot_manager",
+        "schild_audit_logger", "schild_mls_policy", "schild_cap_space",
+        "schild_process_manager", "schild_fs_server",
+    ]
+    sub_re = re.compile(r"^\s*(procedure|function)\s+[A-Za-z0-9_]+", re.M)
+    off_re = re.compile(
+        r"SPARK_Mode\s*(?:=>|:)\s*Off|SPARK_Mode\s*\(\s*Off\s*\)", re.I)
+    roots = [
+        os.path.join(ROOT_DIR, "src"),
+        os.path.join(ROOT_DIR, "tools", "sel4", "src"),
+    ]
+    on_subs = total = 0
+    for root in roots:
+        for dirpath, _, files in os.walk(root):
+            for f in files:
+                if f.endswith((".ads", ".adb")):
+                    base = f[:-4]
+                    if any(base == a or base.startswith(a + "-") for a in allow):
+                        path = os.path.join(dirpath, f)
+                        with open(path, encoding="utf-8", errors="replace") as fh:
+                            txt = fh.read()
+                        n = len(sub_re.findall(txt))
+                        total += n
+                        if not off_re.search(txt):
+                            on_subs += n
+    return on_subs, total
+
+
 def render(metrics, sha, lang):
     t = _EN if lang == "en" else _RU
     swept = metrics["swept"]
@@ -91,7 +129,12 @@ def render(metrics, sha, lang):
         f"{no_output} {t['no_output']}) · **{scaffold} {t['scaffold']}** · "
         f"**{not_proved} {t['unproved']}**."
     )
-    return f"{header}\n{line}\n\n{t['accounting']}\n{MARKER_END}"
+    tier_on, tier_total = tier_a_metric()
+    tier_line = (
+        f"**Tier A**: **{tier_on} subprograms On / {tier_total} total** "
+        f"({tier_total - tier_on} Off — trusted seams: syscall shim, drivers)."
+    )
+    return f"{header}\n{line}\n{tier_line}\n\n{t['accounting']}\n{MARKER_END}"
 
 
 def inject(path, block):
