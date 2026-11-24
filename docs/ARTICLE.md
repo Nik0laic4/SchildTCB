@@ -66,10 +66,12 @@ gate — is published alongside the repository (RU+EN) and archived on Zenodo
 
 Two artifacts, separated by the syscall ABI:
 
-- **seL4 microkernel** (Ring 0) — upstream, formally verified [Klein2009];
-  locally patched (SMAP, object zeroing, framebuffer). ~186 KB, PRINTING=ON.
-- **Root task** (Ring 3) — Ada/SPARK 2022, ~239 KB with NetServer. Orchestrates
-  daemons and the two-level ARINC-653 schedule [ARINC653, Rushby1999].
+- **seL4 microkernel** (Ring 0) — upstream, locally patched (SMAP, object
+  zeroing, the framebuffer trio, bootinfo-8k, max-num-drhu, load-image); see
+  Limitations for the proof status.
+- **Root task** (Ring 3) — Ada/SPARK 2022. Orchestrates the daemons and the
+  two-level ARINC-653 schedule [ARINC653, Rushby1999]; NetServer is a separate
+  isolated ELF.
 
 *(The block diagram is Figure 1.)*
 
@@ -79,10 +81,18 @@ NetServer is caught by the fault handler and contained without rebooting. Each
 daemon runs as a separately loaded ELF with its own CSpace and VSpace, so a
 compromise of one daemon cannot mint capabilities into another's slot map.
 
+MLS is enforced in a userspace server rather than via seL4's static infoflow
+configuration because the policy is dynamic and data-dependent (per-file levels,
+operation-aware `Authorize_File_Op`): the upstream infoflow theorems hold for a
+fixed configuration and do not express per-file, per-operation policy. The MLS
+server is in the TCB, and its isolation rests on the patched kernel.
+
 Trust is split by tier (ASSURANCE.md): **Tier A** (proved core: MLS, capability
 model, process table, firewall verdicts), **Tier B** (contained periphery:
-network/storage), **Tier C** (explicitly-labelled scaffold). The rule is that
-Tier A depends on Tier-B *specifications*, never Tier-B *bodies*.
+network/storage), **Tier C** (explicitly-labelled scaffold). The rule that Tier A
+depends on Tier-B *specifications*, never Tier-B *bodies*, is enforced by review
+and by the `forbidden_check` pre-commit gate (which rejects `SPARK_Mode => Off`
+in Tier-A modules); a full dependency checker is future work.
 
 ## Threat Model
 
@@ -147,7 +157,7 @@ paper cannot drift apart.
 Accounting: `swept` = all modules; `in_proof` = `swept` − `scaffold_excluded`; `proved + skipped + no_output + not_proved` = `in_proof`. Source: `obj/proof/metrics.json`.
 <!-- METRICS:END -->
 
-- 8 root-task daemons proved (`verify.sh`); full private bodies (`verify_private.sh`).
+- 8 root-task proof units (1 daemon + 7 libraries/models) proved (`verify.sh`); full private bodies (`verify_private.sh`).
 - Build: **184 objects, 0 errors**; boots on a **ThinkPad T580 (32 GB)** and QEMU.
 
 The fault-containment and temporal-isolation markers are shown in the listing
@@ -188,7 +198,7 @@ isolation, signed boot) stated honestly rather than hidden.
 
 **[CVE202698432]** "CVE-2026-98432: Linux kernel use-after-free via race in IPv4 TCP SYN/SYN-ACK handling." NVD, 2026. <https://nvd.nist.gov/vuln/detail/CVE-2026-98432>.
 
-**[Anthropic2026Claude]** Anthropic. "Discovering Vulnerabilities with Claude." 2026. <https://www.anthropic.com/research/discovering-vulnerabilities-with-claude>.
+**[Anthropic2026Claude]** Anthropic. "Discovering and exploiting vulnerabilities in critical, real-world software with Claude." 2026. <https://www.anthropic.com/research/discovering-vulnerabilities-with-claude>.
 
 **[ARINC653]** ARINC Specification 653: Avionics Application Software Standard Interface. Aeronautical Radio, Inc., 2003.
 
@@ -242,11 +252,11 @@ isolation, signed boot) stated honestly rather than hidden.
 \midrule
 schild\_server\_security\_policy & Bell-LaPadula: no read-up / no write-down / strict IPC & prove\_kernel.sh & Proved \\
 schild\_scheduler + schild\_mtf & maximum-priority ready task; ARINC-653 totality & prove\_kernel.sh & Proved \\
-schild\_aes\_cbc\_engine & CBC chaining (FIPS 800-38A) & prove\_kernel.sh & Proved \\
+schild\_aes\_cbc\_engine & CBC chaining (FIPS 800-38A conformance by KAT) & prove\_kernel.sh & Proved \\
 schild\_file\_descriptors & Bell-LaPadula soundness (no false access grant) & prove\_kernel.sh & Proved \\
 schild\_cap\_space / process\_manager & capability + MLS invariants & prove\_kernel.sh & Proved \\
 schild\_arp/ipv4/icmp/udp/tcp\_handler & memory-safe parsers (buffer-bound Pre) & prove\_kernel.sh & Proved \\
-8 root-task daemons & daemon logic & verify.sh & Proved \\
+8 root-task proof units & daemon + library/model logic & verify.sh & Proved \\
 e1000e / NVMe / network stack & drivers — not proven (no hardware spec) & run\_tests.sh & Contained \\
 \midrule
 \textbf{canonical metrics (see the Results block)} & \textbf{0 unproved VCs} & prove\_kernel.sh & \textbf{Pass} \\
