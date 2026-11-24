@@ -2,7 +2,7 @@
 # =============================================================================
 # AES-128 known-answer test (KAT).
 #
-# Host-side gate: compiles Schild_Aes_Ni_Core against the native GNAT toolchain
+# Host-side gate: compiles Schild_Aes_Soft_Core against the native GNAT toolchain
 # and runs the FIPS-197 (Appendix B + C.1) AES-128 vectors. Exits non-zero if
 # any vector mismatches.
 # =============================================================================

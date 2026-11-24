@@ -86,6 +86,8 @@ PML4/CSpace, NVMe BAR0 @0x620000), and `Persist_Audit_Log` reaches it over IPC
 Accounting: `swept` = all modules; `in_proof` = `swept` − `scaffold_excluded`; `proved + skipped + no_output + not_proved` = `in_proof`. Source: `obj/proof/metrics.json`.
 <!-- METRICS:END -->
 
+> **The 2 no-output units.** `schild_kernel_entry` (the bare-metal entry point, exported to C via `pragma Export`, with inline asm and external calls) and `schild_main` (the top-level main program) are top-level procedures, not package proof units, so gnatprove emits no verdict block for them. Their bodies are exercised by the boot/containment tests rather than SPARK proof.
+
 > **Note (approximate count).** The `130 proved / 56 skipped` split (2026-11-01)
 > is approximate: gnatprove's parallel prover (`-j8`) flips a few modules (e.g.
 > `schild_execution_fabric`, `schild_sentinel`) between `PROVED` and

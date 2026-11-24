@@ -29,7 +29,7 @@
 | H62/H63 — CRC32 + per-file CRC | `Schild_Fs_Core.CRC32` | host-KAT `fs-core-kat` (0xCBF43926) |
 | H61 — HMAC-SHA256 superblock | `Schild_HMAC_SHA256` | host-KAT `hmac_kat` + `[NVFS] VERIFY OK` |
 | R23 — MLS per-file gate | `Schild_Schild_Fs.Authorize_File_Op` (7 FS-операций) | run_tests `[R23] Fs_Open write-down denied` + SPARK (per-file Level/Owner, delete owner-only) |
-| W10 — AES-128 core no-OOB | `Schild_Aes_Ni_Core` (SPARK On) | gnatprove 0 unproved + KAT FIPS-197 2/2 |
+| W10 — AES-128 core no-OOB | `Schild_Aes_Soft_Core` (SPARK On) | gnatprove 0 unproved + KAT FIPS-197 2/2 |
 | W10 — SHA-256 compress no-OOB | `Schild_Sha256_Compress` (SPARK On) | gnatprove 0 unproved + KAT RFC 4231/NIST 9/9 |
 | Д3 — C9 liveness-detect | `Schild_Health_Monitor` (Update_Health + Record_Heartbeat/Set_Grace/Mark_Unhealthy) | gnatprove 0 unproved + run_tests 25/25 |
 | C4 — shim fuzz (coverage-guided) | `shared_frame/seam/fs_dispatch/mls_dispatch_libfuzzer.c` | libFuzzer 60с: 0 crash (1.5M–24.8M runs, ASan/UBSan) |

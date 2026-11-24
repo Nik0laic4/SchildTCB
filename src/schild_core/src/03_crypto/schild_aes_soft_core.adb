@@ -3,7 +3,7 @@ pragma Spark_Mode (On);
 with Interfaces;
 use Interfaces;
 
-package body Schild_Aes_Ni_Core is
+package body Schild_Aes_Soft_Core is
 
    --  AES S-box (FIPS-197, section 5.1.1), indexed 0..255.
    SBox : constant array (Unsigned_8) of Unsigned_8 :=
@@ -155,4 +155,4 @@ package body Schild_Aes_Ni_Core is
       Ciphertext := S;
    end Encrypt_Aes128_Block;
 
-end Schild_Aes_Ni_Core;
+end Schild_Aes_Soft_Core;

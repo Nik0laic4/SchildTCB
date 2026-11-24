@@ -299,7 +299,7 @@ C-демоны и шимы seL4        11      1 494       —     —      Tier
 которые не входят ни в свип, ни в scaffold-список, ни в документацию. Четыре лежат в
 каталогах       верхнего     уровня     schild_core     (schild_debug_context_switcher,
 schild_fpu_state_guard, schild_vmx_context_guard, schild_mount_manager) и семь — в
-корневом каталоге src (schild_aes_ni_core, schild_ecc_validator, schild_ioapic_core,
+корневом каталоге src (schild_aes_soft_core, schild_ecc_validator, schild_ioapic_core,
 schild_ipc_caps, schild_msr_syscall_core, schild_pcie_config_guard, schild_space). Все
 они помечены SPARK_Mode => On и несут содержательные постусловия; суммарно
 это 745 строк кода. Проверка по трём сборочным сценариям (build.sh, build_full.sh,
@@ -314,7 +314,7 @@ schild_ipc_caps существует в двух разных версиях: в
 через with из schild_ecdh_manager.ads, который в свипе — вопрос о том, как строка с
 зависимостью вне проекта проходит сборку доказательства, стоит задать автору
 (вероятный ответ: ecdh_manager сам классифицируется SKIPPED и не анализируется).
-В-третьих, schild_aes_ni_core используется только тестом aes_kat.adb. Рекомендация:
+В-третьих, schild_aes_soft_core используется только тестом aes_kat.adb. Рекомендация:
 либо удалить осиротевшие модули, либо перенести их в scaffold-список H99 с явной
 мотивировкой, либо включить в свип; в любом случае в ASSURANCE §2.2 должна
 появиться строка, учитывающая их.

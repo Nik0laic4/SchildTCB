@@ -1,5 +1,5 @@
 package body Schild_Crypto_Fabric with
-  SPARK_Mode => On --  Session state machine; cipher cores are Schild_Aes_Ni_Core / Schild_HMAC_SHA256.
+  SPARK_Mode => On --  Session state machine; cipher cores are Schild_Aes_Soft_Core / Schild_HMAC_SHA256.
 is
 
    procedure Initialize_Fabric_session

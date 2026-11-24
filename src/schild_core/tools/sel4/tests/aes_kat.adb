@@ -2,7 +2,7 @@
 -- SPDX-License-Identifier: GPL-2.0-only
 
 -- =============================================================================
--- Known-answer test (KAT) for Schild_Aes_Ni_Core (AES-128, FIPS-197).
+-- Known-answer test (KAT) for Schild_Aes_Soft_Core (AES-128, FIPS-197).
 --
 --   * FIPS-197 Appendix C.1 (AES-128 worked example)
 --   * FIPS-197 Appendix B (AES-128 example)
@@ -14,7 +14,7 @@
 with Ada.Command_Line;
 with Ada.Text_IO;
 with Interfaces;          use Interfaces;
-with Schild_Aes_Ni_Core;  use Schild_Aes_Ni_Core;
+with Schild_Aes_Soft_Core;  use Schild_Aes_Soft_Core;
 
 procedure Aes_KAT is
 

@@ -3,7 +3,7 @@ pragma Spark_Mode (On);
 with Interfaces;
 use Interfaces;
 
-package Schild_Aes_Ni_Core is
+package Schild_Aes_Soft_Core is
 
    subtype Aes_Block_Index is Integer range 0 .. 15;
    type Aes_Block_Type is array (Aes_Block_Index) of Unsigned_8;
@@ -18,4 +18,4 @@ package Schild_Aes_Ni_Core is
       Ciphertext :    out Aes_Block_Type)
    with Global => null;
 
-end Schild_Aes_Ni_Core;
+end Schild_Aes_Soft_Core;
