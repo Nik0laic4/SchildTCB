@@ -1,3 +1,5 @@
+![Schild TCB](../assets/brand/wordmark_color.png){width=9cm}
+
 # Schild TCB: A Reference Architecture for Formally Verified Services on seL4
 
 **Alexander Irganov** · Independent researcher, Russia
@@ -14,13 +16,22 @@
 ## Abstract
 
 Schild TCB is a research prototype of a Trusted Computing Base that pairs the
-formally verified seL4 microkernel [Klein2009] with an Ada/SPARK 2022 user-space
-environment. The security-critical core — an MLS Bell-LaPadula policy, a
-capability model, a process table, and firewall verdicts — is proved at SPARK
-Level 4 with zero unproved verification conditions (**133 modules proved, 0
-unproved VCs**; see the metrics block in Results).
-Untrusted periphery (network driver and storage) runs isolated in Ring 3, so a
-fault or compromise there cannot reach the proved core.
+seL4 microkernel [Klein2009] with an Ada/SPARK 2022 user-space environment. The
+kernel itself is formally verified upstream; this prototype applies eight small
+local patches (see SEL4_PATCHES_ANALYSIS.md) that are NOT covered by that proof:
+seven lie in the boot / cache-maintenance code that the upstream proof
+explicitly excludes, and one (object zeroing) modifies createObject() inside the
+refinement-proof region. The l4v proof suite has not been re-run on the patched
+tree; "formally verified seL4" therefore means "seL4 plus a small,
+self-reviewed, unproven delta".
+
+The security-critical core — an MLS Bell-LaPadula policy, a capability model, a
+process table, and firewall verdicts — is proved at SPARK Level 4 with zero
+unproved verification conditions (**133 of 179 modules in proof, 0 unproved
+VCs**; see the metrics block in Results). Untrusted periphery (network driver
+and storage) runs isolated in Ring 3, so a process-level fault or compromise
+there cannot reach the proved core; a malicious DMA-capable device remains a
+residual risk (see Limitations).
 
 The system boots on a ThinkPad T580 (32 GB) and in QEMU, with an ARM64
 (Raspberry Pi 4B) port in progress. A companion community textbook (15 case
@@ -91,7 +102,8 @@ class: it multiplies existing classes by lowering cost and by chaining bugs
 
 The proved core is written in SPARK [AdaCoreSPARK], with every security property
 re-expressed as a contract and discharged by `gnatprove --level=4 --mode=all`
-(CVC5/Z3/Alt-Ergo). The method (THREAT_MODEL §10): `Pre` accepts **all** legitimate
+(CVC5/Z3/Alt-Ergo); level 4 is the prover effort (strategies, timeouts), not a
+guarantee level. The method (THREAT_MODEL §10): `Pre` accepts **all** legitimate
 inputs, `Post` states the **security property**, liveness is validated by
 runtime/KAT tests rather than proof, vacuity is rejected, and `pragma Assume`
 stays at zero.
@@ -100,12 +112,24 @@ Representative proved properties: CBC chaining (`schild_aes_cbc_engine`),
 maximum-priority scheduling + ARINC-653 MTF (`schild_scheduler`, `schild_mtf`),
 Bell-LaPadula no-read-up/no-write-down (`schild_server_security_policy`,
 `schild_file_descriptors`), and memory-safe network parsers
-(`schild_arp/ipv4/icmp/udp/tcp_handler`). Two cryptographic bodies
-(`schild_aes_ni_core`, the extracted `schild_sha256_compress`) are proved with no
-out-of-bounds access; the MLS storage layer gained per-file levels and an
-operation-aware gate (`Authorize_File_Op`) covering all seven filesystem
-operations. Techniques and gotchas are collected in
-`SPARK_PROOF_TECHNIQUES.md`; a build→run→verify tutorial is `GUIDE.md`.
+(`schild_arp/ipv4/icmp/udp/tcp_handler`). The CBC engine wraps a portable
+software AES-128 whose S-box and 10-round transform sit outside the proof gate
+(the body is `SPARK_Mode => Off`); only the no-out-of-bounds chaining around it
+is proved, and FIPS 800-38A conformance is established by KAT, not proof.
+`schild_sha256_compress` was extracted from the FS daemon (a module split) and
+validated by RFC 4231 / NIST KAT. The MLS storage layer gained per-file levels
+and an operation-aware gate (`Authorize_File_Op`) covering all seven filesystem
+operations. Parser `Pre` conditions are caller obligations, so each parser body
+carries an explicit runtime guard (reject `Raw'Length < 20` for IPv4/TCP,
+`< 28` for ARP) before any field access, a defensive check for Off-mode callers.
+Techniques and gotchas are collected in `SPARK_PROOF_TECHNIQUES.md`; a
+build→run→verify tutorial is `GUIDE.md`.
+
+The scheduling policy is proved at the SPARK level (`Find_Next_Task_In_Partition`,
+the ARINC-653 MTF composition) and validated by KAT; the running system is
+scheduled by seL4/MCS. The translation — priorities set at TCB creation and MTF
+windows mapped to scheduling-context budgets — is an engineering argument,
+checked jointly by the two-level KAT on identical inputs, not a theorem.
 
 The quantitative claim is a **single machine-generated taxonomy**, not a hand-
 edited figure: a deterministic classifier (`classify_gnatprove.py`) sorts every
@@ -131,17 +155,18 @@ below (Figure 2).
 
 ## Limitations & Future Work
 
-- **Locally patched seL4** — the kernel patches (SMAP, object zeroing, the framebuffer trio, bootinfo-8k, max-num-drhu, load-image, log-ringbuffer) are self-reviewed, not re-proven. Only object-zeroing touches code inside the refinement proof; the rest lie in upstream's documented unverified scope (boot code, cache maintenance). See `SEL4_PATCHES_ANALYSIS.md`.
+- **Locally patched seL4** — eight local patches (SMAP, object zeroing, the framebuffer trio, bootinfo-8k, max-num-drhu, load-image) are self-reviewed, not re-proven. Only object-zeroing modifies `createObject()` inside the refinement-proof region; the other seven lie in upstream's documented unverified scope (boot code, cache maintenance). The l4v proof suite has NOT been re-run on the patched tree. See `SEL4_PATCHES_ANALYSIS.md`.
 - **Ring-0 C code** — `runtime_stubs.c`, `interrupt_handlers.c`, `hw_io.c`, `boot.S` are trusted, not contained: memory-unsafe, and containment does not apply (THREAT_MODEL §12.5).
 - **No DMA isolation** — IOMMU/VT-d is upstream-experimental; the Pi 4 has no SMMU. Isolation is process-level, not bus-level (P3 remains a residual risk).
-- **x86_64 MCS** is formally verified weaker than ARM MCS (upstream).
+- **IPC availability under P2** — MCS CPU budgets address CPU starvation but not IPC message flood: a high-frequency P2 sender can starve the root task's IPC budget at low CPU cost (THREAT_MODEL R15). Liveness under an IPC flood is open.
+- **x86_64 MCS** is formally verified weaker than ARM MCS (upstream; the l4v README notes ARM has the most complete proof set, with MCS proofs on the `rt` branch).
 - **Unproven C code** (C shims, drivers) — memory-unsafe, backed only by containment.
-- **No signed boot / HWRoT** — SHA-256 detects corruption, not malice.
+- **Local build/deploy (P4)** — partially covered: a boot counter bounds the damage of a malicious rollback, and SHA-256 detects corruption. Full supply-chain integrity is out of scope (no HWRoT/TPM).
 - **Identity management** — PID reuse was mitigated via monotonic generation (v0.36), but true capability-based process identity remains a long-term architectural goal.
 
-Next: a pilot use case ("protected network gateway with MLS", `USE_CASE.md`),
-the ARM64/GENET port when hardware is available, and per-property contract
-strengthening toward the full end-to-end security property.
+Next: the ARM64/GENET port when hardware is available, and per-property contract
+strengthening toward the full end-to-end security property. A pilot use case
+("protected network gateway with MLS") is already described in `USE_CASE.md`.
 
 ## Conclusion
 
