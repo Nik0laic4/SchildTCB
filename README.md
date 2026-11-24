@@ -4,7 +4,7 @@ A **Trusted Computing Base (TCB)** research prototype: a formally verified core 
 
 <p align="center">
   <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="assets/brand/04_wordmark_dark_512.png">
+    <source media="(prefers-color-scheme: dark)" srcset="assets/brand/04_wordmark_mono_512.png">
     <source media="(prefers-color-scheme: light)" srcset="assets/brand/04_wordmark_mono_512.png">
     <img alt="Schild TCB" src="assets/brand/04_wordmark_mono_512.png" width="400">
   </picture>
