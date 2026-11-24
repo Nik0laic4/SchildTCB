@@ -33,3 +33,6 @@ START/
 
 # Local seL4 kernel source clone (patch development)
 .sel4-src/
+
+# local seL4 fork working copy (upstream PR branches)
+.upstream-seL4/
