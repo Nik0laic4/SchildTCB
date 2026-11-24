@@ -1,4 +1,4 @@
-![Schild TCB](../assets/brand/04_wordmark_color_512.png){width=9cm}
+![Schild TCB](../assets/brand/04_wordmark_mono_512.png){width=9cm}
 
 # Schild TCB: A Reference Architecture for Formally Verified Services on seL4
 
