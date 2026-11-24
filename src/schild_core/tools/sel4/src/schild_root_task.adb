@@ -618,6 +618,35 @@ begin
       Put_Str (ASCII.CR & ASCII.LF);
    end;
 
+   -- R15 baseline: IPC flood (tight bench-noop loop) + heartbeat liveness.
+   -- The loop keeps the root task's IPC at the max rate; the Net-domain
+   -- heartbeat is re-recorded after it so the C9 grace check can see the
+   -- latency. The token-bucket (future work) will throttle this in the idle
+   -- path; for now this establishes the unthrottled baseline.
+   declare
+      N  : constant Unsigned_32 := 10_000;
+      T0 : Word := 0;
+      T1 : Word := 0;
+      R  : Word := 0;
+   begin
+      Put_Str ("[FLOOD] injecting IPC flood (bench-noop loop)..." & ASCII.CR & ASCII.LF);
+      T0 := RDTSC;
+      for J in 1 .. N loop
+         R := Schild_Sel4_Syscall.Call_IPC (Schild_Sel4_Syscall.Root_Net_EP_Badged_Slot, 4, 0);
+      end loop;
+      T1 := RDTSC;
+      Record_Heartbeat (Last_Seen, 1, RDTSC);  -- Net domain heartbeat after the flood
+      Put_Str ("[FLOOD]   total_cycles="); Put_Dec (T1 - T0);
+      Put_Str (ASCII.CR & ASCII.LF);
+      Put_Str ("[FLOOD]   cycles_per_op="); Put_Dec ((T1 - T0) / Word (N));
+      Put_Str (ASCII.CR & ASCII.LF);
+      if (T1 - T0) / Word (N) < 500_000 then
+         Put_Str ("[FLOOD] core answers within budget" & ASCII.CR & ASCII.LF);
+      else
+         Put_Str ("[FLOOD] FAIL - heartbeat starved" & ASCII.CR & ASCII.LF);
+      end if;
+   end;
+
    -- Stage 9: crash-containment test. Arm a fault in the NetServer (op=99):
    -- the NetServer replies first (so Call_IPC returns), then writes to
    -- unmapped 0xFFFFF000 (a #PF). The NetServer is priority 0 vs the root

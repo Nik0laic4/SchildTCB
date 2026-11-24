@@ -117,6 +117,7 @@ if [ "$SEL4_PRIMARY" = "1" ]; then
     "[R23] Fs_Open write-down denied"
     "[NVME] Init OK — queues ready"
     "[NVFS] Read-back VERIFY OK"
+    "[FLOOD] core answers within budget"
     "==== Root Task ready ===="
   )
 else
@@ -130,7 +131,7 @@ else
   )
 fi
 
-FAIL_PATTERNS=("Panic" "#GP" "General Protection" "[FAIL" "unhandled fault")
+FAIL_PATTERNS=("Panic" "#GP" "General Protection" "[FAIL" "unhandled fault" "[FLOOD] FAIL")
 
 fail=0
 for m in "${MARKERS[@]}"; do
