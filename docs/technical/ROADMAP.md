@@ -205,7 +205,7 @@ security-критичных модулей (cap_space, process_manager, signals,
 Детали и остатки — `CHANGELOG.md` (W8). Полный proof на момент W8: `not-proved: 0`,
 `~108 proved / ~77 out-of-proof`.
 
-### W9 — Фаза надёжности (boot/update/recovery) — `[в работе]`
+### W9 — Фаза надёжности (boot/update/recovery) — `[логика закрыта (2026-10-31); железо (таймер/NVMe/bootloader) отложено]`
 
 1. **Boot counter** ✅ ЗАКРЫТ (2026-10-31) — логика A/B + порог блокировки
    (`Max_Boot_Attempts = 3`), `Slot_Locked`/`Is_Bricked`, brick-состояние;

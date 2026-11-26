@@ -134,3 +134,19 @@ bash scripts/verify_private.sh    # полные тела демонов
 SCHILD_PROFILE=public ./build.sh  # bare-metal сборка
 ```
 
+## 10. Prover-friendly паттерны (Philipp `ada-spark`) и W10
+
+Синтез из `agentic-skills` Philipp (github.com/tobiasphilipp/experimental-agentic-verified-software) — «пиши код, который легко доказуем». Применимо к зависшим обязательствам W10.
+
+**Паттерны:**
+- **Скрытый счётчик → closed-form / ghost** (наш `(B-1)*64` в `SHA256_Core`): не гонять прувер по умножению счётчика. ghost-функция/лемма для границы, либо бегущий `Offset` с `Loop_Invariant (Offset <= Data'Length)`. Наивный `Offset` уже не спас — нужна ghost/лемма.
+- **Constrained array types** (наш `Byte_Array` unconstrained + `in out Idx` в `Handle_Request`): unconstrained даёт Why3 ~2 МБ/подпрограмму → constrained subtype (напр. `Byte_Array (0 .. 4095)`).
+- **`Contract_Cases` вместо одного большого `Post`**; **postcondition у каждого helper'а**.
+- **Proof-hostile:** `2 ** D` при переменной `D`, деление `Data'Length/64` в той же категории.
+
+**Диагноз W10 (2026-11-26, «опробовано»):**
+- `schild_hmac_sha256.SHA256_Core`: `(B-1)*64` кладёт прувер (> 300 c при пакетном `On`). SPARK_Mode Off→On на подпрограмме недопустим — только на пакет.
+- `schild_http_server.Handle_Request`: unconstrained `Byte_Array` + C-мост (`Schild_Debug_Render`/`'Address`) + FS; сплит не помог.
+
+**План (следующий пункт):** ghost/лемма для `(B-1)*64` → constrained-buffer для http → каждый шаг `verify_private.sh`.
+

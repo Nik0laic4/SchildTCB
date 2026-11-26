@@ -165,5 +165,8 @@ Alexander Irganov.
 - vc.ru (RU): [«Зачем сварщику микроядро?»](https://vc.ru/id79615/3203908-zachem-svarshchiku-mikroyadro-sel4-i-proyekt-schild-tcb-na-ada-spark)
 - Reddit (r/ada): [«I'm a 38-year-old welder…»](https://www.reddit.com/r/ada/s/XSFhtr1EzA)
 
-© 2026 Alexander Irganov.
+## Mirrors
 
+GitHub is the primary platform. A mirror is available at [Codeberg](https://codeberg.org/Nik0laic4/SchildTCB) for redundancy.
+
+© 2026 Alexander Irganov.
