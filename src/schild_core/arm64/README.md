@@ -3,6 +3,20 @@
 ## Статус
 ✅ Полный цикл seL4 AArch64 работает в QEMU: **elfloader → ядро → root task → вывод по UART** (`Hello, Schild TCB (ARM64 root task)!`).
 
+✅ **Валидирован на реальном железе Raspberry Pi 4B (bcm2711)** — 2026-11-26: U-Boot (загрузка с USB-SSD) → elfloader (Cortex-A72) → ядро seL4 → Ada root-task:
+```
+Booting all finished, dropped to user space
+==== Schild TCB: Ada/SPARK seL4 root task (AArch64) ====
+Root task running under seL4 (DebugPutChar via svc #0).
+sum(1..5) = 0x000000000000000f
+Hello from Ada (seL4 AArch64 root task)!
+virtio-net: mapping failed        ← ожидаемо: у Pi 4 GENET, не virtio
+virtio-net elf child: failed
+```
+- Вывод по UART — PL011 (`serial0`): `config.txt` с `dtoverlay=disable-bt` + смена в `overlay-rpi4.dts` `serial1 → serial0`.
+- Загрузка: `config.txt` → `u-boot.bin` → U-Boot `fatload usb 0 0x10000000 <image>` + `go 0x10000000`.
+- GENET-драйвер (Ethernet Pi 4) — следующий шаг (заменит virtio из QEMU-пути).
+
 > ⚠️ **Tier-статус:** код этого каталога (включая `ada/`) **не доказан** — SPARK-контракты отсутствуют (Pre=0, Post=0, ~452 строки Ada). Это отдельный arm64-трек, **не часть** доказанного x86_64-ядра (188 модулей, Level 4). Не смешивать с verified-кодом master.
 
 ## Структура
